@@ -1,0 +1,31 @@
+- hosts: all
+  tasks:
+    # TODO(pabelanger): Remove once this lands in our base job in
+    # project-config.
+    - name: Execute ensure-output-dirs role
+      include_role:
+        name: ensure-output-dirs
+
+    - name: Disable extra wheels mirror
+      become: yes
+      lineinfile:
+        dest: /etc/pip.conf
+        regexp: ^extra-index-url
+        state: absent
+
+    - name: Bootstrap bindep environment
+      args:
+        chdir: "{{ windmill_src_dir }}"
+      command: tox -ebindep
+
+    - name: Bootstrap tox environment
+      args:
+        chdir: "{{ windmill_src_dir }}"
+      command: tox -evenv --notest
+
+    - name: Install ansible roles via galaxy
+      args:
+        chdir: "{{ windmill_src_dir }}"
+        executable: /bin/bash
+      shell: source .tox/venv/bin/activate; ./tools/install_roles.sh
+

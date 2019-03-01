@@ -1,0 +1,61 @@
+---
+# Copyright 2016, Rackspace US, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- name: Deploy telegraf
+  hosts: "all:!elk_all"
+  gather_facts: true
+  user: root
+  roles:
+    - { role: openstack-ansible-telegraf }
+  vars_files:
+    - vars.yml
+  vars:
+    telegraf_output: influxdb
+    telegraf_output_influxdb_database: "{{ influxdb_db_name }}"
+    telegraf_output_influxdb_username: "{{ influxdb_db_metric_user }}"
+    telegraf_output_influxdb_password: "{{ influxdb_db_metric_password }}"
+    telegraf_openstack_scripts_data_format: influx
+    commands : []
+    telegraf_openstack_scripts:
+      ironic:
+        plugin_name: "ironic_nodes.py"
+        plugin_source_path: "scripts/ironic_nodes.py"
+        command:
+          - "python /opt/telegraf/ironic_nodes.py"
+        sudoers_entry:
+          - "{{ telegraf_openstack_scripts_path }}/ironic_nodes.py"
+        group: "{{ groups['utility_all'][0] }}"
+        when_group: "{{ (groups['ironic_api'] | default([]) | length) > 0 }}"
+      kvm:
+        plugin_name: "kvm_virsh.py"
+        plugin_source_path: "scripts/kvm_virsh.py"
+        command:
+          - "python /opt/telegraf/kvm_virsh.py"
+        sudoers_entry:
+          - "{{ telegraf_openstack_scripts_path }}/kvm_virsh.py"
+        group: "{{ groups['nova_compute'] }}"
+        when_group: "{{ (groups['nova_compute'] | default([]) | length) > 0 and (nova_virt_type | default('qemu') in ['kvm', 'qemu']) }}"
+      cinder_pools_usage:
+        plugin_name: "cinder_pools_usage.py"
+        plugin_source_path: "scripts/cinder_pools_usage.py"
+        command:
+          - "python /opt/telegraf/cinder_pools_usage.py"
+        sudoers_entry:
+          - "{{ telegraf_openstack_scripts_path }}/cinder_pools_usage.py"
+        group: "{{ groups['utility_all'][0] }}"
+        when_group: "{{ (groups['cinder_volumes'] | default([]) | length) > 0 }}"
+    telegraf_output_influxdb_targets:
+      - "{{ influxdb_protocol|default('http') }}://{{ influxdb_host|default(hostvars[groups['cluster-metrics'][0]]['ansible_host']) }}:{{ influxdb_port }}"
+

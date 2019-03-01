@@ -1,0 +1,321 @@
+---
+cidr_networks:
+  lbaas: 10.0.232.0/22
+  container: 10.0.236.0/22
+  tunnel: 10.0.240.0/22
+  storage: 10.0.244.0/22
+  flat: 10.0.248.0/22
+
+used_ips:
+  - "10.0.232.0,10.0.232.200"
+  - "10.0.236.0,10.0.236.200"
+  - "10.0.240.0,10.0.240.200"
+  - "10.0.244.0,10.0.244.200"
+  - "10.0.248.0,10.0.248.200"
+
+global_overrides:
+  internal_lb_vip_address: "{{ internal_lb_vip_address | default(hostvars[groups['loadbalancer_hosts'][0]]['server_networks']['mgmt']['address'].split('/')[0]) }}"
+  external_lb_vip_address: "{{ external_lb_vip_address | default(hostvars[groups['loadbalancer_hosts'][0]]['server_vm_fixed_addr']) }}"
+  tunnel_bridge: "br-vxlan"
+  management_bridge: "br-mgmt"
+  provider_networks:
+    - network:
+        container_bridge: "br-mgmt"
+        container_type: "veth"
+        container_interface: "eth1"
+        ip_from_q: "container"
+        type: "raw"
+        group_binds:
+          - all_containers
+          - hosts
+        is_container_address: true
+        is_ssh_address: true
+    - network:
+        container_bridge: "br-vxlan"
+        container_type: "veth"
+        container_interface: "eth10"
+        ip_from_q: "tunnel"
+        type: "vxlan"
+        range: "1:1000"
+        net_name: "vxlan"
+        group_binds:
+          - neutron_linuxbridge_agent
+    - network:
+        container_bridge: "br-flat"
+        container_type: "veth"
+        container_interface: "eth12"
+        host_bind_override: "veth2"
+        type: "flat"
+        net_name: "flat"
+        group_binds:
+          - neutron_linuxbridge_agent
+          - utility_all
+    - network:
+        container_bridge: "br-vlan"
+        container_type: "veth"
+        container_interface: "eth11"
+        type: "vlan"
+        range: "1:1"
+        net_name: "vlan"
+        group_binds:
+          - neutron_linuxbridge_agent
+    - network:
+        container_bridge: "br-storage"
+        container_type: "veth"
+        container_interface: "eth2"
+        ip_from_q: "storage"
+        type: "raw"
+        group_binds:
+          - glance_api
+          - cinder_api
+          - cinder_volume
+          - nova_compute
+{% if (osa_enable_object_storage | bool) and not (enable_ceph_storage | bool) %}
+          - swift_proxy
+{% endif %}
+{% if enable_ceph_storage | bool %}
+          - ceph-osd
+{% endif %}
+    - network:
+        container_bridge: "br-lbaas"
+        container_type: "veth"
+        container_interface: "eth13"
+        ip_from_q: "lbaas"
+        type: "flat"
+        net_name: "lbaas"
+        group_binds:
+          - "neutron_linuxbridge_agent"
+          - "octavia-worker"
+          - "octavia-housekeeping"
+          - "octavia-health-monitor"
+{% if (osa_enable_object_storage | bool) and not (enable_ceph_storage | bool) %}
+  swift:
+    part_power: 8
+    storage_network: 'br-storage'
+    replication_network: 'br-storage'
+    drives:
+      - name: disk1
+      - name: disk2
+      - name: disk3
+    mount_point: /srv
+    storage_policies:
+      - policy:
+          name: default
+          index: 0
+          default: True
+{% endif %}
+
+###
+### Anchors
+###
+{% if (osa_enable_block_storage | bool) and not (enable_ceph_storage | bool) %}
+cinder_block: &cinder_block
+{%   for host in groups['cinder_hosts'] %}
+  {{ hostvars[host]['server_hostname'] }}:
+    ip: {{ hostvars[host]['server_networks']['mgmt']['address'].split('/')[0] }}
+    container_vars:
+      container_tech: "{{ default_container_tech }}"
+      cinder_backends:
+        limit_container_types: cinder_volume
+        lvm:
+          volume_group: cinder-volumes
+          volume_driver: cinder.volume.drivers.lvm.LVMVolumeDriver
+          volume_backend_name: LVM_iSCSI
+          iscsi_ip_address: {{ hostvars[host]['server_networks']['storage']['address'].split('/')[0] }}
+{%   endfor %}
+{% endif %}
+
+
+{% if osa_enable_compute | bool %}
+compute_block: &compute_block
+{%   for host in groups['compute_hosts'] %}
+  {{ hostvars[host]['server_hostname'] }}:
+    ip: {{ hostvars[host]['server_networks']['mgmt']['address'].split('/')[0] }}
+    container_vars:
+      container_tech: "{{ default_container_tech }}"
+{%   endfor %}
+{% endif %}
+
+
+infra_block: &infra_block
+{% for host in groups['infra_hosts'] %}
+  {{ hostvars[host]['server_hostname'] }}:
+    ip: {{ hostvars[host]['server_networks']['mgmt']['address'].split('/')[0] }}
+    container_vars:
+      container_tech: "{{ default_container_tech }}"
+{% endfor %}
+
+
+loadbalancer_block: &loadbalancer_block
+{% for host in groups['loadbalancer_hosts'] %}
+  {{ hostvars[host]['server_hostname'] }}:
+    ip: {{ hostvars[host]['server_networks']['mgmt']['address'].split('/')[0] }}
+    container_vars:
+      container_tech: "{{ default_container_tech }}"
+{% endfor %}
+
+
+log_block: &log_block
+{% for host in groups['log_hosts'] %}
+  {{ hostvars[host]['server_hostname'] }}:
+    ip: {{ hostvars[host]['server_networks']['mgmt']['address'].split('/')[0] }}
+    container_vars:
+      container_tech: "{{ default_container_tech }}"
+{% endfor %}
+
+
+{% if (osa_enable_object_storage | bool) and not (enable_ceph_storage | bool) %}
+swift_block: &swift_block
+{%   for host in groups['swift_hosts'] %}
+  {{ hostvars[host]['server_hostname'] }}:
+    ip: {{ hostvars[host]['server_networks']['mgmt']['address'].split('/')[0] }}
+    container_vars:
+      container_tech: "{{ default_container_tech }}"
+{%   endfor %}
+{% endif %}
+
+
+{% if enable_ceph_storage | bool %}
+ceph_osds_block: &ceph_osds_block
+{% for host in groups['ceph_hosts'] %}
+  {{ hostvars[host]['server_hostname'] }}:
+    ip: {{ hostvars[host]['server_networks']['mgmt']['address'].split('/')[0] }}
+    container_vars:
+      container_tech: "{{ default_container_tech }}"
+      lvm_volumes:
+        - data: data1
+          data_vg: vmvg00
+          journal: journal1
+          journal_vg: vmvg00
+        - data: data2
+          data_vg: vmvg00
+          journal: journal2
+          journal_vg: vmvg00
+        - data: data3
+          data_vg: vmvg00
+          journal: journal3
+          journal_vg: vmvg00
+{% endfor %}
+{% endif %}
+
+
+###
+### Infrastructure
+###
+
+{% if osa_enable_infra | bool %}
+# galera, memcache, rabbitmq, utility
+shared-infra_hosts: *infra_block
+
+# repository (apt cache, python packages, etc)
+repo-infra_hosts: *infra_block
+
+# rsyslog server
+log_hosts: *log_block
+
+# load balancer
+haproxy_hosts: *loadbalancer_block
+{% endif %}
+
+{% if enable_ceph_storage | bool %}
+# Ceph Mon Hosts
+ceph-mon_hosts: *infra_block
+
+# Ceph RGW Hosts
+ceph-rgw_hosts: *infra_block
+
+# Ceph OSDs Hosts
+ceph-osd_hosts: *ceph_osds_block
+{% endif %}
+
+###
+### OpenStack
+###
+
+{% if osa_enable_legacy_os_infra | bool %}
+# Legacy infra group
+# Contains glance, heat, horizon, nova
+os-infra_hosts: *infra_block
+{% endif %}
+
+{% if osa_enable_identity | bool %}
+# keystone
+identity_hosts: *infra_block
+{% endif %}
+
+{% if (osa_enable_block_storage | bool) or (enable_ceph_storage | bool)  %}
+# cinder api services
+storage-infra_hosts: *infra_block
+
+{% if not (enable_ceph_storage | bool) %}
+# cinder storage host (LVM-backed)
+storage_hosts: *cinder_block
+{% endif %}
+{% endif %}
+
+{% if osa_enable_image | bool %}
+# glance
+image_hosts: *infra_block
+{% endif %}
+
+{% if osa_enable_lbaas | bool %}
+# octavia
+octavia-infra_hosts: *infra_block
+{% endif %}
+
+{% if osa_enable_compute | bool %}
+# nova api, conductor, etc services
+compute-infra_hosts: *infra_block
+
+# nova hypervisors
+compute_hosts: *compute_block
+{% endif %}
+
+{% if osa_enable_orchestration | bool %}
+# heat
+orchestration_hosts: *infra_block
+{% endif %}
+
+{% if osa_enable_dashboard | bool %}
+# horizon
+dashboard_hosts: *infra_block
+{% endif %}
+
+{% if osa_enable_network | bool %}
+# neutron server, agents (L3, etc)
+network_hosts: *infra_block
+{% endif %}
+
+{% if osa_enable_meter | bool %}
+# ceilometer (telemetry data collection)
+metering-infra_hosts: *infra_block
+
+# aodh (telemetry alarm service)
+metering-alarm_hosts: *infra_block
+
+# gnocchi (telemetry metrics storage)
+metrics_hosts: *infra_block
+
+# ceilometer compute agent (telemetry data collection)
+metering-compute_hosts: *compute_block
+{% endif %}
+
+{% if (osa_enable_object_storage | bool) and not (enable_ceph_storage | bool) %}
+# swift storage hosts
+swift_hosts: *swift_block
+
+# swift infra hosts
+swift-proxy_hosts: *infra_block
+{% endif %}
+
+{% if osa_enable_elk_metrics | bool %}
+# kibana hosts
+kibana_hosts: *infra_block
+
+# elasticsearch/logstash hosts
+elastic-logstash_hosts: *log_block
+
+# apm hosts
+apm-server_hosts: *log_block
+{% endif %}
+

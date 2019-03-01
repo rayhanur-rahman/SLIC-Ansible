@@ -1,0 +1,437 @@
+---
+# Copyright 2018, Rackspace US, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in witing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- name: Gather Facts for vm_hosts
+  hosts: vm_hosts
+  gather_facts: yes
+  environment: "{{ deployment_environment_variables | default({}) }}"
+  tags:
+    - deploy-vms
+  tasks:
+    - name: Get info about existing virt storage pools
+      virt_pool:
+        command: info
+      register: _virt_pools
+
+    - name: Set virt_pools host fact
+      set_fact:
+        virt_pools: "{{ _virt_pools }}"
+
+    - name: Get info about existing VM's
+      virt:
+        command: list_vms
+      register: _virt_list
+
+    - name: Stop all running VM's
+      virt:
+        name: "{{ item }}"
+        command: destroy
+      failed_when: false
+      with_items: "{{ _virt_list.list_vms }}"
+
+    - name: Delete any disk images related to running VM's
+      file:
+        path: "{{ _virt_pools.pools.default.path | default('/data/images') }}/{{ item }}.img"
+        state: absent
+      with_items: "{{ _virt_list.list_vms }}"
+
+    - name: Undefine all running VM's
+      virt:
+        name: "{{ item }}"
+        command: undefine
+      failed_when: false
+      with_items: "{{ _virt_list.list_vms }}"
+
+    - name: Find existing base image files
+      find:
+        paths: "{{ _virt_pools.pools.default.path | default('/data/images') }}"
+        patterns: '*-base.img'
+      register: _base_images
+
+    - name: Enable/disable vm_use_snapshot based on whether there are base image files
+      set_fact:
+        vm_use_snapshot: "{{ _base_images['matched'] > 0 }}"
+
+    - name: Clean up base image files if they are not being used
+      file:
+        path: "{{ item.path }}"
+        state: absent
+      with_items: "{{ _base_images.files }}"
+      when:
+        - not (vm_use_snapshot | bool)
+
+
+- name: Prepare VM storage
+  hosts: pxe_servers
+  gather_facts: no
+  environment: "{{ deployment_environment_variables | default({}) }}"
+  tags:
+    - deploy-vms
+  tasks:
+    - name: Create VM Disk Image
+      command: >-
+        qemu-img create
+        -f qcow2
+        {% if hostvars[item]['vm_use_snapshot'] | bool %}
+        -b {{ hostvars[item]['virt_pools'].pools.default.path | default('/data/images') }}/{{ server_hostname }}-base.img
+        {% endif %}
+        {{ hostvars[item]['virt_pools'].pools.default.path | default('/data/images') }}/{{ server_hostname }}.img
+        {{ default_vm_storage }}m
+      when:
+        - server_vm | default(false) | bool
+      delegate_to: "{{ item }}"
+      with_items: "{{ groups['vm_hosts'] }}"
+
+
+- name: Prepare file-based disk images
+  hosts: vm_hosts
+  gather_facts: yes
+  environment: "{{ deployment_environment_variables | default({}) }}"
+  tags:
+    - deploy-vms
+  tasks:
+    # Note (odyssey4me):
+    # This will only work on a host which has
+    # libguestfs >= 1.35.2 and >= 1.34.1
+    # Ubuntu bionic works, but xenial does not (even with UCA).
+    # ref: https://bugs.launchpad.net/ubuntu/+source/libguestfs/+bug/1615337.
+    - name: Prepare file-based disk images
+      when:
+        - vm_use_snapshot | bool
+      block:
+        - name: Inject the host ssh key into the VM disk image
+          command: >-
+            virt-sysprep
+            --enable customize
+            --ssh-inject root:file:/root/.ssh/id_rsa.pub
+            --add {{ virt_pools.pools.default.path | default('/data/images') }}/{{ hostvars[item]['server_hostname'] }}.img
+          when:
+            - hostvars[item]['server_vm'] | default(false) | bool
+          with_items: "{{ groups['pxe_servers'] }}"
+
+        - name: Copy over prepare-image-galera.sh
+          copy:
+            src: kvm/prepare-image-galera.sh
+            dest: /opt/prepare-image-galera.sh
+            mode: "0755"
+
+        - name: Prepare the galera containers for startup
+          command: /opt/prepare-image-galera.sh
+          register: _galera_prepare
+
+        # guestfissh does not always give a return code which indicates
+        # failure, so we look for our final stdout output as an indicator
+        - name: Fail if the preparation script did not complete
+          fail:
+            msg: "The galera container preparation failed."
+          when:
+            - "'Image preparation completed.' not in _galera_prepare.stdout_lines"
+
+
+- name: Prepare VM's
+  hosts: pxe_servers
+  gather_facts: no
+  environment: "{{ deployment_environment_variables | default({}) }}"
+  tags:
+    - deploy-vms
+  tasks:
+    - name: Define the VM
+      virt:
+        name: "{{ server_hostname }}"
+        command: define
+        xml: >-
+          {%- if hostvars[item]['vm_use_snapshot'] | bool %}
+          {{ lookup('file', hostvars[item]['virt_pools'].pools.default.path | default('/data/images') ~ '/' ~ server_hostname ~ '.xml') }}
+          {%- else %}
+          {{ lookup('template', 'kvm/kvm-vm.xml.j2') }}
+          {%- endif %}
+      failed_when: false
+      when:
+        - server_vm | default(false) | bool
+      delegate_to: "{{ item }}"
+      with_items: "{{ groups['vm_hosts'] }}"
+
+    - name: Get the VM xml
+      virt:
+        command: get_xml
+        name: "{{ server_hostname }}"
+      register: vm_xml
+      when:
+        - server_vm | default(false) | bool
+      delegate_to: "{{ item }}"
+      with_items: "{{ groups['vm_hosts'] }}"
+
+    - name: Write the VM xml
+      copy:
+        content: "{{ item.1.get_xml }}"
+        dest: "/etc/libvirt/qemu/{{ item.1.item }}.xml"
+      when:
+        - server_vm | default(false) | bool
+      delegate_to: "{{ item.0 }}"
+      with_nested:
+        - "{{ groups['vm_hosts'] }}"
+        - "{{ vm_xml.results }}"
+
+
+- name: Start VM's
+  hosts: vm_hosts
+  gather_facts: "{{ gather_facts | default(true) }}"
+  environment: "{{ deployment_environment_variables | default({}) }}"
+  tags:
+    - deploy-vms
+  tasks:
+    - name: Gather variables for each operating system
+      include_vars: "{{ item }}"
+      with_first_found:
+        - "{{ playbook_dir }}/vars/{{ ansible_distribution | lower }}-{{ ansible_distribution_version | lower }}.yml"
+        - "{{ playbook_dir }}/vars/{{ ansible_distribution | lower }}-{{ ansible_distribution_major_version | lower }}.yml"
+        - "{{ playbook_dir }}/vars/{{ ansible_os_family | lower }}-{{ ansible_distribution_major_version | lower }}.yml"
+        - "{{ playbook_dir }}/vars/{{ ansible_distribution | lower }}.yml"
+        - "{{ playbook_dir }}/vars/{{ ansible_os_family | lower }}.yml"
+      tags:
+        - always
+
+    - name: Start VM
+      virt:
+        name: "{{ hostvars[item]['server_hostname'] }}"
+        command: start
+        state: running
+      failed_when: false
+      when:
+        - hostvars[item]['server_vm'] | default(false) | bool
+      with_items: "{{ groups['pxe_servers'] }}"
+
+    - name: Add VM to /etc/hosts file
+      lineinfile:
+        path: "/etc/hosts"
+        line: "{{ hostvars[item]['ansible_host'] }} {{ hostvars[item]['server_hostname'] }}"
+      when:
+        - hostvars[item]['server_vm'] | default(false) | bool
+      with_items: "{{ groups['pxe_servers'] }}"
+
+
+- name: Check VM Connectivity
+  import_playbook: vm-status.yml
+
+
+- name: Add SSH keys to VM's and containers
+  hosts: vm_servers:all_containers
+  gather_facts: false
+  any_errors_fatal: true
+  tasks:
+    - name: Copy Host SSH Keys
+      copy:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        mode: "0600"
+      with_items:
+        - src: "{{ lookup('env', 'HOME') }}/.ssh/id_rsa"
+          dest: /root/.ssh/id_rsa
+        - src: "{{ lookup('env', 'HOME') }}/.ssh/id_rsa.pub"
+          dest: /root/.ssh/id_rsa.pub
+
+    - name: Add authorized key
+      authorized_key:
+        user: root
+        state: present
+        key: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
+
+
+# In vm-post-install-script.sh.j2 we chattr +i the interfaces file to prevent
+# the preseed system from overwriting the file after we've modified it.  The
+# task below simply removes the immutable attribute.
+- name: Remove immutable attr from /etc/network/interfaces
+  hosts: vm_servers
+  gather_facts: true
+  environment: "{{ deployment_environment_variables | default({}) }}"
+  tags:
+    - deploy-vms
+  tasks:
+    - name: Remove immutable attr from /etc/network/interfaces
+      file:
+        path: /etc/network/interfaces
+        attr: ""
+      when:
+        - ansible_distribution | lower == "ubuntu"
+        - ansible_distribution_release | lower == "trusty"
+
+
+- name: Set MaxSessions and MaxStartups to reduce connection failures
+  hosts: vm_servers
+  gather_facts: "{{ gather_facts | default(true) }}"
+  environment: "{{ deployment_environment_variables | default({}) }}"
+  tags:
+    - deploy-vms
+  tasks:
+    - name: Gather variables for each operating system
+      include_vars: "{{ item }}"
+      with_first_found:
+        - "{{ playbook_dir }}/vars/{{ ansible_distribution | lower }}-{{ ansible_distribution_version | lower }}.yml"
+        - "{{ playbook_dir }}/vars/{{ ansible_distribution | lower }}-{{ ansible_distribution_major_version | lower }}.yml"
+        - "{{ playbook_dir }}/vars/{{ ansible_os_family | lower }}-{{ ansible_distribution_major_version | lower }}.yml"
+        - "{{ playbook_dir }}/vars/{{ ansible_distribution | lower }}.yml"
+        - "{{ playbook_dir }}/vars/{{ ansible_os_family | lower }}.yml"
+      tags:
+        - always
+
+    - name: Set MaxStartups
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        line: MaxStartups 100
+        state: present
+        regexp: '^MaxStartups.*$'
+      notify:
+        - restart sshd
+
+    - name: Set MaxSessions
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        line: MaxSessions 100
+        state: present
+        regexp: '^MaxSessions.*$'
+      notify:
+        - restart sshd
+
+  handlers:
+    - name: restart sshd
+      service:
+        name: "{{ ssh_service_name }}"
+        state: restarted
+
+
+- name: Make space for swift/cinder/ceph volumes
+  hosts: cinder_hosts:swift_hosts:ceph_hosts:&vm_servers
+  gather_facts: "{{ gather_facts | default(true) }}"
+  environment: "{{ deployment_environment_variables | default({}) }}"
+  tags:
+    - deploy-vms
+  tasks:
+    - name: Unmount unnecessary mounts
+      mount:
+        name: "{{ item }}"
+        state: absent
+      with_items:
+        - "/var/lib/lxc"
+        - "/var/lib/machines"
+      register: _remove_mounts
+
+    - name: Remove unnecessary logical volumes
+      lvol:
+        vg: vmvg00
+        lv: "{{ item }}"
+        force: true
+        state: absent
+      with_items:
+        - "lxc00"
+        - "machines00"
+      register: _remove_lvs
+
+    - name: Reload systemd to remove generated unit files for mount
+      systemd:
+        daemon_reload: yes
+      when:
+        - "ansible_service_mgr == 'systemd'"
+        - "(_remove_mounts is changed) or (_remove_lvs is changed)"
+
+    - name: Set fact to indicate that the volumes changed (later used to force formatting)
+      set_fact:
+        _force_format_disks: "{{ (_remove_mounts is changed) or (_remove_lvs is changed) }}"
+
+- name: Setup cinder host volume
+  hosts: cinder_hosts:&vm_servers
+  gather_facts: "{{ gather_facts | default(true) }}"
+  environment: "{{ deployment_environment_variables | default({}) }}"
+  tags:
+    - deploy-vms
+  tasks:
+    - name: Create cinder-volumes LV
+      lvol:
+        vg: vmvg00
+        lv: cinder-volumes00
+        size: "100%FREE"
+        shrink: false
+
+    - name: Create data cinder-volumes VG
+      lvg:
+        vg: cinder-volumes
+        pvs: "/dev/vmvg00/cinder-volumes00"
+
+
+- name: Setup swift host volume
+  hosts: swift_hosts:&vm_servers
+  gather_facts: "{{ gather_facts | default(true) }}"
+  environment: "{{ deployment_environment_variables | default({}) }}"
+  tags:
+    - deploy-vms
+  tasks:
+    - name: Create swift disk LV's
+      lvol:
+        vg: vmvg00
+        lv: "{{ item }}"
+        size: 4G
+      with_items:
+        - disk1
+        - disk2
+        - disk3
+
+    - name: Format swift drives
+      filesystem:
+        fstype: xfs
+        dev: "/dev/vmvg00/{{ item }}"
+        force: "{{ _force_format_disks | default(False) }}"
+      with_items:
+        - disk1
+        - disk2
+        - disk3
+
+    - name: Mount swift drives
+      mount:
+        name: "/srv/{{ item }}"
+        src: "/dev/mapper/vmvg00-{{ item }}"
+        fstype: xfs
+        state: mounted
+        opts: defaults,discard
+      with_items:
+        - disk1
+        - disk2
+        - disk3
+
+- name: Setup ceph OSD volumes
+  hosts: ceph_hosts:&vm_servers
+  gather_facts: "{{ gather_facts | default(true) }}"
+  environment: "{{ deployment_environment_variables | default({}) }}"
+  tags:
+    - deploy-vms
+  tasks:
+    - name: Create ceph OSD journal LV's
+      lvol:
+        vg: vmvg00
+        lv: "{{ item }}"
+        size: "{{ ceph_journal_size }}"
+      with_items:
+        - journal1
+        - journal2
+        - journal3
+
+    - name: Create ceph OSD disk LV's
+      lvol:
+        vg: vmvg00
+        lv: "{{ item }}"
+        size: "{{ ceph_osds_size }}"
+      with_items:
+        - data1
+        - data2
+        - data3
+

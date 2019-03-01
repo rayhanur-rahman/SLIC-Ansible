@@ -1,0 +1,404 @@
+---
+# Copyright 2018, Rackspace US, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in witing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- name: Gather facts
+  hosts: vm_hosts
+  gather_facts: "{{ gather_facts | default(true) }}"
+  environment: "{{ deployment_environment_variables | default({}) }}"
+  tags:
+    - setup-host
+  tasks:
+    - name: Check for a supported Operating System
+      assert:
+        that:
+          - (ansible_distribution == 'Ubuntu' and ansible_distribution_release == 'xenial') or
+            (ansible_distribution == 'Ubuntu' and ansible_distribution_release == 'bionic')
+        msg: >-
+          The only supported host platforms for this tooling are Ubuntu 16.04 LTS (Xenial)
+          and Ubuntu 18.04 LTS (Bionic). Patches to add support for other distributions are
+          most welcome.
+
+    - name: Gather variables for each operating system
+      include_vars: "{{ item }}"
+      with_first_found:
+        - "{{ playbook_dir }}/vars/{{ ansible_distribution | lower }}-{{ ansible_distribution_version | lower }}.yml"
+        - "{{ playbook_dir }}/vars/{{ ansible_distribution | lower }}-{{ ansible_distribution_major_version | lower }}.yml"
+        - "{{ playbook_dir }}/vars/{{ ansible_os_family | lower }}-{{ ansible_distribution_major_version | lower }}.yml"
+        - "{{ playbook_dir }}/vars/{{ ansible_distribution | lower }}.yml"
+        - "{{ playbook_dir }}/vars/{{ ansible_os_family | lower }}.yml"
+      tags:
+        - always
+
+    - name: Install pre-requisite host distro packages
+      package:
+        name: "{{ mnaio_host_required_distro_packages }}"
+        state: "latest"
+        update_cache: yes
+        cache_valid_time: 600
+      register: _install_required_host_packages
+      until: _install_required_host_packages is success
+      retries: 3
+      delay: 15
+      when:
+        - "mnaio_host_required_distro_packages | length > 0"
+
+    - name: Add/Remove/Update apt repositories
+      apt_repository:
+        repo: "{{ repo.repo }}"
+        state: "{{ repo.state | default('present') }}"
+        filename: "{{ repo.filename | default(omit) }}"
+        update_cache: no
+      with_items: "{{ mnaio_host_package_repos }}"
+      loop_control:
+        loop_var: repo
+      register: _add_apt_repo
+      when:
+        - "ansible_os_family == 'Debian'"
+        - "mnaio_host_package_repos | length > 0"
+        - "(repo.condition | default(True)) | bool"
+
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+      register: _update_apt_cache
+      until: _update_apt_cache is success
+      retries: 3
+      delay: 15
+      when:
+        - "ansible_os_family == 'Debian'"
+        - "_add_apt_repo is changed"
+
+    - name: Install host distro packages
+      package:
+        name: "{{ mnaio_host_distro_packages }}"
+        state: "latest"
+        update_cache: yes
+        cache_valid_time: 600
+      register: _install_host_packages
+      until: _install_host_packages is success
+      retries: 3
+      delay: 15
+
+    - name: Get version of libguestfs
+      shell: >-
+        guestfish --version | awk '{print $2}'
+      changed_when: false
+      register: _libguestfs_version
+
+    # See:
+    # https://bugzilla.redhat.com/show_bug.cgi?id=1591617
+    # https://bugs.launchpad.net/ubuntu/+source/libguestfs/+bug/1615337
+    - name: Apply workaround for older versions to make guestfish work
+      shell: |
+        echo dash > /usr/lib/x86_64-linux-gnu/guestfs/supermin.d/zz-dash-packages
+        rm -rf /var/tmp/.guestfs*
+      when:
+        - "{{ (_libguestfs_version.stdout is version('1.38.1', '<')) or
+              ((_libguestfs_version.stdout is version('1.39.0', '>=')) and
+               (_libguestfs_version.stdout is version('1.39.1', '<'))) }}"
+
+    # If the host had already installed kvm_intel.ko without nested=1, then
+    # re-load it now, honoring whatever is in qemu-system-x86.modprobe
+    # Exit codes:
+    # 0 - Nested virt already enabled
+    # 1 - Error
+    # 2 - Nested virt enabled by task (should show task as changed)
+    # 3 - Nested virt not available
+    - name: Ensure that nested virtualization is enabled (if it is available)
+      shell: |
+        INTEL_NESTED=/sys/module/kvm_intel/parameters/nested
+        if grep -q kvm_intel /proc/modules; then
+          echo "Intel CPU found. Checking for nested virtualization capabilities."
+          if [ -f ${INTEL_NESTED} ]; then
+            echo "Nested virtualization capability found. Checking if it is enabled."
+            v=$(cat ${INTEL_NESTED})
+            if [ "x${v}" != "xY" ]; then
+              echo "Nested virtualization not enabled. Enabling it now."
+              rmmod kvm_intel && modprobe kvm_intel
+              exit 2
+            else
+              echo "Nested virtualization already enabled."
+            fi
+          else
+            echo "Nested virtualization capability not found."
+            exit 3
+          fi
+        else
+          echo "Intel CPU not found."
+          exit 3
+        fi
+      args:
+        executable: /bin/bash
+      register: _enable_nested_virt
+      changed_when: _enable_nested_virt.rc == 2
+      failed_when: _enable_nested_virt.rc not in [0, 2, 3]
+
+    - name: Ensure root has a .ssh directory
+      file:
+        path: /root/.ssh
+        state: directory
+        owner: root
+        group: root
+        mode: 0700
+
+    - name: Create ssh key pair for root
+      user:
+        name: root
+        generate_ssh_key: yes
+        ssh_key_bits: 2048
+        ssh_key_file: /root/.ssh/id_rsa
+
+    - name: Get root public key
+      command: cat /root/.ssh/id_rsa.pub
+      register: public_key_get
+      changed_when: false
+
+    - name: Set key facts
+      set_fact:
+        root_public_key: "{{ public_key_get.stdout }}"
+
+    - name: Ensure root can ssh to localhost
+      authorized_key:
+        user: "root"
+        key: "{{ root_public_key }}"
+
+    - name: Setup SSH client to disable strict host key checks
+      lineinfile:
+        path: /etc/ssh/ssh_config
+        regexp: "^.*StrictHostKeyChecking.*$"
+        line: "    StrictHostKeyChecking no"
+        insertafter: "^Host \\*$"
+        state: present
+
+    - name: Setup SSH client to have a non-persistant known hosts file
+      lineinfile:
+        path: /etc/ssh/ssh_config
+        regexp: "^.*UserKnownHostsFile.*$"
+        line: "    UserKnownHostsFile=/dev/null"
+        insertafter: "^Host \\*$"
+        state: present
+
+    - name: Setup SSH client to disable DNS host key checks
+      lineinfile:
+        path: /etc/ssh/ssh_config
+        regexp: "^.*VerifyHostKeyDNS.*$"
+        line: "    VerifyHostKeyDNS no"
+        insertafter: "^Host \\*$"
+        state: present
+
+    - name: Add sysctl options
+      sysctl:
+        name: net.ipv4.ip_forward
+        value: 1
+        sysctl_set: yes
+        state: present
+        reload: yes
+        sysctl_file: /etc/sysctl.conf
+
+    - name: Get gateway interface
+      shell: "/sbin/ip r g 1 | awk '{print $5}'"
+      register: gw_iface
+
+    - set_fact:
+        masquerade_interface: "{{ gw_iface.stdout.strip() }}"
+
+    - name: Add IPtables rules
+      iptables:
+        table: "{{ item.table | default(omit) }}"
+        chain: "{{ item.chain | default(omit) }}"
+        in_interface: "{{ item.in_interface | default(omit) }}"
+        out_interface: "{{ item.out_interface | default(omit) }}"
+        source: "{{ item.source | default(omit) }}"
+        destination: "{{ item.destination | default(omit) }}"
+        protocol: "{{ item.protocol | default(omit) }}"
+        match: "{{ item.match | default(omit) }}"
+        destination_port: "{{ item.destination_port | default(omit) }}"
+        jump: "{{ item.jump | default(omit) }}"
+        to_ports: "{{ item.to_ports | default(omit) }}"
+      with_items: "{{ mnaio_host_iptables_rules }}"
+
+    # These rules are added manually due to bugs in the iptables module.
+    - name: Add IPtables rules
+      shell: |
+        if ! iptables -w -t {{ item.table }} -C {{ item.rule }};then
+          iptables -w -t {{ item.table }} -I {{ item.rule }}
+        fi
+      with_items:
+        - table: 'nat'
+          rule: 'POSTROUTING -s 10.0.2.0/22 ! -d 10.0.2.0/22 -j MASQUERADE'
+        - table: 'mangle'
+          rule: 'POSTROUTING -s 10.0.2.0/22 -o vm-br-dhcp -p udp -m udp --dport 68 -j CHECKSUM --checksum-fill'
+        - table: 'mangle'
+          rule: 'POSTROUTING -s 10.0.2.0/22 -o vm-br-dhcp -p udp -m udp --dport 68 -j CHECKSUM --checksum-fill'
+
+    - name: Add IPtables pre-routing rules to allow external access to VMs
+      shell: |
+        if ! iptables -w -t nat -C PREROUTING -p tcp -d {{ ansible_default_ipv4.address }} --dport {{ item.host_port }} -j DNAT --to {{ item.vm_ip }}:{{ item.vm_port }};then
+          iptables -w -t nat -I PREROUTING -p tcp -d {{ ansible_default_ipv4.address }} --dport {{ item.host_port }} -j DNAT --to {{ item.vm_ip }}:{{ item.vm_port }}
+        fi
+      with_items: "{{ mnaio_host_iptables_prerouting_ports }}"
+      when: config_prerouting | default(false) | bool
+
+    - name: Start netfilter persistent
+      service:
+        name: "{{ mnaio_host_iptables_service }}"
+        state: started
+        enabled: yes
+      when:
+        - ansible_distribution | lower == 'ubuntu'
+
+    - name: Deploy systemd-networkd bridge devices
+      template:
+        src: "mnaio_host/systemd-networkd-bridges-netdev.j2"
+        dest: /etc/systemd/network/{{ item.value.iface }}.netdev
+        mode: "0644"
+        owner: root
+        group: root
+      with_dict:
+        - "{{ mnaio_host_networks }}"
+      register: mnaio_bridges
+
+    - name: Deploy systemd-networkd bridge networks
+      template:
+        src: "mnaio_host/systemd-networkd-bridges-network.j2"
+        dest: /etc/systemd/network/{{ item.value.iface }}.network
+        mode: "0644"
+        owner: root
+        group: root
+      with_dict:
+        - "{{ mnaio_host_networks }}"
+      register: mnaio_bridges
+
+    - name: Restart the systemd-networkd daemon to load new networks
+      systemd:
+        name: systemd-networkd
+        daemon_reload: yes
+        state: restarted
+      when:
+        - mnaio_bridges is changed
+
+    - name: Disable default virt network
+      virt_net:
+        name: "default"
+        state: inactive
+
+    - name: Prevent default virt network autostart
+      virt_net:
+        name: "default"
+        autostart: no
+
+    - name: Define virt network(s)
+      virt_net:
+        name: "{{ item.value.iface }}"
+        state: present
+        xml: "{{ lookup('template', 'kvm/libvirt-network-template.xml.j2') }}"
+      with_dict: "{{ mnaio_host_networks }}"
+
+    - name: Set virt network(s) to active
+      virt_net:
+        name: "{{ item.value.iface }}"
+        state: active
+      with_dict: "{{ mnaio_host_networks }}"
+
+    - name: Set virt network(s) to autostart
+      virt_net:
+        name: "{{ item.value.iface }}"
+        autostart: yes
+      with_dict: "{{ mnaio_host_networks }}"
+
+    - name: Locate the largest writable data disk if mnaio_data_disk is not set
+      shell: >
+        lsblk -brndo NAME,TYPE,FSTYPE,RO,SIZE | awk '/d[b-z]+ disk +0/{ if ($4>m){m=$4; d=$1}}; END{print d}'
+      register: lsblk
+      changed_when: false
+      when:
+        - mnaio_data_disk is undefined
+
+    - name: Setup the data disk partition
+      parted:
+        device: "/dev/{{ mnaio_data_disk | default(lsblk.stdout) }}"
+        label: gpt
+        number: 1
+        name: data1
+        state: present
+      register: _add_partition
+
+    - name: Prepare the data disk file system
+      filesystem:
+        fstype: ext4
+        dev: "/dev/{{ mnaio_data_disk | default(lsblk.stdout) }}1"
+        force: yes
+      when:
+        - _add_partition is changed
+
+    - name: Mount the data disk
+      mount:
+        src: "/dev/{{ mnaio_data_disk | default(lsblk.stdout) }}1"
+        path: /data
+        state: mounted
+        fstype: ext4
+
+    - name: Create the images directory
+      file:
+        path: /data/images
+        owner: root
+        group: root
+        mode: "0755"
+        state: directory
+
+    - name: Define the default virt storage pool
+      virt_pool:
+        name: default
+        state: present
+        xml: |
+          <pool type='dir'>
+            <name>default</name>
+            <target>
+              <path>/data/images</path>
+              <permissions>
+                <mode>0755</mode>
+                <owner>0</owner>
+                <group>0</group>
+              </permissions>
+            </target>
+          </pool>
+
+    - name: Set default virt storage pool to active
+      virt_pool:
+        name: default
+        state: active
+
+    - name: Set default virt storage pool to autostart
+      virt_pool:
+        name: default
+        autostart: yes
+
+    - name: Load virtio kernel modules
+      shell: |
+        for mod in $(find /lib/modules/$(uname -r) -type f -name 'virtio*.ko'); do
+          module=$(echo $(basename $mod) | sed 's/\.ko//g')
+          modprobe ${module}
+          if ! grep ${module} /etc/modules; then
+            echo ${module} | tee -a /etc/modules
+          fi
+        done
+
+    - name: Wait for guest capabilities to appear
+      command: "virsh capabilities"
+      register: virsh_caps
+      until: "'<guest>' in virsh_caps.stdout"
+      retries: 6
+      delay: 10
+

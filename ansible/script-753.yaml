@@ -1,0 +1,33 @@
+---
+- name: Gather variables for each operating system
+  include_vars: "{{ item }}"
+  with_first_found:
+    - "{{ ansible_distribution | lower }}-{{ ansible_distribution_version | lower }}.yml"
+    - "{{ ansible_distribution | lower }}-{{ ansible_distribution_major_version | lower }}.yml"
+    - "{{ ansible_os_family | lower }}-{{ ansible_distribution_major_version | lower }}.yml"
+    - "{{ ansible_distribution | lower }}.yml"
+    - "{{ ansible_os_family | lower }}-{{ ansible_distribution_version.split('.')[0] }}.yml"
+    - "{{ ansible_os_family | lower }}.yml"
+  tags:
+    - always
+
+- include_tasks: "osquery_{{ ansible_pkg_mgr }}.yml"
+
+- name: Install osquery
+  package:
+    name: "{{ osquery_packages }}"
+    state: present
+
+- name: Install osquery debug packages
+  package:
+    name: "{{ item }}"
+    state: present
+  with_items: "{{ osquery_debug_packages }}"
+  when:
+    - osquery_debug_packages_install | bool
+
+- include: osquery_configure.yml
+  tags:
+    - osquery
+    - config
+

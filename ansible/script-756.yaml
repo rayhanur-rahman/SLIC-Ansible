@@ -1,0 +1,22 @@
+---
+- name: Enable and stop the service
+  systemd:
+    name: osqueryd
+    enabled: true
+    state: stopped
+  listen: restart osquery
+
+- name: Enable and start the service
+  systemd:
+    name: osqueryd
+    enabled: true
+    state: started
+  listen: restart osquery
+
+- name: Enable and start the service
+  systemd:
+    name: rsyslog
+    enabled: true
+    state: restarted
+  listen: restart rsyslog
+

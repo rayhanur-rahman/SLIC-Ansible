@@ -1,0 +1,71 @@
+---
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+mnaio_host_iptables_rules:
+  - table: filter
+    chain: INPUT
+    protocol: tcp
+    match: tcp
+    destination_port: 67
+    jump: ACCEPT
+  - table: filter
+    chain: INPUT
+    protocol: udp
+    match: udp
+    destination_port: 67
+    jump: ACCEPT
+  - table: filter
+    chain: INPUT
+    protocol: udp
+    match: udp
+    destination_port: 53
+    jump: ACCEPT
+  - table: filter
+    chain: INPUT
+    protocol: udp
+    match: udp
+    destination_port: 53
+    jump: ACCEPT
+  - table: filter
+    chain: FORWARD
+    in_interface: vm-br-dhcp
+    jump: ACCEPT
+  - table: filter
+    chain: FORWARD
+    out_interface: vm-br-dhcp
+    jump: ACCEPT
+  - table: nat
+    chain: POSTROUTING
+    out_interface: "{{ masquerade_interface | default(default_interface) }}"
+    jump: MASQUERADE
+
+mnaio_host_iptables_prerouting_ports:
+  - host_port: 80
+    vm_port: 80
+    vm_ip: "{{ hostvars[groups['loadbalancer_hosts'][0]]['server_vm_fixed_addr'] }}"
+  - host_port: 443
+    vm_port: 443
+    vm_ip: "{{ hostvars[groups['loadbalancer_hosts'][0]]['server_vm_fixed_addr'] }}"
+  - host_port: 2222
+    vm_port: 22
+    vm_ip: "{{ hostvars[groups['deploy_hosts'][0]]['server_vm_fixed_addr'] }}"
+  - host_port: 6080
+    vm_port: 6080
+    vm_ip: "{{ hostvars[groups['loadbalancer_hosts'][0]]['server_vm_fixed_addr'] }}"
+  - host_port: 6082
+    vm_port: 6082
+    vm_ip: "{{ hostvars[groups['loadbalancer_hosts'][0]]['server_vm_fixed_addr'] }}"
+  - host_port: 8443
+    vm_port: 8443
+    vm_ip: "{{ hostvars[groups['loadbalancer_hosts'][0]]['server_vm_fixed_addr'] }}"
+

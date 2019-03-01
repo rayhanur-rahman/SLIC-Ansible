@@ -1,0 +1,3 @@
+# Use only kubedns for testing k8s dns
+skip_dnsmasq: true
+
