@@ -1,29 +1,26 @@
-import yaml
+import yaml, re
+import os
+
 
 class Node:
     def __init__(self, key):
         self.key = key
-        self.value = None
+        self.value = ''
         self.children = []
-
-
-
-stream = open('ex.yml', 'r')
-yamlObject = yaml.load(stream)
-
-print(yamlObject)
-
+        self.parent = None
 
 def traverse(dictionary, node):
     for key in dictionary:
         child = Node('')
         node.children.append(child)
+        child.parent = node
         # print(key)
         child.key = key
         if isinstance(dictionary[key], dict):
-            newChild = Node('')
-            child.children.append(newChild)
-            traverse(dictionary[key], newChild)
+            grandChild = Node('')
+            child.children.append(grandChild)
+            grandChild.parent = child
+            traverse(dictionary[key], grandChild)
         if isinstance(dictionary[key], list):
             traverseList(dictionary[key], child)
         if isinstance(dictionary[key], str):
@@ -40,6 +37,7 @@ def traverseList(ls, node):
     for item in ls:
         child = Node('')
         node.children.append(child)
+        child.parent = node
         if isinstance(item, dict):
             traverse(item, child)
         if isinstance(item, list):
@@ -54,26 +52,179 @@ def traverseList(ls, node):
             # print(item)
             child.value = item
 
-root = Node('root')
+def tree(node, checkSubTree, response):
+    # print(f'{node.key}:{node.value}')
 
-if isinstance(yamlObject, list):
-    for dictionary in yamlObject:
-        traverse(dictionary, root)
+    listOfUserNameAndPassword = ['root','passno','pass-no', 'pass_no', 'auth_token', 'authetication_token','auth-token', 'authentication-token', 'user', 'uname', 'username', 'user-name', 'user_name', 'owner-name', 'owner_name', 'owner', 'admin', 'login', 'pass', 'pwd', 'password', 'passwd', 'secret', 'uuid', 'crypt', 'certificate', 'userid', 'loginid', 'token', 'ssh_key', 'md5', 'rsa', 'ssl_content', 'ca_content', 'ssl-content', 'ca-content', 'ssh_key_content', 'ssh-key-content', 'ssh_key_public', 'ssh-key-public', 'ssh_key_private', 'ssh-key-private', 'ssh_key_public_content', 'ssh_key_private_content', 'ssh-key-public-content', 'ssh-key-private-content']
+    listOfPassWord = ['pass', 'pwd', 'password', 'passwd']
+    listOfSSHDirectory = ['source', 'destination', 'path', 'directory', 'src', 'dest', 'file']
+    miscelleneous = ['key','id', 'cert']
 
-if isinstance(yamlObject, dict):
-    traverse(yamlObject, root)
+    if checkSubTree:
+        listOfUserNameAndPassword.append('name')
+
+    for item in listOfUserNameAndPassword:
+        if item.lower() in str(node.key).lower():
+            if len(str(node.value)) == 0 and len(node.children) > 0 and re.match(r'[_A-Za-z0-9-]*{text}\b'.format(text=str(item).lower()), str(node.key).lower().strip()):
+                checkSubTree = True
+
+            if item.lower() in listOfPassWord and len(str(node.value)) == 0:
+                response.append({
+                    'smell-type': 'empty-password',
+                    'smell-instance': f'{str(node.key)}:{str(node.value)}'
+                })
+                break
+            if len(str(node.value)) > 0 and '{{' not in str(node.value).strip():
+                if re.match(r'[_A-Za-z0-9-]*{text}\b'.format(text=str(item).lower()), str(node.key).lower().strip()):
+                    response.append({
+                        'smell-type': 'hardcoded-secret',
+                        'smell-instance': f'{str(node.key)}:{str(node.value)}'
+                    })
+                    break
+
+    for item in listOfSSHDirectory:
+        if item.lower() in str(node.key).lower():
+            if len(str(node.value)) > 0 and '/id_rsa' in str(node.value).strip():
+                response.append({
+                    'smell-type': 'hardcoded-secret',
+                    'smell-instance': f'{str(node.key)}:{str(node.value)}'
+                })
+                break
+
+    for item in miscelleneous:
+        if item.lower() in str(node.key).lower():
+            if len(str(node.value)) > 0 and '{{' not in str(node.value).strip() and re.match(r'[_A-Za-z0-9-]*{text}[-_]*$'.format(text=str(item)), str(node.key).strip()):
+                response.append({
+                    'smell-type': 'hardcoded-secret',
+                    'smell-instance': f'{str(node.key)}:{str(node.value)}'
+                })
+                break
+
+    if 'gpgcheck' in str(node.key).strip().lower() or 'get_checksum' in str(node.key).strip().lower():
+        if str(node.value).strip().lower() == 'no' or str(node.value).strip().lower() == 'false':
+            response.append({
+                'smell-type': 'no-integrity-check',
+                'smell-instance': f'{str(node.key)}:{str(node.value)}'
+            })
+
+    if re.match(r'^0.0.0.0', str(node.value).strip().lower()):
+        response.append({
+            'smell-type': 'improper ip address binding',
+            'smell-instance': f'{str(node.key)}:{str(node.value)}'
+        })
+
+    download = ['iso', 'tar', 'tar.gz', 'tar.bzip2', 'zip', 'rar', 'gzip', 'gzip2', 'deb', 'rpm', 'sh', 'run', 'bin']
+    if re.match(
+            r'^(http:\/\/www\.|https:\/\/www\.|http:\/\/|https:\/\/)?[a-z0-9]+([_\-\.]{1}[a-z0-9]+)*\.[a-z]{2,5}(:[0-9]{1,5})?(\/.*)?$',
+            str(node.value)):
+        if ('http' in str(node.value).strip().lower() or 'www' in str(node.value).strip().lower()) and 'https' not in str(node.value).strip().lower():
+            response.append({
+                'smell-type': 'use of http',
+                'smell-instance': f'{str(node.key)}:{str(node.value)}'
+            })
+        for item in download:
+            if re.match(r'(http|https|www)[_\-a-zA-Z0-9:\/.]*{text}$'.format(text = item), str(node.value)):
+                if node.parent != None:
+                    parent = node.parent
+                    siblings = parent.children
+                    integrityCheckNotFound = True
+                    for child in siblings:
+                        if 'checksum' in str(child.key).lower().strip() or 'gpg' in str(child.key).lower().strip():
+                            integrityCheckNotFound = False
+                            break
+
+                    if integrityCheckNotFound:
+                        response.append({
+                            'smell-type': 'no-integrity-check',
+                            'smell-instance': f'{str(node.key)}:{str(node.value)}'
+                        })
 
 
-print('###########\n')
-
-def tree(node):
-    print(f'{node.key}:{node.value}')
     if len(node.children) > 0:
         for child in node.children:
-            tree(child)
-
-tree(root)
-
+            tree(child, checkSubTree, response)
 
 def parseYaml(filename):
-    
+    response = []
+    stream = open(filename, 'r')
+    file = open(filename, 'r')
+
+    tabuWordsInComments = ['bug', 'debug', 'todo', 'to-do', 'to_do', 'fix', 'issue', 'problem', 'solve', 'hack', 'ticket', 'later']
+
+    for line in file:
+        if line.startswith('#'):
+            for word in tabuWordsInComments:
+                if word in line:
+                    response.append({
+                        'smell-type': 'suspicious comment',
+                        'smell-instance': f'{line}'
+                    })
+                    break
+
+    try:
+        yamlObject = yaml.load(stream)
+    except:
+        return response
+    # print(yamlObject)
+
+    root = Node('')
+
+    if isinstance(yamlObject, list):
+        for dictionary in yamlObject:
+            traverse(dictionary, root)
+
+    if isinstance(yamlObject, dict):
+        traverse(yamlObject, root)
+
+    tree(root, False, response)
+    return response
+
+
+def parseBatch2():
+    listofFiles = os.listdir('/home/brokenquark/Workspace/SLIC-Ansible/ansible/')
+    responses = []
+    for file in listofFiles:
+        if file.endswith('.yaml') or file.endswith('.yaml'):
+            response = parseYaml(f'/home/brokenquark/Workspace/SLIC-Ansible/ansible/{file}')
+            # print(f'{file}: {response}')
+            responses.append({
+                'file': file,
+                'smells': response
+            })
+    return responses
+
+
+response = parseBatch2()
+
+output = open('output.csv', 'w')
+output.write(f"file, hardcoded-secret, empty-password, use of http, improper ip address binding, suspicious comment, no-integrity-check, total\n")
+
+smellCounts = {
+    'hardcoded-secret': 0,
+    'empty-password': 0,
+    'use of http': 0,
+    'improper ip address binding': 0,
+    'no-integrity-check': 0,
+    'suspicious comment': 0
+}
+
+
+
+for item in response:
+    total = 0
+    if len(item['smells']) > 0:
+        for element in item['smells']:
+            smellCounts[element['smell-type']] += 1
+            total += 1
+
+    output.write(f"{item['file']}, {smellCounts['hardcoded-secret']}, {smellCounts['empty-password']}, {smellCounts['use of http']}, {smellCounts['improper ip address binding']}, {smellCounts['suspicious comment']}, {smellCounts['no-integrity-check']}, {total}")
+    output.write('\n')
+
+    smellCounts['hardcoded-secret'] = 0
+    smellCounts['empty-password'] = 0
+    smellCounts['improper ip address binding'] = 0
+    smellCounts['no-integrity-check'] = 0
+    smellCounts['suspicious comment'] = 0
+    smellCounts['use of http'] = 0
+
+output.close()

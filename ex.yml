@@ -1,1 +1,49 @@
-_full_docker_options: "{% if container_registry_selinux|bool %}--selinux-enabled {% endif %}{% if container_registry_additional_sockets | length > 0 %}-H unix:///run/docker.sock {% for soc in container_registry_additional_sockets %}-H unix://{{ soc }}{% if not loop.last %} {% endif %}{% endfor %}{% endif %} {{ container_registry_docker_options }}"
+---
+#mysql:
+#  user: root
+#  user: 'root'
+#  user: "root"
+#  owner: root
+#  uname: 'root'
+#  admin: '{{hhh}}'
+#  remote_user: root
+#  username: admin
+#  login: admin
+#  password: 123
+#  pwd: ''
+#  pass: 123
+#  passwd: 123
+
+centos_user:
+  name: root
+#  login: root
+#  pass: 123
+#  secret: 123
+  username: root
+  password: ''
+
+yum_repo:
+  - url: "http://www.yum.org"
+  - gpgcheck: Yes
+  - get_checksum: no
+  - src: '/root/.ssh/id_rsa'
+  - ssl_content: |
+      -----BEGIN CERTIFICATE-----
+      MIIDmjCCAoKgAwIBAgIJAN8sAUG3GR9wMA0GCSqGSIb3DQEBCwUAMGIxCzAJBgNV
+      BAYTAlVTMQ4wDAYDVQQIDAVUZXhhczEPMA0GA1UEBwwGQXVzdGluMR0wGwYDVQQK
+      DBRPcGVuU3RhY2sgRm91bmRhdGlvbjETMBEGA1UEAwwKZ2Vhcm1hbi1jYTAeFw0x
+      ODAzMjgwMjMzMTZaFw0yODAzMjUwMjMzMTZaMGIxCzAJBgNVBAYTAlVTMQ4wDAYD
+      VQQIDAVUZXhhczEPMA0GA1UEBwwGQXVzdGluMR0wGwYDVQQKDBRPcGVuU3RhY2sg
+      Rm91bmRhdGlvbjETMBEGA1UEAwwKZ2Vhcm1hbi1jYTCCASIwDQYJKoZIhvcNAQEB
+      BQADggEPADCCAQoCggEBAMLqIrwY9mDh9kKc/mXDvEUifXgdHtz4GwP3hoYz6N82
+      8Zl7NzUqvYFSj9tlpdJxFHWF
+  - ca_content: |
+      -----BEGIN CERTIFICATE-----
+      MIIDmjCCAoKgAwIBAgIJAN8sAUG3GR9wMA0GCSqGSIb3DQEBCwUAMGIxCzAJBgNV
+      BAYTAlVTMQ4wDAYDVQQIDAVUZXhhczEPMA0GA1UEBwwGQXVzdGluMR0wGwYDVQQK
+      DBRPcGVuU3RhY2sgRm91bmRhdGlvbjETMBEGA1UEAwwKZ2Vhcm1hbi1jYTAeFw0x
+      ODAzMjgwMjMzMTZaFw0yODAzMjUwMjMzMTZaMGIxCzAJBgNVBAYTAlVTMQ4wDAYD
+      VQQIDAVUZXhhczEPMA0GA1UEBwwGQXVzdGluMR0wGwYDVQQKDBRPcGVuU3RhY2sg
+      Rm91bmRhdGlvbjETMBEGA1UEAwwKZ2Vhcm1hbi1jYTCCASIwDQYJKoZIhvcNAQEB
+      BQADggEPADCCAQoCggEBAMLqIrwY9mDh9kKc/mXDvEUifXgdHtz4GwP3hoYz6N82
+      8Zl7NzUqvYFSj9tlpdJxFHWF

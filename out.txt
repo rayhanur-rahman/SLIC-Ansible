@@ -1,0 +1,1450 @@
+1####
+{'_full_docker_options': '{% if container_registry_selinux|bool %}--selinux-enabled {% endif %}{% if container_registry_additional_sockets | length > 0 %}-H unix:///run/docker.sock {% for soc in container_registry_additional_sockets %}-H unix://{{ soc }}{% if not loop.last %} {% endif %}{% endfor %}{% endif %} {{ container_registry_docker_options }}'}
+###########
+
+root:None
+_full_docker_options:{% if container_registry_selinux|bool %}--selinux-enabled {% endif %}{% if container_registry_additional_sockets | length > 0 %}-H unix:///run/docker.sock {% for soc in container_registry_additional_sockets %}-H unix://{{ soc }}{% if not loop.last %} {% endif %}{% endfor %}{% endif %} {{ container_registry_docker_options }}
+
+
+2####
+[{'name': 'ensure docker-distribution is installed', 'package': {'name': 'docker-distribution', 'state': 'present'}}, {'name': 'manage /etc/docker-distribution/registry/config.yml', 'template': {'src': 'docker-distribution-config.yml.j2', 'dest': '/etc/docker-distribution/registry/config.yml'}, 'notify': 'restart docker-distribution service'}, {'name': 'force systemd to reread configs', 'meta': 'flush_handlers'}, {'name': 'enable and start docker-distribution', 'systemd': {'enabled': True, 'state': 'started', 'name': 'docker-distribution'}}]
+###########
+
+root:None
+name:ensure docker-distribution is installed
+package:None
+:None
+name:docker-distribution
+state:present
+name:manage /etc/docker-distribution/registry/config.yml
+template:None
+:None
+src:docker-distribution-config.yml.j2
+dest:/etc/docker-distribution/registry/config.yml
+notify:restart docker-distribution service
+name:force systemd to reread configs
+meta:flush_handlers
+name:enable and start docker-distribution
+systemd:None
+:None
+enabled:True
+state:started
+name:docker-distribution
+
+
+3####
+[{'name': 'enable net.ipv4.ip_forward', 'sysctl': {'name': 'net.ipv4.ip_forward', 'value': 1, 'sysctl_set': True, 'state': 'present', 'reload': True}}, {'name': 'Check if there are XFS volumes with ftype=0', 'become': True, 'shell': 'for dev in $(df -h | grep \'/dev/\' | grep -v \'tmp\' | cut -d\' \' -f1)\ndo\n  parseftype=$(xfs_info $dev | grep ftype=0);\n  if [[ ! -z "$parseftype" ]]; then\n    ftype="ftype=0";\n    break;\n  fi\ndone\necho $ftype;\n', 'register': 'ftype', 'changed_when': False}, {'name': 'Check ftype', 'fail': {'msg': 'XFS volumes formatted using ftype=0 are incompatible with the docker overlayfs driver.\n'}, 'when': ["ftype.stdout == 'ftype=0'"]}, {'name': 'ensure docker is installed', 'package': {'name': 'docker', 'state': 'present'}}, {'name': 'manage /etc/systemd/system/docker.service.d', 'file': {'path': '/etc/systemd/system/docker.service.d', 'state': 'directory'}, 'when': "ansible_service_mgr == 'systemd'"}, {'name': 'unset mountflags', 'ini_file': {'path': '/etc/systemd/system/docker.service.d/99-unset-mountflags.conf', 'section': 'Service', 'option': 'MountFlags', 'value': '', 'create': True}, 'notify': 'restart docker service', 'when': "ansible_service_mgr == 'systemd'"}, {'name': 'configure OPTIONS in /etc/sysconfig/docker', 'lineinfile': {'path': '/etc/sysconfig/docker', 'regexp': '^OPTIONS=', 'line': "OPTIONS='{{ _full_docker_options }}'", 'create': True}, 'notify': 'restart docker service'}, {'name': 'configure INSECURE_REGISTRY in /etc/sysconfig/docker', 'lineinfile': {'path': '/etc/sysconfig/docker', 'regexp': '^INSECURE_REGISTRY=', 'line': "INSECURE_REGISTRY='{{ registry_flags }}'"}, 'when': 'container_registry_insecure_registries | length > 0', 'notify': 'restart docker service', 'vars': {'registry_flags': '{% for reg in container_registry_insecure_registries %}--insecure-registry {{ reg }}{% if not loop.last %} {% endif %}{% endfor %}'}}, {'name': 'Create additional socket directories', 'file': {'path': '{{ item | dirname }}', 'state': 'directory'}, 'notify': 'restart docker service', 'with_items': '{{ container_registry_additional_sockets }}', 'when': 'container_registry_additional_sockets | length > 0'}, {'name': 'manage /etc/docker/daemon.json', 'template': {'src': 'docker-daemon.json.j2', 'dest': '/etc/docker/daemon.json'}, 'notify': 'restart docker service'}, {'name': 'configure DOCKER_STORAGE_OPTIONS in /etc/sysconfig/docker-storage', 'lineinfile': {'path': '/etc/sysconfig/docker-storage', 'regexp': '^DOCKER_STORAGE_OPTIONS=', 'line': "DOCKER_STORAGE_OPTIONS=' {{ container_registry_storage_options }}'", 'create': True}, 'when': 'container_registry_storage_options != ""', 'notify': 'restart docker service'}, {'name': 'configure DOCKER_NETWORK_OPTIONS in /etc/sysconfig/docker-network', 'lineinfile': {'path': '/etc/sysconfig/docker-network', 'regexp': '^DOCKER_NETWORK_OPTIONS=', 'line': "DOCKER_NETWORK_OPTIONS=' {{ container_registry_network_options }}'", 'create': True}, 'when': 'container_registry_storage_options != ""', 'notify': 'restart docker service'}, {'name': 'ensure docker group exists', 'group': {'name': 'docker', 'state': 'present'}}, {'name': 'add deployment user to docker group', 'user': {'name': '{{ container_registry_deployment_user }}', 'groups': 'docker', 'append': True}, 'when': 'container_registry_deployment_user != ""'}, {'name': 'force systemd to reread configs', 'meta': 'flush_handlers'}, {'name': 'enable and start docker', 'systemd': {'enabled': True, 'state': 'started', 'name': 'docker'}, 'when': "ansible_service_mgr == 'systemd'"}]
+###########
+
+root:None
+name:enable net.ipv4.ip_forward
+sysctl:None
+:None
+name:net.ipv4.ip_forward
+value:1
+sysctl_set:True
+state:present
+reload:True
+name:Check if there are XFS volumes with ftype=0
+become:True
+shell:for dev in $(df -h | grep '/dev/' | grep -v 'tmp' | cut -d' ' -f1)
+do
+  parseftype=$(xfs_info $dev | grep ftype=0);
+  if [[ ! -z "$parseftype" ]]; then
+    ftype="ftype=0";
+    break;
+  fi
+done
+echo $ftype;
+
+register:ftype
+changed_when:False
+name:Check ftype
+fail:None
+:None
+msg:XFS volumes formatted using ftype=0 are incompatible with the docker overlayfs driver.
+
+when:None
+:ftype.stdout == 'ftype=0'
+name:ensure docker is installed
+package:None
+:None
+name:docker
+state:present
+name:manage /etc/systemd/system/docker.service.d
+file:None
+:None
+path:/etc/systemd/system/docker.service.d
+state:directory
+when:ansible_service_mgr == 'systemd'
+name:unset mountflags
+ini_file:None
+:None
+path:/etc/systemd/system/docker.service.d/99-unset-mountflags.conf
+section:Service
+option:MountFlags
+value:
+create:True
+notify:restart docker service
+when:ansible_service_mgr == 'systemd'
+name:configure OPTIONS in /etc/sysconfig/docker
+lineinfile:None
+:None
+path:/etc/sysconfig/docker
+regexp:^OPTIONS=
+line:OPTIONS='{{ _full_docker_options }}'
+create:True
+notify:restart docker service
+name:configure INSECURE_REGISTRY in /etc/sysconfig/docker
+lineinfile:None
+:None
+path:/etc/sysconfig/docker
+regexp:^INSECURE_REGISTRY=
+line:INSECURE_REGISTRY='{{ registry_flags }}'
+when:container_registry_insecure_registries | length > 0
+notify:restart docker service
+vars:None
+:None
+registry_flags:{% for reg in container_registry_insecure_registries %}--insecure-registry {{ reg }}{% if not loop.last %} {% endif %}{% endfor %}
+name:Create additional socket directories
+file:None
+:None
+path:{{ item | dirname }}
+state:directory
+notify:restart docker service
+with_items:{{ container_registry_additional_sockets }}
+when:container_registry_additional_sockets | length > 0
+name:manage /etc/docker/daemon.json
+template:None
+:None
+src:docker-daemon.json.j2
+dest:/etc/docker/daemon.json
+notify:restart docker service
+name:configure DOCKER_STORAGE_OPTIONS in /etc/sysconfig/docker-storage
+lineinfile:None
+:None
+path:/etc/sysconfig/docker-storage
+regexp:^DOCKER_STORAGE_OPTIONS=
+line:DOCKER_STORAGE_OPTIONS=' {{ container_registry_storage_options }}'
+create:True
+when:container_registry_storage_options != ""
+notify:restart docker service
+name:configure DOCKER_NETWORK_OPTIONS in /etc/sysconfig/docker-network
+lineinfile:None
+:None
+path:/etc/sysconfig/docker-network
+regexp:^DOCKER_NETWORK_OPTIONS=
+line:DOCKER_NETWORK_OPTIONS=' {{ container_registry_network_options }}'
+create:True
+when:container_registry_storage_options != ""
+notify:restart docker service
+name:ensure docker group exists
+group:None
+:None
+name:docker
+state:present
+name:add deployment user to docker group
+user:None
+:None
+name:{{ container_registry_deployment_user }}
+groups:docker
+append:True
+when:container_registry_deployment_user != ""
+name:force systemd to reread configs
+meta:flush_handlers
+name:enable and start docker
+systemd:None
+:None
+enabled:True
+state:started
+name:docker
+when:ansible_service_mgr == 'systemd'
+
+
+4####
+[{'include_tasks': 'docker.yml', 'when': 'container_registry_deploy_docker|bool'}, {'include_tasks': 'docker-distribution.yml', 'when': 'container_registry_deploy_docker_distribution|bool'}]
+###########
+
+root:None
+include_tasks:docker.yml
+when:container_registry_deploy_docker|bool
+include_tasks:docker-distribution.yml
+when:container_registry_deploy_docker_distribution|bool
+
+
+5####
+[{'name': 'set package manager to yum', 'set_fact': {'registry_pkg_manager': 'yum'}, 'when': ["ansible_os_family == 'RedHat'", 'ansible_distribution_major_version|int == 7']}, {'name': 'set package manager to dnf', 'set_fact': {'registry_pkg_manager': 'dnf'}, 'when': "(ansible_os_family == 'RedHat' and ansible_distribution_major_version|int > 7) or (ansible_distribution == 'Fedora')"}, {'name': 'can docker be updated', 'shell': '{{ registry_pkg_manager }} check-update docker', 'register': 'docker_check_update', 'failed_when': 'docker_check_update.rc not in [0, 100]', 'changed_when': 'docker_check_update.rc == 100'}, {'name': 'set docker_rpm_needs_update fact', 'set_fact': 'docker_rpm_needs_update={{ docker_check_update.rc == 100 }}'}, {'name': 'stop all containers before update', 'shell': 'docker ps -q | xargs --no-run-if-empty -n1 docker stop', 'when': 'docker_rpm_needs_update'}, {'name': 'ensure docker is installed', 'package': {'name': 'docker', 'state': 'present'}, 'when': 'docker_rpm_needs_update'}, {'name': 'update the docker package (yum)', 'yum': 'name=docker state=latest update_cache=yes', 'notify': 'restart docker service', 'when': ['docker_rpm_needs_update', "registry_pkg_manager == 'yum'"]}, {'name': 'update the docker package (dnf)', 'dnf': 'name=docker state=latest', 'notify': 'restart docker service', 'when': ['docker_rpm_needs_update', "registry_pkg_manager == 'dnf'"]}]
+###########
+
+root:None
+name:set package manager to yum
+set_fact:None
+:None
+registry_pkg_manager:yum
+when:None
+:ansible_os_family == 'RedHat'
+:ansible_distribution_major_version|int == 7
+name:set package manager to dnf
+set_fact:None
+:None
+registry_pkg_manager:dnf
+when:(ansible_os_family == 'RedHat' and ansible_distribution_major_version|int > 7) or (ansible_distribution == 'Fedora')
+name:can docker be updated
+shell:{{ registry_pkg_manager }} check-update docker
+register:docker_check_update
+failed_when:docker_check_update.rc not in [0, 100]
+changed_when:docker_check_update.rc == 100
+name:set docker_rpm_needs_update fact
+set_fact:docker_rpm_needs_update={{ docker_check_update.rc == 100 }}
+name:stop all containers before update
+shell:docker ps -q | xargs --no-run-if-empty -n1 docker stop
+when:docker_rpm_needs_update
+name:ensure docker is installed
+package:None
+:None
+name:docker
+state:present
+when:docker_rpm_needs_update
+name:update the docker package (yum)
+yum:name=docker state=latest update_cache=yes
+notify:restart docker service
+when:None
+:docker_rpm_needs_update
+:registry_pkg_manager == 'yum'
+name:update the docker package (dnf)
+dnf:name=docker state=latest
+notify:restart docker service
+when:None
+:docker_rpm_needs_update
+:registry_pkg_manager == 'dnf'
+
+
+6####
+[{'hosts': 'localhost', 'become': True, 'roles': ['container-registry']}]
+###########
+
+root:None
+hosts:localhost
+become:True
+roles:None
+:container-registry
+
+
+7####
+{'galaxy_info': {'author': 'Emilien Macchi', 'description': 'A role to deploy a container registry.', 'license': 'Apache 2.0', 'min_ansible_version': 2.4, 'platforms': [{'name': 'EL', 'versions': [7]}], 'galaxy_tags': ['docker', 'registry']}, 'dependencies': []}
+###########
+
+root:None
+galaxy_info:None
+:None
+author:Emilien Macchi
+description:A role to deploy a container registry.
+license:Apache 2.0
+min_ansible_version:2.4
+platforms:None
+:None
+name:EL
+versions:None
+:7
+galaxy_tags:None
+:docker
+:registry
+dependencies:None
+
+
+8####
+{'container_registry_debug': False, 'container_registry_deploy_docker': True, 'container_registry_deploy_docker_distribution': True, 'container_registry_deployment_user': 'centos', 'container_registry_docker_options': '--log-driver=journald --signature-verification=false --iptables=false --live-restore', 'container_registry_insecure_registries': [], 'container_registry_network_options': '', 'container_registry_host': 'localhost', 'container_registry_port': 8787, 'container_registry_mirror': '', 'container_registry_storage_options': '-s overlay2', 'container_registry_selinux': False, 'container_registry_additional_sockets': []}
+###########
+
+root:None
+container_registry_debug:False
+container_registry_deploy_docker:True
+container_registry_deploy_docker_distribution:True
+container_registry_deployment_user:centos
+container_registry_docker_options:--log-driver=journald --signature-verification=false --iptables=false --live-restore
+container_registry_insecure_registries:None
+container_registry_network_options:
+container_registry_host:localhost
+container_registry_port:8787
+container_registry_mirror:
+container_registry_storage_options:-s overlay2
+container_registry_selinux:False
+container_registry_additional_sockets:None
+
+
+9####
+[{'project': {'templates': ['tripleo-multinode-container-minimal'], 'check': {'jobs': ['openstack-tox-linters']}, 'gate': {'jobs': ['openstack-tox-linters']}, 'post': {'jobs': ['publish-openstack-python-branch-tarball']}}}]
+###########
+
+root:None
+project:None
+:None
+templates:None
+:tripleo-multinode-container-minimal
+check:None
+:None
+jobs:None
+:openstack-tox-linters
+gate:None
+:None
+jobs:None
+:openstack-tox-linters
+post:None
+:None
+jobs:None
+:publish-openstack-python-branch-tarball
+
+
+10####
+[{'name': 'restart docker', 'command': '/bin/true', 'notify': ['Docker | reload systemd', 'Docker | reload docker', 'Docker | pause while Docker restarts', 'Docker | wait for docker'], 'listen': 'restart docker service'}, {'name': 'restart docker-distribution', 'command': '/bin/true', 'notify': ['Docker | reload systemd', 'Docker | reload docker-distribution', 'Docker | wait for registry'], 'listen': 'restart docker-distribution service'}, {'name': 'Docker | reload systemd', 'systemd': {'daemon_reload': True}, 'when': "ansible_service_mgr == 'systemd'"}, {'name': 'Docker | reload docker', 'service': {'name': 'docker', 'state': 'restarted'}}, {'name': 'Docker | pause while Docker restarts', 'pause': {'seconds': 10, 'prompt': 'Waiting for docker restart'}}, {'name': 'Docker | wait for docker', 'command': '/usr/bin/docker images', 'register': 'docker_ready', 'retries': 10, 'delay': 5, 'until': 'docker_ready.rc == 0'}, {'name': 'Docker | reload docker-distribution', 'service': {'name': 'docker-distribution', 'state': 'restarted'}}, {'name': 'Docker | wait for registry', 'uri': {'url': 'http://{{ container_registry_host }}:{{ container_registry_port }}/v2/', 'return_content': True}, 'register': 'registry_status', 'retries': 10, 'delay': 5, 'until': "registry_status.status|int == 200 and 'OK' in registry_status.msg"}]
+###########
+
+root:None
+name:restart docker
+command:/bin/true
+notify:None
+:Docker | reload systemd
+:Docker | reload docker
+:Docker | pause while Docker restarts
+:Docker | wait for docker
+listen:restart docker service
+name:restart docker-distribution
+command:/bin/true
+notify:None
+:Docker | reload systemd
+:Docker | reload docker-distribution
+:Docker | wait for registry
+listen:restart docker-distribution service
+name:Docker | reload systemd
+systemd:None
+:None
+daemon_reload:True
+when:ansible_service_mgr == 'systemd'
+name:Docker | reload docker
+service:None
+:None
+name:docker
+state:restarted
+name:Docker | pause while Docker restarts
+pause:None
+:None
+seconds:10
+prompt:Waiting for docker restart
+name:Docker | wait for docker
+command:/usr/bin/docker images
+register:docker_ready
+retries:10
+delay:5
+until:docker_ready.rc == 0
+name:Docker | reload docker-distribution
+service:None
+:None
+name:docker-distribution
+state:restarted
+name:Docker | wait for registry
+uri:None
+:None
+url:http://{{ container_registry_host }}:{{ container_registry_port }}/v2/
+return_content:True
+register:registry_status
+retries:10
+delay:5
+until:registry_status.status|int == 200 and 'OK' in registry_status.msg
+
+
+11####
+{'_venv_build_base_distro_package_list': {'debian': ['cmake', 'gcc', "{{ (venv_python_executable == 'python2') | ternary('pkg-config', 'python3-pkgconfig') }}", "{{ (venv_python_executable == 'python2') | ternary('python-dev', 'python3-dev') }}"], 'redhat': ['autoconf', 'cmake', 'gcc', 'gcc-c++', "{{ (venv_python_executable == 'python2') | ternary('python2-devel', 'python3-devel') }}"], 'suse': ['autoconf', 'cmake', 'gcc', 'gcc-c++', "{{ (venv_python_executable == 'python2') | ternary('python-devel', 'python3-devel') }}"]}}
+###########
+
+root:None
+_venv_build_base_distro_package_list:None
+:None
+debian:None
+:cmake
+:gcc
+:{{ (venv_python_executable == 'python2') | ternary('pkg-config', 'python3-pkgconfig') }}
+:{{ (venv_python_executable == 'python2') | ternary('python-dev', 'python3-dev') }}
+redhat:None
+:autoconf
+:cmake
+:gcc
+:gcc-c++
+:{{ (venv_python_executable == 'python2') | ternary('python2-devel', 'python3-devel') }}
+suse:None
+:autoconf
+:cmake
+:gcc
+:gcc-c++
+:{{ (venv_python_executable == 'python2') | ternary('python-devel', 'python3-devel') }}
+
+
+12####
+[{'name': 'Verify that venv_install_destination_path has been provided', 'fail': {'msg': 'The variable venv_install_destination_path is required and\nhas not been set.\n'}, 'when': ['venv_install_destination_path is not defined']}, {'name': 'Collect the version of virtualenv', 'shell': "virtualenv --version 2>/dev/null || echo 'none'\n", 'args': {'executable': '/bin/bash'}, 'changed_when': False, 'failed_when': False, 'register': '_virtualenv_version'}, {'name': 'Fail when required virtualenv version is not present', 'fail': {'msg': 'The required virtualenv version is not present. The minimum version of 1.10 is required, but {{ _virtualenv_version.stdout }} is installed.'}, 'when': ["((_virtualenv_version.stdout | trim) == 'none') or ((_virtualenv_version.stdout | trim) is version_compare('1.10', '<'))"]}, {'name': 'Set extra virtualenv parameters', 'set_fact': {'_venv_create_extra_options': "{{ ((_virtualenv_version.stdout | trim) is version_compare('14.0.0', '<')) | ternary('--never-download', '--no-download') }} {{ ((_virtualenv_version.stdout | trim) is version_compare('1.7.0', '<')) | ternary('--no-site-packages', '') }}"}}]
+###########
+
+root:None
+name:Verify that venv_install_destination_path has been provided
+fail:None
+:None
+msg:The variable venv_install_destination_path is required and
+has not been set.
+
+when:None
+:venv_install_destination_path is not defined
+name:Collect the version of virtualenv
+shell:virtualenv --version 2>/dev/null || echo 'none'
+
+args:None
+:None
+executable:/bin/bash
+changed_when:False
+failed_when:False
+register:_virtualenv_version
+name:Fail when required virtualenv version is not present
+fail:None
+:None
+msg:The required virtualenv version is not present. The minimum version of 1.10 is required, but {{ _virtualenv_version.stdout }} is installed.
+when:None
+:((_virtualenv_version.stdout | trim) == 'none') or ((_virtualenv_version.stdout | trim) is version_compare('1.10', '<'))
+name:Set extra virtualenv parameters
+set_fact:None
+:None
+_venv_create_extra_options:{{ ((_virtualenv_version.stdout | trim) is version_compare('14.0.0', '<')) | ternary('--never-download', '--no-download') }} {{ ((_virtualenv_version.stdout | trim) is version_compare('1.7.0', '<')) | ternary('--no-site-packages', '') }}
+
+
+13####
+[{'name': 'Build the wheels on the build host', 'delegate_to': '{{ venv_build_host }}', 'become': "{{ venv_build_host == 'localhost' }}", 'when': ['venv_build_host != inventory_hostname'], 'block': [{'name': 'Install distro packages for wheel build', 'package': {'name': '{{ (venv_build_base_distro_package_list + venv_build_distro_package_list) | unique }}', 'state': '{{ venv_distro_package_state }}', 'update_cache': "{{ (ansible_pkg_mgr in ['apt', 'zypper']) | ternary('yes', omit) }}", 'cache_valid_time': "{{ (ansible_pkg_mgr == 'apt') | ternary(venv_distro_cache_valid_time, omit) }}"}, 'when': ['(venv_build_distro_package_list | length > 0) or (venv_install_distro_package_list | length > 0)'], 'register': '_install_build_distro_packages', 'until': '_install_build_distro_packages is success', 'retries': 5, 'delay': 2}, {'name': 'Ensure a fresh venv_build_host_venv_path if venv_rebuild is enabled', 'file': {'path': '{{ venv_build_host_venv_path }}', 'state': 'absent'}, 'when': ['venv_rebuild | bool']}, {'name': 'Create wheel directory on the build host', 'file': {'path': '{{ venv_build_host_wheel_path }}', 'state': 'directory'}}, {'name': 'Create the wheel build virtualenv (if it does not exist)', 'command': "virtualenv {{ _venv_create_extra_options }} --python={{ venv_python_executable }} {{ (ansible_pkg_mgr == 'apt') | ternary('--always-copy', '') }} {{ venv_build_host_venv_path }}", 'args': {'creates': '{{ venv_build_host_venv_path }}/bin/activate'}}, {'name': 'Upgrade the wheel build virtualenv pip/setuptools/wheel to the versions we want', 'pip': {'name': ['pip', 'setuptools', 'wheel'], 'state': '{{ venv_pip_package_state }}', 'virtualenv': '{{ venv_build_host_venv_path }}', 'extra_args': '--find-links {{ venv_build_host_wheel_path }}/ --log /var/log/python_venv_build.log {{ venv_pip_install_args }}'}, 'register': '_update_virtualenv_packages', 'until': '_update_virtualenv_packages is success', 'retries': 5, 'delay': 2}, {'name': 'Build wheels for the packages to be installed into the venv', 'command': "{{  venv_build_host_venv_path }}/bin/pip wheel --wheel-dir {{ venv_build_host_wheel_path }}/ --find-links {{ venv_build_host_wheel_path }}/ --log /var/log/python_wheel_build.log {{ venv_pip_install_args }} {{ (venv_default_pip_packages + venv_pip_packages) | join(' ') }}", 'register': '_build_python_wheels', 'until': '_build_python_wheels is success', 'changed_when': "(_build_python_wheels.stdout.find('Successfully built') != -1) or (_build_python_wheels.stdout | regex_search('Saved \\S*\\.whl'))", 'retries': 5, 'delay': 2}]}]
+###########
+
+root:None
+name:Build the wheels on the build host
+delegate_to:{{ venv_build_host }}
+become:{{ venv_build_host == 'localhost' }}
+when:None
+:venv_build_host != inventory_hostname
+block:None
+:None
+name:Install distro packages for wheel build
+package:None
+:None
+name:{{ (venv_build_base_distro_package_list + venv_build_distro_package_list) | unique }}
+state:{{ venv_distro_package_state }}
+update_cache:{{ (ansible_pkg_mgr in ['apt', 'zypper']) | ternary('yes', omit) }}
+cache_valid_time:{{ (ansible_pkg_mgr == 'apt') | ternary(venv_distro_cache_valid_time, omit) }}
+when:None
+:(venv_build_distro_package_list | length > 0) or (venv_install_distro_package_list | length > 0)
+register:_install_build_distro_packages
+until:_install_build_distro_packages is success
+retries:5
+delay:2
+:None
+name:Ensure a fresh venv_build_host_venv_path if venv_rebuild is enabled
+file:None
+:None
+path:{{ venv_build_host_venv_path }}
+state:absent
+when:None
+:venv_rebuild | bool
+:None
+name:Create wheel directory on the build host
+file:None
+:None
+path:{{ venv_build_host_wheel_path }}
+state:directory
+:None
+name:Create the wheel build virtualenv (if it does not exist)
+command:virtualenv {{ _venv_create_extra_options }} --python={{ venv_python_executable }} {{ (ansible_pkg_mgr == 'apt') | ternary('--always-copy', '') }} {{ venv_build_host_venv_path }}
+args:None
+:None
+creates:{{ venv_build_host_venv_path }}/bin/activate
+:None
+name:Upgrade the wheel build virtualenv pip/setuptools/wheel to the versions we want
+pip:None
+:None
+name:None
+:pip
+:setuptools
+:wheel
+state:{{ venv_pip_package_state }}
+virtualenv:{{ venv_build_host_venv_path }}
+extra_args:--find-links {{ venv_build_host_wheel_path }}/ --log /var/log/python_venv_build.log {{ venv_pip_install_args }}
+register:_update_virtualenv_packages
+until:_update_virtualenv_packages is success
+retries:5
+delay:2
+:None
+name:Build wheels for the packages to be installed into the venv
+command:{{  venv_build_host_venv_path }}/bin/pip wheel --wheel-dir {{ venv_build_host_wheel_path }}/ --find-links {{ venv_build_host_wheel_path }}/ --log /var/log/python_wheel_build.log {{ venv_pip_install_args }} {{ (venv_default_pip_packages + venv_pip_packages) | join(' ') }}
+register:_build_python_wheels
+until:_build_python_wheels is success
+changed_when:(_build_python_wheels.stdout.find('Successfully built') != -1) or (_build_python_wheels.stdout | regex_search('Saved \S*\.whl'))
+retries:5
+delay:2
+
+
+14####
+[{'name': 'Ensure local facts folder exists', 'file': {'path': '/etc/ansible/facts.d', 'state': 'directory'}}, {'name': 'Record the necessary facts', 'ini_file': {'dest': '/etc/ansible/facts.d/{{ venv_facts_dest }}.fact', 'section': '{{ item.section }}', 'option': '{{ item.option }}', 'value': '{{ item.value }}'}, 'with_items': '{{ venv_facts_when_changed }}', 'when': ['venv_facts_when_changed != []', '(_install_venv_pip_packages is defined and _install_venv_pip_packages is mapping and _install_venv_pip_packages is changed)']}]
+###########
+
+root:None
+name:Ensure local facts folder exists
+file:None
+:None
+path:/etc/ansible/facts.d
+state:directory
+name:Record the necessary facts
+ini_file:None
+:None
+dest:/etc/ansible/facts.d/{{ venv_facts_dest }}.fact
+section:{{ item.section }}
+option:{{ item.option }}
+value:{{ item.value }}
+with_items:{{ venv_facts_when_changed }}
+when:None
+:venv_facts_when_changed != []
+:(_install_venv_pip_packages is defined and _install_venv_pip_packages is mapping and _install_venv_pip_packages is changed)
+
+
+15####
+[{'name': 'Install distro packages for venv build', 'package': {'name': '{{ (venv_build_host != inventory_hostname) | ternary(venv_install_distro_package_list, (venv_build_base_distro_package_list + venv_build_distro_package_list + venv_install_distro_package_list) | unique) }}', 'state': '{{ venv_distro_package_state }}', 'update_cache': "{{ (ansible_pkg_mgr in ['apt', 'zypper']) | ternary('yes', omit) }}", 'cache_valid_time': "{{ (ansible_pkg_mgr == 'apt') | ternary(venv_distro_cache_valid_time, omit) }}"}, 'when': ['(venv_build_distro_package_list | length > 0) or (venv_install_distro_package_list | length > 0)'], 'register': '_install_distro_packages', 'until': '_install_distro_packages is success', 'retries': 5, 'delay': 2}, {'name': 'Ensure a fresh venv_install_destination_path if venv_rebuild is enabled', 'file': {'path': '{{ venv_install_destination_path }}', 'state': 'absent'}, 'when': ['venv_rebuild | bool']}, {'name': 'Create the virtualenv (if it does not exist)', 'command': "virtualenv {{ _venv_create_extra_options }} --python={{ venv_python_executable }} {{ (ansible_pkg_mgr == 'apt') | ternary('--always-copy', '') }} {{ venv_install_destination_path }}", 'args': {'creates': '{{ venv_install_destination_path }}/bin/activate'}}, {'name': 'Upgrade pip/setuptools/wheel to the versions we want', 'pip': {'name': ['pip', 'setuptools', 'wheel'], 'state': '{{ venv_pip_package_state }}', 'virtualenv': '{{ venv_install_destination_path }}', 'extra_args': '--log /var/log/python_venv_build.log {{ venv_pip_install_args }}'}, 'register': '_update_virtualenv_packages', 'until': '_update_virtualenv_packages is success', 'retries': 5, 'delay': 2}, {'name': 'Install python packages into the venv', 'pip': {'name': '{{ venv_default_pip_packages + venv_pip_packages }}', 'state': '{{ venv_pip_package_state }}', 'virtualenv': '{{ venv_install_destination_path }}', 'extra_args': '--pre --log /var/log/python_venv_build.log {{ venv_pip_install_args }}'}, 'register': '_install_venv_pip_packages', 'until': '_install_venv_pip_packages is success', 'retries': 5, 'delay': 2, 'notify': ['venv changed']}]
+###########
+
+root:None
+name:Install distro packages for venv build
+package:None
+:None
+name:{{ (venv_build_host != inventory_hostname) | ternary(venv_install_distro_package_list, (venv_build_base_distro_package_list + venv_build_distro_package_list + venv_install_distro_package_list) | unique) }}
+state:{{ venv_distro_package_state }}
+update_cache:{{ (ansible_pkg_mgr in ['apt', 'zypper']) | ternary('yes', omit) }}
+cache_valid_time:{{ (ansible_pkg_mgr == 'apt') | ternary(venv_distro_cache_valid_time, omit) }}
+when:None
+:(venv_build_distro_package_list | length > 0) or (venv_install_distro_package_list | length > 0)
+register:_install_distro_packages
+until:_install_distro_packages is success
+retries:5
+delay:2
+name:Ensure a fresh venv_install_destination_path if venv_rebuild is enabled
+file:None
+:None
+path:{{ venv_install_destination_path }}
+state:absent
+when:None
+:venv_rebuild | bool
+name:Create the virtualenv (if it does not exist)
+command:virtualenv {{ _venv_create_extra_options }} --python={{ venv_python_executable }} {{ (ansible_pkg_mgr == 'apt') | ternary('--always-copy', '') }} {{ venv_install_destination_path }}
+args:None
+:None
+creates:{{ venv_install_destination_path }}/bin/activate
+name:Upgrade pip/setuptools/wheel to the versions we want
+pip:None
+:None
+name:None
+:pip
+:setuptools
+:wheel
+state:{{ venv_pip_package_state }}
+virtualenv:{{ venv_install_destination_path }}
+extra_args:--log /var/log/python_venv_build.log {{ venv_pip_install_args }}
+register:_update_virtualenv_packages
+until:_update_virtualenv_packages is success
+retries:5
+delay:2
+name:Install python packages into the venv
+pip:None
+:None
+name:{{ venv_default_pip_packages + venv_pip_packages }}
+state:{{ venv_pip_package_state }}
+virtualenv:{{ venv_install_destination_path }}
+extra_args:--pre --log /var/log/python_venv_build.log {{ venv_pip_install_args }}
+register:_install_venv_pip_packages
+until:_install_venv_pip_packages is success
+retries:5
+delay:2
+notify:None
+:venv changed
+
+
+16####
+[{'import_tasks': 'python_venv_preflight.yml', 'tags': ['always']}, {'import_tasks': 'python_venv_wheel_build.yml', 'run_once': True, 'tags': ['build']}, {'import_tasks': 'python_venv_install.yml', 'tags': ['install']}, {'import_tasks': 'python_venv_set_facts.yml', 'tags': ['install']}]
+###########
+
+root:None
+import_tasks:python_venv_preflight.yml
+tags:None
+:always
+import_tasks:python_venv_wheel_build.yml
+run_once:True
+tags:None
+:build
+import_tasks:python_venv_install.yml
+tags:None
+:install
+import_tasks:python_venv_set_facts.yml
+tags:None
+:install
+
+
+17####
+[{'name': 'Prepare the host/containers', 'import_playbook': 'common/test-setup-host.yml'}, {'name': 'Prepare web server on localhost to serve python packages', 'hosts': 'localhost', 'connection': 'local', 'become': True, 'any_errors_fatal': True, 'tasks': [{'name': 'Set venv_build_archive_path and venv_install_source_path', 'set_fact': {'venv_build_host_wheel_path': '{%- if ansible_distribution == "Ubuntu" %} {%-   set _path = "/var/www/html" %} {%- elif ansible_distribution == "CentOS" %} {%-   set _path = "/usr/share/nginx/html" %} {%- else %} {%-   set _path = "/srv/www/htdocs" %} {%- endif %} {{- _path }}'}}, {'name': 'Install EPEL gpg keys', 'rpm_key': {'key': 'http://dl.fedoraproject.org/pub/epel/RPM-GPG-KEY-EPEL-7', 'state': 'present'}, 'when': ["ansible_pkg_mgr in ['yum', 'dnf']"], 'register': '_add_yum_keys', 'until': '_add_yum_keys  is success', 'retries': 5, 'delay': 2}, {'name': 'Install the EPEL repository', 'yum_repository': {'name': 'epel-nginx', 'baseurl': "{{ (centos_epel_mirror | default ('http://download.fedoraproject.org/pub/epel')) ~ '/' ~ ansible_distribution_major_version ~ '/' ~ ansible_architecture }}", 'description': 'Extra Packages for Enterprise Linux 7 - $basearch', 'gpgcheck': True, 'enabled': True, 'state': 'present', 'includepkgs': 'nginx*'}, 'when': ["ansible_pkg_mgr in ['yum', 'dnf']"], 'register': 'install_epel_repo', 'until': 'install_epel_repo  is success', 'retries': 5, 'delay': 2}, {'name': 'Install distro packages', 'package': {'name': 'nginx', 'update_cache': "{{ (ansible_pkg_mgr in ['apt', 'zypper']) | ternary('yes', omit) }}"}, 'register': 'install', 'until': 'install  is success', 'retries': 5, 'delay': 2}, {'name': 'Enable and start nginx', 'service': {'name': 'nginx', 'enabled': True, 'daemon_reload': True, 'state': 'restarted'}}]}, {'name': 'Verify not using a build host', 'hosts': 'container1', 'remote_user': 'root', 'any_errors_fatal': True, 'vars': {'venv_pip_packages': ['Jinja2==2.10'], 'venv_install_destination_path': '/openstack/venvs/test-venv'}, 'tasks': [{'name': 'Execute venv install', 'include_role': {'name': 'python_venv_build', 'private': True}, 'vars': {'venv_facts_when_changed': [{'section': '{{ inventory_hostname }}', 'option': 'test', 'value': True}]}}, {'name': 'refresh local facts', 'setup': {'filter': 'ansible_local', 'gather_subset': '!all'}}, {'name': 'Show the ansible_local facts', 'debug': {'var': 'ansible_local'}}, {'name': 'Verify that the facts were set', 'assert': {'that': ["ansible_local['openstack_ansible'][inventory_hostname]['test'] | bool"]}}, {'name': 'Find files/folders on targets', 'find': {'file_type': 'directory', 'get_checksum': False, 'recurse': False, 'paths': ['{{ venv_install_destination_path | dirname }}']}, 'register': '_target_folders'}, {'name': 'Compile the folder list from the targets', 'set_fact': {'_target_folder_list': "{{ _target_folders['files'] | map(attribute='path') | list }}"}}, {'name': 'Show the files/folder from the targets', 'debug': {'var': '_target_folder_list'}}, {'name': 'Verify the folder list from the targets', 'assert': {'that': ['{{ venv_install_destination_path in _target_folder_list }}']}}]}, {'name': 'Verify using a build host', 'hosts': 'container2:container3', 'remote_user': 'root', 'any_errors_fatal': True, 'vars': {'venv_default_pip_packages': ['elasticsearch>=6.0.0,<7.0.0'], 'venv_pip_packages': ['Jinja2==2.10'], 'venv_install_destination_path': '/openstack/venvs/test-venv', 'venv_pip_install_args': "--find-links http://{{ hostvars['localhost'].ansible_default_ipv4.address }} --trusted-host {{ hostvars['localhost'].ansible_default_ipv4.address }}", 'venv_build_host': 'localhost', 'venv_build_host_wheel_path': "{{ hostvars['localhost']['venv_build_host_wheel_path'] }}"}, 'tasks': [{'name': 'Execute venv install', 'include_role': {'name': 'python_venv_build', 'private': True}, 'vars': {'venv_facts_when_changed': [{'section': '{{ inventory_hostname }}', 'option': 'test', 'value': True}]}}, {'name': 'refresh local facts', 'setup': {'filter': 'ansible_local', 'gather_subset': '!all'}}, {'name': 'Show the ansible_local facts', 'debug': {'var': 'ansible_local'}}, {'name': 'Verify that the facts were set', 'assert': {'that': ["ansible_local['openstack_ansible'][inventory_hostname]['test'] | bool"]}}, {'name': 'Find files/folders on targets', 'find': {'file_type': 'directory', 'get_checksum': False, 'recurse': False, 'paths': ['{{ venv_install_destination_path | dirname }}']}, 'register': '_target_folders'}, {'name': 'Compile the folder list from the targets', 'set_fact': {'_target_folder_list': "{{ _target_folders['files'] | map(attribute='path') | list }}"}}, {'name': 'Show the files/folder from the targets', 'debug': {'var': '_target_folder_list'}}, {'name': 'Verify the folder list from the targets', 'assert': {'that': ['{{ venv_install_destination_path in _target_folder_list }}']}}]}]
+###########
+
+root:None
+name:Prepare the host/containers
+import_playbook:common/test-setup-host.yml
+name:Prepare web server on localhost to serve python packages
+hosts:localhost
+connection:local
+become:True
+any_errors_fatal:True
+tasks:None
+:None
+name:Set venv_build_archive_path and venv_install_source_path
+set_fact:None
+:None
+venv_build_host_wheel_path:{%- if ansible_distribution == "Ubuntu" %} {%-   set _path = "/var/www/html" %} {%- elif ansible_distribution == "CentOS" %} {%-   set _path = "/usr/share/nginx/html" %} {%- else %} {%-   set _path = "/srv/www/htdocs" %} {%- endif %} {{- _path }}
+:None
+name:Install EPEL gpg keys
+rpm_key:None
+:None
+key:http://dl.fedoraproject.org/pub/epel/RPM-GPG-KEY-EPEL-7
+state:present
+when:None
+:ansible_pkg_mgr in ['yum', 'dnf']
+register:_add_yum_keys
+until:_add_yum_keys  is success
+retries:5
+delay:2
+:None
+name:Install the EPEL repository
+yum_repository:None
+:None
+name:epel-nginx
+baseurl:{{ (centos_epel_mirror | default ('http://download.fedoraproject.org/pub/epel')) ~ '/' ~ ansible_distribution_major_version ~ '/' ~ ansible_architecture }}
+description:Extra Packages for Enterprise Linux 7 - $basearch
+gpgcheck:True
+enabled:True
+state:present
+includepkgs:nginx*
+when:None
+:ansible_pkg_mgr in ['yum', 'dnf']
+register:install_epel_repo
+until:install_epel_repo  is success
+retries:5
+delay:2
+:None
+name:Install distro packages
+package:None
+:None
+name:nginx
+update_cache:{{ (ansible_pkg_mgr in ['apt', 'zypper']) | ternary('yes', omit) }}
+register:install
+until:install  is success
+retries:5
+delay:2
+:None
+name:Enable and start nginx
+service:None
+:None
+name:nginx
+enabled:True
+daemon_reload:True
+state:restarted
+name:Verify not using a build host
+hosts:container1
+remote_user:root
+any_errors_fatal:True
+vars:None
+:None
+venv_pip_packages:None
+:Jinja2==2.10
+venv_install_destination_path:/openstack/venvs/test-venv
+tasks:None
+:None
+name:Execute venv install
+include_role:None
+:None
+name:python_venv_build
+private:True
+vars:None
+:None
+venv_facts_when_changed:None
+:None
+section:{{ inventory_hostname }}
+option:test
+value:True
+:None
+name:refresh local facts
+setup:None
+:None
+filter:ansible_local
+gather_subset:!all
+:None
+name:Show the ansible_local facts
+debug:None
+:None
+var:ansible_local
+:None
+name:Verify that the facts were set
+assert:None
+:None
+that:None
+:ansible_local['openstack_ansible'][inventory_hostname]['test'] | bool
+:None
+name:Find files/folders on targets
+find:None
+:None
+file_type:directory
+get_checksum:False
+recurse:False
+paths:None
+:{{ venv_install_destination_path | dirname }}
+register:_target_folders
+:None
+name:Compile the folder list from the targets
+set_fact:None
+:None
+_target_folder_list:{{ _target_folders['files'] | map(attribute='path') | list }}
+:None
+name:Show the files/folder from the targets
+debug:None
+:None
+var:_target_folder_list
+:None
+name:Verify the folder list from the targets
+assert:None
+:None
+that:None
+:{{ venv_install_destination_path in _target_folder_list }}
+name:Verify using a build host
+hosts:container2:container3
+remote_user:root
+any_errors_fatal:True
+vars:None
+:None
+venv_default_pip_packages:None
+:elasticsearch>=6.0.0,<7.0.0
+venv_pip_packages:None
+:Jinja2==2.10
+venv_install_destination_path:/openstack/venvs/test-venv
+venv_pip_install_args:--find-links http://{{ hostvars['localhost'].ansible_default_ipv4.address }} --trusted-host {{ hostvars['localhost'].ansible_default_ipv4.address }}
+venv_build_host:localhost
+venv_build_host_wheel_path:{{ hostvars['localhost']['venv_build_host_wheel_path'] }}
+tasks:None
+:None
+name:Execute venv install
+include_role:None
+:None
+name:python_venv_build
+private:True
+vars:None
+:None
+venv_facts_when_changed:None
+:None
+section:{{ inventory_hostname }}
+option:test
+value:True
+:None
+name:refresh local facts
+setup:None
+:None
+filter:ansible_local
+gather_subset:!all
+:None
+name:Show the ansible_local facts
+debug:None
+:None
+var:ansible_local
+:None
+name:Verify that the facts were set
+assert:None
+:None
+that:None
+:ansible_local['openstack_ansible'][inventory_hostname]['test'] | bool
+:None
+name:Find files/folders on targets
+find:None
+:None
+file_type:directory
+get_checksum:False
+recurse:False
+paths:None
+:{{ venv_install_destination_path | dirname }}
+register:_target_folders
+:None
+name:Compile the folder list from the targets
+set_fact:None
+:None
+_target_folder_list:{{ _target_folders['files'] | map(attribute='path') | list }}
+:None
+name:Show the files/folder from the targets
+debug:None
+:None
+var:_target_folder_list
+:None
+name:Verify the folder list from the targets
+assert:None
+:None
+that:None
+:{{ venv_install_destination_path in _target_folder_list }}
+
+
+18####
+[{'name': 'apt_package_pinning', 'src': 'https://git.openstack.org/openstack/openstack-ansible-apt_package_pinning', 'scm': 'git', 'version': 'master'}, {'name': 'pip_install', 'src': 'https://git.openstack.org/openstack/openstack-ansible-pip_install', 'scm': 'git', 'version': 'master'}, {'name': 'openstack_hosts', 'src': 'https://git.openstack.org/openstack/openstack-ansible-openstack_hosts', 'scm': 'git', 'version': 'master'}, {'name': 'lxc_hosts', 'src': 'https://git.openstack.org/openstack/openstack-ansible-lxc_hosts', 'scm': 'git', 'version': 'master'}, {'name': 'lxc_container_create', 'src': 'https://git.openstack.org/openstack/openstack-ansible-lxc_container_create', 'scm': 'git', 'version': 'master'}]
+###########
+
+root:None
+name:apt_package_pinning
+src:https://git.openstack.org/openstack/openstack-ansible-apt_package_pinning
+scm:git
+version:master
+name:pip_install
+src:https://git.openstack.org/openstack/openstack-ansible-pip_install
+scm:git
+version:master
+name:openstack_hosts
+src:https://git.openstack.org/openstack/openstack-ansible-openstack_hosts
+scm:git
+version:master
+name:lxc_hosts
+src:https://git.openstack.org/openstack/openstack-ansible-lxc_hosts
+scm:git
+version:master
+name:lxc_container_create
+src:https://git.openstack.org/openstack/openstack-ansible-lxc_container_create
+scm:git
+version:master
+
+
+19####
+{'container_networks': {'management_address': {'address': '{{ ansible_host }}', 'bridge': 'br-mgmt', 'interface': 'eth1', 'netmask': '255.255.252.0', 'type': 'veth'}}, 'physical_host': 'localhost', 'properties': {'service_name': '{{ inventory_hostname }}'}, 'lxc2_container_config_list': ['lxc.aa_profile=lxc-openstack'], 'lxc3_container_config_list': ['lxc.apparmor.profile=lxc-openstack'], 'lxc_container_config_list': "{{ lookup('pipe', 'lxc-info --version || echo 2.0.0') is version_compare('3.0.0', 'lt') | ternary(lxc2_container_config_list, lxc3_container_config_list) }}"}
+###########
+
+root:None
+container_networks:None
+:None
+management_address:None
+:None
+address:{{ ansible_host }}
+bridge:br-mgmt
+interface:eth1
+netmask:255.255.252.0
+type:veth
+physical_host:localhost
+properties:None
+:None
+service_name:{{ inventory_hostname }}
+lxc2_container_config_list:None
+:lxc.aa_profile=lxc-openstack
+lxc3_container_config_list:None
+:lxc.apparmor.profile=lxc-openstack
+lxc_container_config_list:{{ lookup('pipe', 'lxc-info --version || echo 2.0.0') is version_compare('3.0.0', 'lt') | ternary(lxc2_container_config_list, lxc3_container_config_list) }}
+
+
+20####
+{'ansible_host': '10.1.0.2', 'ansible_become': True, 'ansible_user': 'root', 'container_name': 'container1'}
+###########
+
+root:None
+ansible_host:10.1.0.2
+ansible_become:True
+ansible_user:root
+container_name:container1
+
+
+21####
+{'ansible_host': '10.1.0.3', 'ansible_become': True, 'ansible_user': 'root', 'container_name': 'container2'}
+###########
+
+root:None
+ansible_host:10.1.0.3
+ansible_become:True
+ansible_user:root
+container_name:container2
+
+
+22####
+{'ansible_host': '10.1.0.4', 'ansible_become': True, 'ansible_user': 'root', 'container_name': 'container3'}
+###########
+
+root:None
+ansible_host:10.1.0.4
+ansible_become:True
+ansible_user:root
+container_name:container3
+
+
+23####
+{'bridges': [{'name': 'br-mgmt', 'ip_addr': '10.1.0.1'}], 'ansible_python_interpreter': '/usr/bin/python2'}
+###########
+
+root:None
+bridges:None
+:None
+name:br-mgmt
+ip_addr:10.1.0.1
+ansible_python_interpreter:/usr/bin/python2
+
+
+24####
+{'galaxy_info': {'author': 'openstack-ansible', 'description': 'Python venv preparation', 'company': 'OpenStack', 'license': 'Apache2', 'min_ansible_version': 2.4, 'platforms': [{'name': 'Ubuntu', 'versions': ['xenial', 'bionic']}, {'name': 'EL', 'versions': [7]}, {'name': 'opensuse', 'versions': [42.1, 42.2, 42.3]}], 'categories': ['cloud', 'python', 'development']}, 'dependencies': []}
+###########
+
+root:None
+galaxy_info:None
+:None
+author:openstack-ansible
+description:Python venv preparation
+company:OpenStack
+license:Apache2
+min_ansible_version:2.4
+platforms:None
+:None
+name:Ubuntu
+versions:None
+:xenial
+:bionic
+:None
+name:EL
+versions:None
+:7
+:None
+name:opensuse
+versions:None
+:42.1
+:42.2
+:42.3
+categories:None
+:cloud
+:python
+:development
+dependencies:None
+
+
+25####
+{'venv_build_base_distro_package_list': '{{ _venv_build_base_distro_package_list[ansible_os_family | lower] }}', 'venv_build_distro_package_list': [], 'venv_install_distro_package_list': [], 'venv_distro_package_state': 'latest', 'venv_pip_package_state': 'latest', 'venv_distro_cache_valid_time': 600, 'venv_default_pip_packages': [], 'venv_pip_packages': [], 'venv_pip_install_args': '', 'venv_python_executable': 'python2', 'venv_rebuild': False, 'venv_build_host': "{{ ((groups['repo_all'] is defined) and (groups['repo_all'] | length > 0)) | ternary(groups.get('repo_all')[0], inventory_hostname) }}", 'venv_build_host_venv_path': '/openstack/venvs/wheel-builder', 'venv_build_host_wheel_path': "/var/www/repo/os-releases/{{ openstack_release | default('master') }}/{{ (ansible_distribution | lower) | replace(' ', '_') }}-{{ ansible_distribution_version.split('.')[:2] | join('.') }}-{{ ansible_architecture | lower }}", 'venv_facts_when_changed': [], 'venv_facts_dest': 'openstack_ansible'}
+###########
+
+root:None
+venv_build_base_distro_package_list:{{ _venv_build_base_distro_package_list[ansible_os_family | lower] }}
+venv_build_distro_package_list:None
+venv_install_distro_package_list:None
+venv_distro_package_state:latest
+venv_pip_package_state:latest
+venv_distro_cache_valid_time:600
+venv_default_pip_packages:None
+venv_pip_packages:None
+venv_pip_install_args:
+venv_python_executable:python2
+venv_rebuild:False
+venv_build_host:{{ ((groups['repo_all'] is defined) and (groups['repo_all'] | length > 0)) | ternary(groups.get('repo_all')[0], inventory_hostname) }}
+venv_build_host_venv_path:/openstack/venvs/wheel-builder
+venv_build_host_wheel_path:/var/www/repo/os-releases/{{ openstack_release | default('master') }}/{{ (ansible_distribution | lower) | replace(' ', '_') }}-{{ ansible_distribution_version.split('.')[:2] | join('.') }}-{{ ansible_architecture | lower }}
+venv_facts_when_changed:None
+venv_facts_dest:openstack_ansible
+
+
+26####
+[{'project': {'templates': ['openstack-ansible-role-jobs', 'check-requirements', 'publish-openstack-docs-pti', 'release-notes-jobs-python3']}}]
+###########
+
+root:None
+project:None
+:None
+templates:None
+:openstack-ansible-role-jobs
+:check-requirements
+:publish-openstack-docs-pti
+:release-notes-jobs-python3
+
+
+27####
+[{'name': 'venv changed', 'meta': 'noop', 'when': False}]
+###########
+
+root:None
+name:venv changed
+meta:noop
+when:False
+
+
+28####
+[{'name': 'plugins', 'src': 'https://git.openstack.org/openstack/openstack-ansible-plugins', 'scm': 'git', 'version': 'master'}]
+###########
+
+root:None
+name:plugins
+src:https://git.openstack.org/openstack/openstack-ansible-plugins
+scm:git
+version:master
+
+
+29####
+{'systemd_mount_states': {'reloaded': 'reload', 'restarted': 'reload-or-restart', 'started': 'reload-or-restart', 'stopped': 'stopped', 'absent': 'stopped'}}
+###########
+
+root:None
+systemd_mount_states:None
+:None
+reloaded:reload
+restarted:reload-or-restart
+started:reload-or-restart
+stopped:stopped
+absent:stopped
+
+
+30####
+[{'name': 'Set mount facts', 'set_fact': {'systemd_mount_suffix': "{{ (item.type == 'swap') | ternary('swap', 'mount') }}", 'systemd_mount_item': '{{ item.where | default(item.what) }}'}}, {'name': 'Escape mount service file name', 'command': 'systemd-escape -p --suffix="{{ systemd_mount_suffix }}" "{{ systemd_mount_item }}"', 'changed_when': False, 'register': 'mount_service_name'}, {'name': 'Create mount target(s)', 'file': {'path': '{{ item.where }}', 'state': 'directory', 'owner': '{{ item.owner | default(omit) }}', 'group': '{{ item.group | default(omit) }}', 'mode': '0755'}, 'when': ['item.where is defined', "item.state | default('unknown') != 'absent'", "item.type != 'swap'"], 'tags': ['systemd-mount']}, {'name': 'Create systemd mount services(s)', 'config_template': {'src': 'systemd-mount.j2', 'dest': '/etc/systemd/system/{{ mount_service_name.stdout }}', 'owner': 'root', 'group': 'root', 'mode': '0640', 'config_overrides': '{{ item.config_overrides | default({}) }}', 'config_type': 'ini'}, 'when': ["item.state | default('unknown') != 'absent'"], 'tags': ['systemd-mount']}, {'name': 'Load or Unload mount(s)', 'systemd': {'daemon_reload': True, 'name': '{{ mount_service_name.stdout }}', 'enabled': '{{ item.enabled | default(true) }}'}, 'when': ["item.state | default('unknown') != 'absent'"]}, {'name': 'Mount state block', 'block': [{'name': 'Set the state of the mount', 'shell': 'systemctl {{ systemd_mount_states[item.state] }} $(systemd-escape -p --suffix="{{ systemd_mount_suffix }}" "{{ systemd_mount_item }}")', 'args': {'warn': False}, 'when': ['item.state is defined'], 'tags': ['skip_ansible_lint']}], 'rescue': [{'name': 'Set the state of the mount (fallback)', 'systemd': {'name': '{{ mount_service_name.stdout }}', 'state': '{{ item.state }}'}}]}, {'name': 'Unload mount(s)', 'systemd': {'daemon_reload': True, 'name': '{{ mount_service_name.stdout }}', 'enabled': False, 'no_block': True}, 'when': ["item.state | default('unknown') == 'absent'"], 'notify': 'Remove mount'}]
+###########
+
+root:None
+name:Set mount facts
+set_fact:None
+:None
+systemd_mount_suffix:{{ (item.type == 'swap') | ternary('swap', 'mount') }}
+systemd_mount_item:{{ item.where | default(item.what) }}
+name:Escape mount service file name
+command:systemd-escape -p --suffix="{{ systemd_mount_suffix }}" "{{ systemd_mount_item }}"
+changed_when:False
+register:mount_service_name
+name:Create mount target(s)
+file:None
+:None
+path:{{ item.where }}
+state:directory
+owner:{{ item.owner | default(omit) }}
+group:{{ item.group | default(omit) }}
+mode:0755
+when:None
+:item.where is defined
+:item.state | default('unknown') != 'absent'
+:item.type != 'swap'
+tags:None
+:systemd-mount
+name:Create systemd mount services(s)
+config_template:None
+:None
+src:systemd-mount.j2
+dest:/etc/systemd/system/{{ mount_service_name.stdout }}
+owner:root
+group:root
+mode:0640
+config_overrides:{{ item.config_overrides | default({}) }}
+config_type:ini
+when:None
+:item.state | default('unknown') != 'absent'
+tags:None
+:systemd-mount
+name:Load or Unload mount(s)
+systemd:None
+:None
+daemon_reload:True
+name:{{ mount_service_name.stdout }}
+enabled:{{ item.enabled | default(true) }}
+when:None
+:item.state | default('unknown') != 'absent'
+name:Mount state block
+block:None
+:None
+name:Set the state of the mount
+shell:systemctl {{ systemd_mount_states[item.state] }} $(systemd-escape -p --suffix="{{ systemd_mount_suffix }}" "{{ systemd_mount_item }}")
+args:None
+:None
+warn:False
+when:None
+:item.state is defined
+tags:None
+:skip_ansible_lint
+rescue:None
+:None
+name:Set the state of the mount (fallback)
+systemd:None
+:None
+name:{{ mount_service_name.stdout }}
+state:{{ item.state }}
+name:Unload mount(s)
+systemd:None
+:None
+daemon_reload:True
+name:{{ mount_service_name.stdout }}
+enabled:False
+no_block:True
+when:None
+:item.state | default('unknown') == 'absent'
+notify:Remove mount
+
+
+31####
+[{'name': 'Fail if mount is missing what parameters', 'fail': {'msg': 'Mount parameters [ type ] is missing for mount {{ item }}'}, 'with_items': '{{ systemd_mounts }}', 'when': ['item.type is undefined'], 'tags': ['always']}, {'name': 'Fail if mount is missing what parameters', 'fail': {'msg': 'Mount parameters [ what ] is missing for mount {{ item }}'}, 'with_items': '{{ systemd_mounts }}', 'when': ['item.what is undefined'], 'tags': ['always']}, {'name': 'Fail if mount is missing where parameters', 'fail': {'msg': 'Mount parameters [ where ] is missing for mount {{ item }}'}, 'with_items': '{{ systemd_mounts }}', 'when': ["item.where is undefined and item.type != 'swap'"], 'tags': ['always']}, {'include_tasks': 'systemd_mounts.yml', 'with_items': '{{ systemd_mounts }}'}]
+###########
+
+root:None
+name:Fail if mount is missing what parameters
+fail:None
+:None
+msg:Mount parameters [ type ] is missing for mount {{ item }}
+with_items:{{ systemd_mounts }}
+when:None
+:item.type is undefined
+tags:None
+:always
+name:Fail if mount is missing what parameters
+fail:None
+:None
+msg:Mount parameters [ what ] is missing for mount {{ item }}
+with_items:{{ systemd_mounts }}
+when:None
+:item.what is undefined
+tags:None
+:always
+name:Fail if mount is missing where parameters
+fail:None
+:None
+msg:Mount parameters [ where ] is missing for mount {{ item }}
+with_items:{{ systemd_mounts }}
+when:None
+:item.where is undefined and item.type != 'swap'
+tags:None
+:always
+include_tasks:systemd_mounts.yml
+with_items:{{ systemd_mounts }}
+
+
+32####
+{'tempest_run': True, 'tempest_venv_tag': '{{ tempest_git_install_branch }}', 'tempest_venv_bin': '/opt/tempest_{{ tempest_venv_tag }}/bin', 'tempest_log_dir': '/var/log/', 'tempest_test_whitelist': ['tempest.scenario.test_server_basic_ops.TestServerBasicOps.test_server_basic_ops'], 'neutron_provider_networks': {'network_types': 'vxlan,flat', 'network_mappings': 'flat:eth12', 'network_vxlan_ranges': '1:1000'}}
+###########
+
+root:None
+tempest_run:True
+tempest_venv_tag:{{ tempest_git_install_branch }}
+tempest_venv_bin:/opt/tempest_{{ tempest_venv_tag }}/bin
+tempest_log_dir:/var/log/
+tempest_test_whitelist:None
+:tempest.scenario.test_server_basic_ops.TestServerBasicOps.test_server_basic_ops
+neutron_provider_networks:None
+:None
+network_types:vxlan,flat
+network_mappings:flat:eth12
+network_vxlan_ranges:1:1000
+
+
+33####
+[{'import_playbook': 'test-create-swap-dev.yml'}, {'import_playbook': 'test-create-nfs-dev.yml'}, {'import_playbook': 'test-create-btrfs-dev.yml'}, {'name': 'Playbook for role testing', 'hosts': 'localhost', 'connection': 'local', 'user': 'root', 'become': True, 'roles': [{'role': 'systemd_mount'}], 'post_tasks': [{'name': 'Ensure mount are mounted', 'command': "grep -w '{{ item }}' /proc/mounts", 'with_items': ['/var/lib/sparse-file', '/var/lib/test'], 'tags': ['skip_ansible_lint']}, {'name': 'Ensure swap is enabled', 'shell': "swapon | grep -w '/var/lib/test-swap.img'", 'tags': ['skip_ansible_lint']}], 'vars': {'systemd_mounts': [{'what': '/var/lib/sparse-file.img', 'where': '/var/lib/sparse-file', 'type': 'btrfs', 'options': 'loop', 'state': 'started', 'enabled': True, 'config_overrides': {'Unit': {'ConditionPathExists': '/var/lib/sparse-file.img'}}}, {'what': '/var/lib/test-swap.img', 'priority': '0', 'options': '%%', 'type': 'swap', 'state': 'started', 'enabled': True}, {'what': '127.0.0.1:/srv/nfs/test', 'where': '/var/lib/test', 'type': 'nfs', 'options': '_netdev,auto', 'state': 'started', 'enabled': True, 'config_overrides': {'Unit': {'After': {'network.target': None, 'network-online.target': None}, 'Wants': 'network-online.target'}}}]}}]
+###########
+
+root:None
+import_playbook:test-create-swap-dev.yml
+import_playbook:test-create-nfs-dev.yml
+import_playbook:test-create-btrfs-dev.yml
+name:Playbook for role testing
+hosts:localhost
+connection:local
+user:root
+become:True
+roles:None
+:None
+role:systemd_mount
+post_tasks:None
+:None
+name:Ensure mount are mounted
+command:grep -w '{{ item }}' /proc/mounts
+with_items:None
+:/var/lib/sparse-file
+:/var/lib/test
+tags:None
+:skip_ansible_lint
+:None
+name:Ensure swap is enabled
+shell:swapon | grep -w '/var/lib/test-swap.img'
+tags:None
+:skip_ansible_lint
+vars:None
+:None
+systemd_mounts:None
+:None
+what:/var/lib/sparse-file.img
+where:/var/lib/sparse-file
+type:btrfs
+options:loop
+state:started
+enabled:True
+config_overrides:None
+:None
+Unit:None
+:None
+ConditionPathExists:/var/lib/sparse-file.img
+:None
+what:/var/lib/test-swap.img
+priority:0
+options:%%
+type:swap
+state:started
+enabled:True
+:None
+what:127.0.0.1:/srv/nfs/test
+where:/var/lib/test
+type:nfs
+options:_netdev,auto
+state:started
+enabled:True
+config_overrides:None
+:None
+Unit:None
+:None
+After:None
+:None
+network.target:None
+network-online.target:None
+Wants:network-online.target
+
+
+34####
+[{'name': 'plugins', 'src': 'https://git.openstack.org/openstack/openstack-ansible-plugins', 'scm': 'git', 'version': 'master'}]
+###########
+
+root:None
+name:plugins
+src:https://git.openstack.org/openstack/openstack-ansible-plugins
+scm:git
+version:master
+
+
+35####
+[{'name': 'Configure BTRFS sparse file', 'hosts': 'localhost', 'user': 'root', 'become': True, 'connection': 'local', 'tasks': [{'name': 'Install BTRFS packages', 'package': {'name': '{{ btrfs_package[ansible_pkg_mgr | lower] }}', 'state': 'present'}}, {'name': 'Create base directories', 'file': {'path': '/var/lib', 'state': 'directory'}}, {'name': 'Create sparse file', 'command': 'truncate -s 1024G /var/lib/sparse-file.img', 'args': {'creates': '/var/lib/sparse-file.img'}, 'register': 'sparse_file'}, {'name': 'Format the sparse file', 'filesystem': {'fstype': 'btrfs', 'dev': '/var/lib/sparse-file.img'}, 'when': ['sparse_file  is changed']}], 'vars': {'btrfs_package': {'apt': 'btrfs-tools', 'yum': 'btrfs-progs', 'zypper': 'btrfsprogs'}}}]
+###########
+
+root:None
+name:Configure BTRFS sparse file
+hosts:localhost
+user:root
+become:True
+connection:local
+tasks:None
+:None
+name:Install BTRFS packages
+package:None
+:None
+name:{{ btrfs_package[ansible_pkg_mgr | lower] }}
+state:present
+:None
+name:Create base directories
+file:None
+:None
+path:/var/lib
+state:directory
+:None
+name:Create sparse file
+command:truncate -s 1024G /var/lib/sparse-file.img
+args:None
+:None
+creates:/var/lib/sparse-file.img
+register:sparse_file
+:None
+name:Format the sparse file
+filesystem:None
+:None
+fstype:btrfs
+dev:/var/lib/sparse-file.img
+when:None
+:sparse_file  is changed
+vars:None
+:None
+btrfs_package:None
+:None
+apt:btrfs-tools
+yum:btrfs-progs
+zypper:btrfsprogs
+
+
+36####
+[{'name': 'Configure swap sparse file', 'hosts': 'localhost', 'user': 'root', 'become': True, 'connection': 'local', 'tasks': [{'name': 'Create swap file', 'command': 'dd if=/dev/zero of=/var/lib/test-swap.img bs=1M count=128', 'args': {'creates': '/var/lib/test-swap.img'}, 'register': 'create_swap'}, {'name': 'Format the swap file', 'command': 'mkswap /var/lib/test-swap.img', 'failed_when': False, 'when': ['create_swap  is changed']}]}]
+###########
+
+root:None
+name:Configure swap sparse file
+hosts:localhost
+user:root
+become:True
+connection:local
+tasks:None
+:None
+name:Create swap file
+command:dd if=/dev/zero of=/var/lib/test-swap.img bs=1M count=128
+args:None
+:None
+creates:/var/lib/test-swap.img
+register:create_swap
+:None
+name:Format the swap file
+command:mkswap /var/lib/test-swap.img
+failed_when:False
+when:None
+:create_swap  is changed
+
+
+37####
+[{'name': 'Create an NFS backing store', 'hosts': 'localhost', 'user': 'root', 'become': True, 'connection': 'local', 'tasks': [{'name': 'Install NFS packages', 'package': {'name': '{{ nfs_package[ansible_distribution.split()[0] | lower] }}', 'state': 'present'}}, {'name': 'create the system group for nfs', 'group': {'name': 'nfs-user', 'gid': '10000', 'state': 'present', 'system': 'yes'}}, {'name': 'Create the system user for nfs', 'user': {'name': 'nfs-user', 'uid': '10000', 'group': 'nfs-user', 'comment': 'nfs-user', 'shell': '/bin/false', 'system': 'yes', 'createhome': 'yes', 'home': '/srv/nfs'}}, {'name': 'Create base directories', 'file': {'path': '{{ item }}', 'state': 'directory', 'owner': 'nfs-user', 'group': 'nfs-user'}, 'with_items': ['/srv/nfs/test']}, {'name': 'Create exports file', 'lineinfile': {'path': '/etc/exports', 'line': '{{ item }} 127.0.0.1/255.0.0.0(rw,sync,no_subtree_check,insecure,all_squash,anonuid=10000,anongid=10000)', 'owner': 'root', 'group': 'root', 'mode': 420, 'create': True}, 'with_items': ['/srv/nfs/test'], 'register': 'nfs_exportfs'}, {'name': 'Restart nfs-server', 'systemd': {'daemon_reload': True, 'name': 'nfs-server', 'enabled': 'yes', 'state': 'restarted'}, 'when': ['nfs_exportfs  is changed']}, {'name': 'Export NFS', 'command': 'exportfs -rav', 'tags': ['skip_ansible_lint']}], 'vars': {'nfs_package': {'ubuntu': 'nfs-kernel-server', 'centos': 'nfs-utils', 'opensuse': 'nfs-kernel-server'}}}]
+###########
+
+root:None
+name:Create an NFS backing store
+hosts:localhost
+user:root
+become:True
+connection:local
+tasks:None
+:None
+name:Install NFS packages
+package:None
+:None
+name:{{ nfs_package[ansible_distribution.split()[0] | lower] }}
+state:present
+:None
+name:create the system group for nfs
+group:None
+:None
+name:nfs-user
+gid:10000
+state:present
+system:yes
+:None
+name:Create the system user for nfs
+user:None
+:None
+name:nfs-user
+uid:10000
+group:nfs-user
+comment:nfs-user
+shell:/bin/false
+system:yes
+createhome:yes
+home:/srv/nfs
+:None
+name:Create base directories
+file:None
+:None
+path:{{ item }}
+state:directory
+owner:nfs-user
+group:nfs-user
+with_items:None
+:/srv/nfs/test
+:None
+name:Create exports file
+lineinfile:None
+:None
+path:/etc/exports
+line:{{ item }} 127.0.0.1/255.0.0.0(rw,sync,no_subtree_check,insecure,all_squash,anonuid=10000,anongid=10000)
+owner:root
+group:root
+mode:420
+create:True
+with_items:None
+:/srv/nfs/test
+register:nfs_exportfs
+:None
+name:Restart nfs-server
+systemd:None
+:None
+daemon_reload:True
+name:nfs-server
+enabled:yes
+state:restarted
+when:None
+:nfs_exportfs  is changed
+:None
+name:Export NFS
+command:exportfs -rav
+tags:None
+:skip_ansible_lint
+vars:None
+:None
+nfs_package:None
+:None
+ubuntu:nfs-kernel-server
+centos:nfs-utils
+opensuse:nfs-kernel-server
+
+
+38####
+{'container_networks': {'management_address': {'address': '{{ ansible_host }}', 'bridge': 'br-mgmt', 'interface': 'eth1', 'netmask': '255.255.255.0', 'type': 'veth'}}, 'physical_host': 'localhost', 'properties': {'service_name': '{{ inventory_hostname }}'}}
+###########
+
+root:None
+container_networks:None
+:None
+management_address:None
+:None
+address:{{ ansible_host }}
+bridge:br-mgmt
+interface:eth1
+netmask:255.255.255.0
+type:veth
+physical_host:localhost
+properties:None
+:None
+service_name:{{ inventory_hostname }}
+
+
+39####
+{'neutron_provider_networks': {'network_types': 'vxlan,flat', 'network_mappings': 'flat:eth12', 'network_vxlan_ranges': '1:1000'}, 'neutron_local_ip': '10.1.2.1', 'ansible_python_interpreter': '/usr/bin/python2', 'bridges': [{'name': 'br-mgmt', 'ip_addr': '10.1.1.1'}]}
+###########
+
+root:None
+neutron_provider_networks:None
+:None
+network_types:vxlan,flat
+network_mappings:flat:eth12
+network_vxlan_ranges:1:1000
+neutron_local_ip:10.1.2.1
+ansible_python_interpreter:/usr/bin/python2
+bridges:None
+:None
+name:br-mgmt
+ip_addr:10.1.1.1
+
+
+40####
+{'galaxy_info': {'author': 'rcbops', 'description': 'Installation and setup of systemd_mount', 'company': 'Rackspace', 'license': 'Apache2', 'min_ansible_version': 2.0, 'platforms': [{'name': 'Ubuntu', 'versions': ['xenial', 'bionic']}, {'name': 'EL', 'versions': [7]}, {'name': 'opensuse', 'versions': [42.1, 42.2, 42.3]}], 'categories': ['systemd', 'development'], 'dependencies': ['plugins']}}
+###########
+
+root:None
+galaxy_info:None
+:None
+author:rcbops
+description:Installation and setup of systemd_mount
+company:Rackspace
+license:Apache2
+min_ansible_version:2.0
+platforms:None
+:None
+name:Ubuntu
+versions:None
+:xenial
+:bionic
+:None
+name:EL
+versions:None
+:7
+:None
+name:opensuse
+versions:None
+:42.1
+:42.2
+:42.3
+categories:None
+:systemd
+:development
+dependencies:None
+:plugins
+
+
+41####
+{'systemd_default_mount_options': 'defaults', 'systemd_mounts': []}
+###########
+
+root:None
+systemd_default_mount_options:defaults
+systemd_mounts:None
+
+
+42####
