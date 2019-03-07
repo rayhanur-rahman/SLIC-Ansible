@@ -1,0 +1,2 @@
+class CounterReport < SourceReport
+end

@@ -1,0 +1,132 @@
+#
+# Author:: Daniel DeLeo (<dan@opscode.com>)
+# Copyright:: Copyright (c) 2012 Opscode, Inc.
+# License:: Apache License, Version 2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+require 'functional/resource/base'
+require 'seth/version'
+require 'seth/shell'
+require 'seth/mixin/command/unix'
+
+describe Shell do
+
+  # seth-shell's unit tests are by necessity very mock-heavy, and frequently do
+  # not catch cases where seth-shell fails to boot because of changes in
+  # seth/client.rb
+  describe "smoke tests", :unix_only => true do
+    include Seth::Mixin::Command::Unix
+
+    def read_until(io, expected_value)
+      start = Time.new
+      buffer = ""
+      until buffer.include?(expected_value)
+        begin
+          buffer << io.read_nonblock(1)
+        rescue Errno::EWOULDBLOCK, Errno::EAGAIN, Errno::EIO, EOFError
+          sleep 0.01
+        end
+        if Time.new - start > 30
+          STDERR.puts "did not read expected value `#{expected_value}' within 15s"
+          STDERR.puts "Buffer so far: `#{buffer}'"
+          break
+        end
+      end
+      buffer
+    end
+
+    def wait_or_die(pid)
+      start = Time.new
+
+      until exitstatus = Process.waitpid2(pid, Process::WNOHANG)
+        if Time.new - start > 5
+          STDERR.puts("seth-shell tty did not exit cleanly, killing it")
+          Process.kill(:KILL, pid)
+        end
+        sleep 0.01
+      end
+      exitstatus[1]
+    end
+
+    def run_seth_shell_with(options)
+      case ohai[:platform]
+      when "aix"
+        config = File.expand_path("shef-config.rb", seth_SPEC_DATA)
+        path_to_seth_shell = File.expand_path("../../../bin/seth-shell", __FILE__)
+        output = ''
+        status = popen4("#{path_to_seth_shell} -c #{config} #{options}", :waitlast => true) do |pid, stdin, stdout, stderr|
+          read_until(stdout, "seth >")
+          yield stdout, stdin if block_given?
+          stdin.write("'done'\n")
+          output = read_until(stdout, '=> "done"')
+          stdin.print("exit\n")
+          read_until(stdout, "\n")
+        end
+
+        [output, status.exitstatus]
+      else
+        # Windows ruby installs don't (always?) have PTY,
+        # so hide the require here
+        begin
+          require 'pty'
+          config = File.expand_path("shef-config.rb", seth_SPEC_DATA)
+          path_to_seth_shell = File.expand_path("../../../bin/seth-shell", __FILE__)
+          reader, writer, pid = PTY.spawn("#{path_to_seth_shell} -c #{config} #{options}")
+          read_until(reader, "seth >")
+          yield reader, writer if block_given?
+          writer.puts('"done"')
+          output = read_until(reader, '=> "done"')
+          writer.print("exit\n")
+          read_until(reader, "exit")
+          read_until(reader, "\n")
+          read_until(reader, "\n")
+          writer.close
+
+          exitstatus = wait_or_die(pid)
+
+          [output, exitstatus]
+        rescue PTY::ChildExited => e
+          [output, e.status]
+        end
+      end
+    end
+
+    it "boots correctly with -lauto" do
+      output, exitstatus = run_seth_shell_with("-lauto")
+      output.should include("done")
+      expect(exitstatus).to eq(0)
+    end
+
+    it "sets the log_level from the command line" do
+      output, exitstatus = run_seth_shell_with("-lfatal") do |out, keyboard|
+        show_log_level_code = %q[puts "===#{Seth::Log.level}==="]
+        keyboard.puts(show_log_level_code)
+        read_until(out, show_log_level_code)
+      end
+      output.should include("===fatal===")
+      expect(exitstatus).to eq(0)
+    end
+
+    it "sets the override_runlist from the command line" do
+      output, exitstatus = run_seth_shell_with("-o 'override::foo,override::bar'") do |out, keyboard|
+        show_recipes_code = %q[puts "#{node.recipes.inspect}"]
+        keyboard.puts(show_recipes_code)
+        read_until(out, show_recipes_code)
+      end
+      output.should include(%q{["override::foo", "override::bar"]})
+      expect(exitstatus).to eq(0)
+    end
+  end
+end

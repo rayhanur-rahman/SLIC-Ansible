@@ -1,0 +1,7 @@
+include_recipe "chef-marketplace::_config_marketplace"
+include_recipe "chef-marketplace::_config_secrets"
+include_recipe "chef-marketplace::_config_compliance"
+include_recipe "chef-marketplace::_config_api_fqdn"
+include_recipe "chef-marketplace::_config_reckoner"
+include_recipe "chef-marketplace::_config_biscotti"
+include_recipe "chef-marketplace::_config_package_mirrors"

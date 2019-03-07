@@ -1,0 +1,350 @@
+#
+# Author:: Adam Jacob (<adam@opscode.com>)
+# Copyright:: Copyright (c) 2008 Opscode, Inc.
+# License:: Apache License, Version 2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+require 'spec_helper'
+require 'seth/role'
+
+describe Seth::Role do
+  before(:each) do
+    @role = Seth::Role.new
+    @role.name("ops_master")
+  end
+
+  it "has a name" do
+    @role.name("ops_master").should == "ops_master"
+  end
+
+  it "does not accept a name with spaces" do
+    lambda { @role.name "ops master" }.should raise_error(ArgumentError)
+  end
+
+  it "does not accept non-String objects for the name" do
+    lambda { @role.name({}) }.should raise_error(ArgumentError)
+  end
+
+  describe "when a run list is set" do
+
+    before do
+      @role.run_list(%w{ nginx recipe[ree] role[base]})
+    end
+
+
+    it "returns the run list" do
+      @role.run_list.should == %w{ nginx recipe[ree] role[base]}
+    end
+
+    describe "and per-environment run lists are set" do
+      before do
+        @role.name("base")
+        @role.run_list(%w{ recipe[nagios::client] recipe[tims-acl::bork]})
+        @role.env_run_list["prod"] = Seth::RunList.new(*(@role.run_list.to_a << "recipe[prod-base]"))
+        @role.env_run_list["dev"]  = Seth::RunList.new
+      end
+
+      it "uses the default run list as *the* run_list" do
+        @role.run_list.should == Seth::RunList.new("recipe[nagios::client]", "recipe[tims-acl::bork]")
+      end
+
+      it "gives the default run list as the when getting the _default run list" do
+        @role.run_list_for("_default").should == @role.run_list
+      end
+
+      it "gives an environment specific run list" do
+        @role.run_list_for("prod").should == Seth::RunList.new("recipe[nagios::client]", "recipe[tims-acl::bork]", "recipe[prod-base]")
+      end
+
+      it "gives the default run list when no run list exists for the given environment" do
+        @role.run_list_for("qa").should == @role.run_list
+      end
+
+      it "gives the environment specific run list even if it is empty" do
+        @role.run_list_for("dev").should == Seth::RunList.new
+      end
+
+      it "env_run_lists can only be set with _default run list in it" do
+        long_exception_name = Seth::Exceptions::InvalidEnvironmentRunListSpecification
+        lambda {@role.env_run_lists({})}.should raise_error(long_exception_name)
+      end
+
+    end
+
+
+    describe "using the old #recipes API" do
+      it "should let you set the recipe array" do
+        @role.recipes([ "one", "two" ]).should == [ "one", "two" ]
+      end
+
+      it "should let you return the recipe array" do
+        @role.recipes([ "one", "two" ])
+        @role.recipes.should == [ "one", "two" ]
+      end
+
+      it "should not list roles in the recipe array" do
+        @role.run_list([ "one", "role[two]"])
+        @role.recipes.should == [ "recipe[one]", "role[two]" ]
+      end
+
+    end
+
+  end
+
+
+
+  describe "default_attributes" do
+    it "should let you set the default attributes hash explicitly" do
+      @role.default_attributes({ :one => 'two' }).should == { :one => 'two' }
+    end
+
+    it "should let you return the default attributes hash" do
+      @role.default_attributes({ :one => 'two' })
+      @role.default_attributes.should == { :one => 'two' }
+    end
+
+    it "should throw an ArgumentError if we aren't a kind of hash" do
+      lambda { @role.default_attributes(Array.new) }.should raise_error(ArgumentError)
+    end
+  end
+
+  describe "override_attributes" do
+    it "should let you set the override attributes hash explicitly" do
+      @role.override_attributes({ :one => 'two' }).should == { :one => 'two' }
+    end
+
+    it "should let you return the override attributes hash" do
+      @role.override_attributes({ :one => 'two' })
+      @role.override_attributes.should == { :one => 'two' }
+    end
+
+    it "should throw an ArgumentError if we aren't a kind of hash" do
+      lambda { @role.override_attributes(Array.new) }.should raise_error(ArgumentError)
+    end
+  end
+
+  describe "update_from!" do
+    before(:each) do
+      @role.name('mars_volta')
+      @role.description('Great band!')
+      @role.run_list('one', 'two', 'role[a]')
+      @role.default_attributes({ :el_groupo => 'nuevo' })
+      @role.override_attributes({ :deloused => 'in the comatorium' })
+
+      @example = Seth::Role.new
+      @example.name('newname')
+      @example.description('Really Great band!')
+      @example.run_list('alpha', 'bravo', 'role[alpha]')
+      @example.default_attributes({ :el_groupo => 'nuevo dos' })
+      @example.override_attributes({ :deloused => 'in the comatorium XOXO' })
+    end
+
+    it "should update all fields except for name" do
+      @role.update_from!(@example)
+      @role.name.should == "mars_volta"
+      @role.description.should == @example.description
+      @role.run_list.should == @example.run_list
+      @role.default_attributes.should == @example.default_attributes
+      @role.override_attributes.should == @example.override_attributes
+    end
+  end
+
+  describe "when serialized as JSON", :json => true do
+    before(:each) do
+      @role.name('mars_volta')
+      @role.description('Great band!')
+      @role.run_list('one', 'two', 'role[a]')
+      @role.default_attributes({ :el_groupo => 'nuevo' })
+      @role.override_attributes({ :deloused => 'in the comatorium' })
+      @serialized_role = Seth::JSONCompat.to_json(@role)
+    end
+
+    it "should serialize to a json hash" do
+      Seth::JSONCompat.to_json(@role).should match(/^\{.+\}$/)
+    end
+
+    it "includes the name in the JSON output" do
+      @serialized_role.should =~ /"name":"mars_volta"/
+    end
+
+    it "includes its description in the JSON" do
+      @serialized_role.should match(/"description":"Great band!"/)
+    end
+
+    it "should include 'default_attributes'" do
+      @serialized_role.should =~ /"default_attributes":\{"el_groupo":"nuevo"\}/
+    end
+
+    it "should include 'override_attributes'" do
+      @serialized_role.should =~ /"override_attributes":\{"deloused":"in the comatorium"\}/
+    end
+
+    it "should include 'run_list'" do
+      #Activesupport messes with Seth json formatting
+      #This test should pass with and without activesupport
+      @serialized_role.should =~ /"run_list":\["recipe\[one\]","recipe\[two\]","role\[a\]"\]/
+    end
+
+    describe "and it has per-environment run lists" do
+      before do
+        @role.env_run_lists("_default" => ['one', 'two', 'role[a]'], "production" => ['role[monitoring]', 'role[auditing]', 'role[apache]'], "dev" => ["role[nginx]"])
+        @serialized_role = Seth::JSONCompat.from_json(seth::JSONCompat.to_json(@role), :create_additions => false)
+      end
+
+      it "includes the per-environment run lists" do
+        #Activesupport messes with Seth json formatting
+        #This test should pass with and without activesupport
+        @serialized_role["env_run_lists"]["production"].should == ['role[monitoring]', 'role[auditing]', 'role[apache]']
+        @serialized_role["env_run_lists"]["dev"].should == ["role[nginx]"]
+      end
+
+      it "does not include the default environment in the per-environment run lists" do
+        @serialized_role["env_run_lists"].should_not have_key("_default")
+      end
+
+    end
+  end
+
+  describe "when created from JSON", :json => true do
+    before(:each) do
+      @role.name('mars_volta')
+      @role.description('Great band!')
+      @role.run_list('one', 'two', 'role[a]')
+      @role.default_attributes({ 'el_groupo' => 'nuevo' })
+      @role.override_attributes({ 'deloused' => 'in the comatorium' })
+      @deserial = Seth::JSONCompat.from_json(seth::JSONCompat.to_json(@role))
+    end
+
+    it "should deserialize to a Seth::Role object" do
+      @deserial.should be_a_kind_of(Seth::Role)
+    end
+
+    %w{
+      name
+      description
+      default_attributes
+      override_attributes
+      run_list
+    }.each do |t|
+      it "should preserves the '#{t}' attribute from the JSON object" do
+        @deserial.send(t.to_sym).should == @role.send(t.to_sym)
+      end
+    end
+  end
+
+  ROLE_DSL=<<-EOR
+name "ceiling_cat"
+description "like Aliens, but furry"
+EOR
+
+  describe "when loading from disk" do
+    before do
+      default_cache_path = windows? ? 'C:\seth' : '/var/seth'
+      Seth::Config.stub(:cache_path).and_return(default_cache_path)
+    end
+
+    it "should return a Seth::Role object from JSON" do
+      Dir.should_receive(:glob).and_return(["#{Seth::Config[:role_path]}/memes", "#{seth::Config[:role_path]}/memes/lolcat.json"])
+      file_path = File.join(Seth::Config[:role_path], 'memes/lolcat.json')
+      File.should_receive(:exists?).with(file_path).exactly(1).times.and_return(true)
+      IO.should_receive(:read).with(file_path).and_return('{"name": "ceiling_cat", "json_class": "Seth::Role" }')
+      @role.should be_a_kind_of(Seth::Role)
+      @role.class.from_disk("lolcat")
+    end
+
+    it "should return a Seth::Role object from a Ruby DSL" do
+      Dir.should_receive(:glob).and_return(["#{Seth::Config[:role_path]}/memes", "#{seth::Config[:role_path]}/memes/lolcat.rb"])
+      rb_path = File.join(Seth::Config[:role_path], 'memes/lolcat.rb')
+      File.should_receive(:exists?).with(rb_path).exactly(2).times.and_return(true)
+      File.should_receive(:readable?).with(rb_path).exactly(1).times.and_return(true)
+      IO.should_receive(:read).with(rb_path).and_return(ROLE_DSL)
+      @role.should be_a_kind_of(Seth::Role)
+      @role.class.from_disk("lolcat")
+    end
+
+    it "should prefer a Seth::Role Object from JSON over one from a Ruby DSL" do
+      Dir.should_receive(:glob).and_return(["#{Seth::Config[:role_path]}/memes", "#{seth::Config[:role_path]}/memes/lolcat.json", "#{seth::Config[:role_path]}/memes/lolcat.rb"])
+      js_path = File.join(Seth::Config[:role_path], 'memes/lolcat.json')
+      rb_path = File.join(Seth::Config[:role_path], 'memes/lolcat.rb')
+      File.should_receive(:exists?).with(js_path).exactly(1).times.and_return(true)
+      File.should_not_receive(:exists?).with(rb_path)
+      IO.should_receive(:read).with(js_path).and_return('{"name": "ceiling_cat", "json_class": "Seth::Role" }')
+      @role.should be_a_kind_of(Seth::Role)
+      @role.class.from_disk("lolcat")
+    end
+
+    it "should raise an exception if the file does not exist" do
+      Dir.should_receive(:glob).and_return(["#{Seth::Config[:role_path]}/meme.rb"])
+      File.should_not_receive(:exists?)
+      lambda {@role.class.from_disk("lolcat")}.should raise_error(Seth::Exceptions::RoleNotFound)
+    end
+
+    it "should raise an exception if two files exist with the same name" do
+      Dir.should_receive(:glob).and_return(["#{Seth::Config[:role_path]}/memes/lolcat.rb", "#{seth::Config[:role_path]}/lolcat.rb"])
+      File.should_not_receive(:exists?)
+      lambda {@role.class.from_disk("lolcat")}.should raise_error(Seth::Exceptions::DuplicateRole)
+    end
+  end
+
+  describe "when loading from disk and role_path is an array" do
+
+    before(:each) do
+      Seth::Config[:role_path] = ['/path1', '/path/path2']
+    end
+
+    it "should return a Seth::Role object from JSON" do
+      Dir.should_receive(:glob).with(File.join('/path1', '**', '**')).exactly(1).times.and_return(['/path1/lolcat.json'])
+      File.should_receive(:exists?).with('/path1/lolcat.json').exactly(1).times.and_return(true)
+      IO.should_receive(:read).with('/path1/lolcat.json').and_return('{"name": "ceiling_cat", "json_class": "Seth::Role" }')
+      @role.should be_a_kind_of(Seth::Role)
+      @role.class.from_disk("lolcat")
+    end
+
+    it "should return a Seth::Role object from JSON when role is in the second path" do
+      Dir.should_receive(:glob).with(File.join('/path1', '**', '**')).exactly(1).times.and_return([])
+      Dir.should_receive(:glob).with(File.join('/path/path2', '**', '**')).exactly(1).times.and_return(['/path/path2/lolcat.json'])
+      File.should_receive(:exists?).with('/path/path2/lolcat.json').exactly(1).times.and_return(true)
+      IO.should_receive(:read).with('/path/path2/lolcat.json').and_return('{"name": "ceiling_cat", "json_class": "Seth::Role" }')
+      @role.should be_a_kind_of(Seth::Role)
+      @role.class.from_disk("lolcat")
+    end
+
+    it "should return a Seth::Role object from a Ruby DSL" do
+      Dir.should_receive(:glob).with(File.join('/path1', '**', '**')).exactly(1).times.and_return(['/path1/lolcat.rb'])
+      File.should_receive(:exists?).with('/path1/lolcat.rb').exactly(2).times.and_return(true)
+      File.should_receive(:readable?).with('/path1/lolcat.rb').and_return(true)
+      IO.should_receive(:read).with('/path1/lolcat.rb').exactly(1).times.and_return(ROLE_DSL)
+      @role.should be_a_kind_of(Seth::Role)
+      @role.class.from_disk("lolcat")
+    end
+
+    it "should return a Seth::Role object from a Ruby DSL when role is in the second path" do
+      Dir.should_receive(:glob).with(File.join('/path1', '**', '**')).exactly(1).times.and_return([])
+      Dir.should_receive(:glob).with(File.join('/path/path2', '**', '**')).exactly(1).times.and_return(['/path/path2/lolcat.rb'])
+      File.should_receive(:exists?).with('/path/path2/lolcat.rb').exactly(2).times.and_return(true)
+      File.should_receive(:readable?).with('/path/path2/lolcat.rb').and_return(true)
+      IO.should_receive(:read).with('/path/path2/lolcat.rb').exactly(1).times.and_return(ROLE_DSL)
+      @role.should be_a_kind_of(Seth::Role)
+      @role.class.from_disk("lolcat")
+    end
+
+    it "should raise an exception if the file does not exist" do
+      Dir.should_receive(:glob).with(File.join('/path1', '**', '**')).exactly(1).times.and_return([])
+      Dir.should_receive(:glob).with(File.join('/path/path2', '**', '**')).exactly(1).times.and_return([])
+      lambda {@role.class.from_disk("lolcat")}.should raise_error(Seth::Exceptions::RoleNotFound)
+    end
+
+  end
+end

@@ -1,0 +1,2 @@
+class CounterByMonthReport < SourceByMonthReport
+end

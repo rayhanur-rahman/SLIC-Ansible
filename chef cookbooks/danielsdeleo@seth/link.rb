@@ -1,0 +1,109 @@
+#
+# Author:: Adam Jacob (<adam@opscode.com>)
+# Author:: Tyler Cloke (<tyler@opscode.com>)
+# Copyright:: Copyright (c) 2008 Opscode, Inc.
+# License:: Apache License, Version 2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+require 'seth/resource'
+require 'seth/mixin/securable'
+
+class Seth
+  class Resource
+    class Link < Seth::Resource
+      include Seth::Mixin::Securable
+
+      provides :link, :on_platform  => :all
+
+      identity_attr :target_file
+
+      state_attrs :to, :owner, :group
+
+      def initialize(name, run_context=nil)
+        verify_links_supported!
+        super
+        @resource_name = :link
+        @to = nil
+        @action = :create
+        @link_type = :symbolic
+        @target_file = name
+        @allowed_actions.push(:create, :delete)
+        @provider = Seth::Provider::Link
+      end
+
+      def to(arg=nil)
+        set_or_return(
+          :to,
+          arg,
+          :kind_of => String
+        )
+      end
+
+      def target_file(arg=nil)
+        set_or_return(
+          :target_file,
+          arg,
+          :kind_of => String
+        )
+      end
+
+      def link_type(arg=nil)
+        real_arg = arg.kind_of?(String) ? arg.to_sym : arg
+        set_or_return(
+          :link_type,
+          real_arg,
+          :equal_to => [ :symbolic, :hard ]
+        )
+      end
+
+      def group(arg=nil)
+        set_or_return(
+          :group,
+          arg,
+          :regex => Seth::Config[:group_valid_regex]
+        )
+      end
+
+      def owner(arg=nil)
+        set_or_return(
+          :owner,
+          arg,
+          :regex => Seth::Config[:user_valid_regex]
+        )
+      end
+
+      # make link quack like a file (XXX: not for public consumption)
+      def path
+        @target_file
+      end
+
+      private
+      def verify_links_supported!
+        # On certain versions of windows links are not supported. Make
+        # sure we are not on such a platform.
+
+        if Seth::Platform.windows?
+          require 'seth/win32/file'
+          begin
+            Seth::ReservedNames::Win32::File.verify_links_supported!
+          rescue Seth::Exceptions::Win32APIFunctionNotImplemented => e
+            Seth::Log.fatal("Link resource is not supported on this version of Windows")
+            raise e
+          end
+        end
+      end
+    end
+  end
+end

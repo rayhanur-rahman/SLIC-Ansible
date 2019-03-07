@@ -1,0 +1,153 @@
+#
+# Author:: Adam Jacob (<adam@opscode.com>)
+# Author:: Seth Chisamore (<schisamo@opscode.com>)
+# Copyright:: Copyright (c) 2008, 2011 Opscode, Inc.
+# License:: Apache License, Version 2.0
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+require 'seth/resource/file'
+require 'seth/provider/remote_file'
+require 'seth/mixin/securable'
+
+class Seth
+  class Resource
+    class RemoteFile < Seth::Resource::File
+      include Seth::Mixin::Securable
+
+      provides :remote_file, :on_platforms => :all
+
+      def initialize(name, run_context=nil)
+        super
+        @resource_name = :remote_file
+        @action = "create"
+        @source = []
+        @use_etag = true
+        @use_last_modified = true
+        @ftp_active_mode = false
+        @headers = {}
+        @provider = Seth::Provider::RemoteFile
+      end
+
+      # source can take any of the following as arguments
+      # - A single string argument
+      # - Multiple string arguments
+      # - An array or strings
+      # - A delayed evaluator that evaluates to a string
+      #   or array of strings
+      # All strings must be parsable as URIs.
+      # source returns an array of strings.
+      def source(*args)
+        arg = parse_source_args(args)
+        ret = set_or_return(:source,
+                            arg,
+                            { :callbacks => {
+                                :validate_source => method(:validate_source)
+                              }})
+        if ret.is_a? String
+          Array(ret)
+        else
+          ret
+        end
+      end
+
+      def parse_source_args(args)
+        if args.empty?
+          nil
+        elsif args[0].is_a?(Seth::DelayedEvaluator) && args.count == 1
+          args[0]
+        elsif args.any? {|a| a.is_a?(Seth::DelayedEvaluator)} && args.count > 1
+          raise Exceptions::InvalidRemoteFileURI, "Only 1 source argument allowed when using a lazy evaluator"
+        else
+          Array(args).flatten
+        end
+      end
+
+      def checksum(args=nil)
+        set_or_return(
+          :checksum,
+          args,
+          :kind_of => String
+        )
+      end
+
+      # Disable or enable ETag and Last Modified conditional GET. Equivalent to
+      #   use_etag(true_or_false)
+      #   use_last_modified(true_or_false)
+      def use_conditional_get(true_or_false)
+        use_etag(true_or_false)
+        use_last_modified(true_or_false)
+      end
+
+      def use_etag(args=nil)
+        set_or_return(
+          :use_etag,
+          args,
+          :kind_of => [ TrueClass, FalseClass ]
+        )
+      end
+
+      alias :use_etags :use_etag
+
+      def use_last_modified(args=nil)
+        set_or_return(
+          :use_last_modified,
+          args,
+          :kind_of => [ TrueClass, FalseClass ]
+        )
+      end
+
+      def ftp_active_mode(args=nil)
+        set_or_return(
+          :ftp_active_mode,
+          args,
+          :kind_of => [ TrueClass, FalseClass ]
+        )
+      end
+
+      def headers(args=nil)
+        set_or_return(
+          :headers,
+          args,
+          :kind_of => Hash
+        )
+      end
+
+      def after_created
+        validate_source(@source)
+      end
+
+      private
+
+      def validate_source(source)
+        source = Array(source).flatten
+        raise ArgumentError, "#{resource_name} has an empty source" if source.empty?
+        source.each do |src|
+          unless absolute_uri?(src)
+            raise Exceptions::InvalidRemoteFileURI,
+              "#{src.inspect} is not a valid `source` parameter for #{resource_name}. `source` must be an absolute URI or an array of URIs."
+          end
+        end
+        true
+      end
+
+      def absolute_uri?(source)
+        source.kind_of?(String) and URI.parse(source).absolute?
+      rescue URI::InvalidURIError
+        false
+      end
+
+    end
+  end
+end
