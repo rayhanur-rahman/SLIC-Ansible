@@ -1,2 +1,0 @@
-class Share < FacebookAction
-end

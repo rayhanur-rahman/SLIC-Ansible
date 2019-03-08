@@ -1,1 +1,0 @@
-default["packages"] = ["libxslt-dev", "libxml2-dev"]

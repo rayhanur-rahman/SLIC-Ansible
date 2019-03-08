@@ -29,3 +29,9 @@ print(authors)
 # else:
 #     commitsPerMonth = 0
 # uniqueAuthors = set(author_emails)
+
+
+for i in range(0,10):
+    print(i)
+    if i == 5:
+        i = i -1

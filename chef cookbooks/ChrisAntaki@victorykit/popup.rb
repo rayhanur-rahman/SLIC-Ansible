@@ -1,2 +1,0 @@
-class Popup < FacebookAction
-end

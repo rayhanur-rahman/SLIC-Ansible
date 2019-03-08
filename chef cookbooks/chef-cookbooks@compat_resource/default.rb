@@ -1,2 +1,0 @@
-
-file "/tmp/foo.xyz"

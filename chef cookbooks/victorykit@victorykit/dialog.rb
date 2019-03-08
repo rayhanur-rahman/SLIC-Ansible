@@ -1,2 +1,0 @@
-class Dialog < FacebookAction
-end

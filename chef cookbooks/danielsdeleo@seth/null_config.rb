@@ -1,1 +1,0 @@
-$__ceth_INTEGRATION_FAILSAFE_CHECK << " ole"

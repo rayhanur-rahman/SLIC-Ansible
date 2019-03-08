@@ -1,2 +1,0 @@
-class Like < FacebookAction
-end

@@ -1,2 +1,0 @@
-class FacebookRecommendation < FacebookAction
-end

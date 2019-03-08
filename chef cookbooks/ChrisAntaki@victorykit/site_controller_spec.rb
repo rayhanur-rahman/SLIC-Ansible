@@ -1,3 +1,0 @@
-describe SiteController do
-
-end
