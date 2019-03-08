@@ -1,0 +1,5 @@
+dependencies:
+  - libvirt
+  - common
+  - libvirt/setup/common
+

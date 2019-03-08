@@ -1,0 +1,241 @@
+---
+# Copyright 2017, Rackspace US, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in witing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- name: Gather facts
+  hosts: pxe_hosts
+  gather_facts: "{{ gather_facts | default(true) }}"
+  environment: "{{ deployment_environment_variables | default({}) }}"
+  tags:
+    - deploy-pxe
+  tasks:
+    - name: Gather variables for each operating system
+      include_vars: "{{ item }}"
+      with_first_found:
+        - "{{ playbook_dir }}/vars/{{ ansible_distribution | lower }}-{{ ansible_distribution_version | lower }}.yml"
+        - "{{ playbook_dir }}/vars/{{ ansible_distribution | lower }}-{{ ansible_distribution_major_version | lower }}.yml"
+        - "{{ playbook_dir }}/vars/{{ ansible_os_family | lower }}-{{ ansible_distribution_major_version | lower }}.yml"
+        - "{{ playbook_dir }}/vars/{{ ansible_distribution | lower }}.yml"
+        - "{{ playbook_dir }}/vars/{{ ansible_os_family | lower }}.yml"
+      tags:
+        - always
+
+    - name: Install host distro packages
+      package:
+        name: "{{ mnaio_pxe_distro_packages }}"
+        state: "latest"
+        update_cache: yes
+        cache_valid_time: 600
+      register: _install_host_packages
+      until: _install_host_packages is success
+      retries: 3
+      delay: 15
+
+    - name: Create base directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: "root"
+        group: "root"
+        mode: "0755"
+      with_items:
+        - /var/www/pxe
+        - /var/www/pxe/configs
+        - /var/www/pxe/images
+        - /var/www/pxe/networking
+        - /var/www/pxe/scripts
+        - /var/www/pxe/templates
+        - /var/lib/tftpboot
+        - /var/lib/tftpboot/ipxe
+
+    - name: Get root public key
+      command: cat /root/.ssh/id_rsa.pub
+      register: public_key_get
+      changed_when: false
+      when:
+        - tftp_ssh_key is undefined
+
+    - name: Set key facts
+      set_fact:
+        tftp_ssh_key: "{{ public_key_get.stdout }}"
+      when:
+        - tftp_ssh_key is undefined
+
+    - name: Drop NGINX config
+      copy:
+        src: "pxe/sites-enabled.default"
+        dest: /etc/nginx/sites-enabled/default
+        mode: "0644"
+        owner: root
+        group: root
+      notify:
+        - restart nginx
+
+    - name: Drop tftp-hpa configs
+      template:
+        src: "pxe/tftp/tftp-hpa"
+        dest: /etc/default/tftpd-hpa
+        mode: "0644"
+        owner: root
+        group: root
+      notify:
+        - restart tftp-hpa
+
+    - name: Download iPXE
+      get_url:
+        url: "{{ ipxe_kernel_base_url }}/{{ item.filename }}"
+        dest: "/var/lib/tftpboot/{{ item.dest }}"
+        tmp_dest: /tmp/
+      with_items:
+        - { filename: 'ipxe.lkrn', dest: 'ipxe.lkrn' }
+        - { filename: 'ipxe.efi', dest: 'ipxe.efi' }
+        - { filename: 'undionly.kpxe', dest: 'undionly.kpxe' }
+
+    - name: Drop ipxe default menu
+      template:
+        src: "pxe/tftp/boot.ipxe.j2"
+        dest: "/var/lib/tftpboot/boot.ipxe"
+        mode: "0644"
+        owner: root
+        group: root
+
+    - name: Register network_setup fact
+      set_fact:
+        network_setup: "{{ images[default_vm_image]['network_setup'] }}"
+
+# ENI Block
+    - name: Generate guest networking scripts for /e/n/i family
+      template:
+        src: "pxe/configs/eni/vm-bridges.cfg.j2"
+        dest: /var/www/pxe/networking/{{ hostvars[item]['server_hostname'] }}-bridges.cfg
+        mode: "0644"
+        owner: root
+        group: root
+      with_items: "{{ groups['pxe_servers'] }}"
+      when: network_setup | lower == "eni"
+
+    - name: Generate post-install network scripts for /e/n/i family
+      template:
+        src: "pxe/configs/eni/{{ item.src }}"
+        dest: /var/www/pxe/{{ item.dir }}/{{ item.dest }}
+        mode: "0644"
+        owner: root
+        group: root
+      with_items:
+        - src: basic-interface.cfg
+          dest: basic-debian-interface.cfg
+          dir: networking
+        - src: eni-post-network-script.sh.j2
+          dest: vm-post-network-script.sh
+          dir: scripts
+      when: network_setup | lower == "eni"
+
+# Systemd-networkd Block
+    - name: Generate vm network scripts for systemd-network family
+      template:
+        src: "pxe/configs/systemd-networkd/systemd-network.sh.j2"
+        dest: /var/www/pxe/networking/{{ hostvars[item]['server_hostname'] }}-systemd-network.sh
+        mode: "0644"
+        owner: root
+        group: root
+      with_items: "{{ groups['pxe_servers'] }}"
+      when: network_setup | lower == "systemd-networkd"
+
+    - name: Generate post-install networks scripts for systemd-networkd family
+      template:
+        src: "pxe/configs/systemd-networkd/systemd-networkd-post-network-script.sh.j2"
+        dest: /var/www/pxe/scripts/vm-post-network-script.sh
+        mode: "0644"
+        owner: root
+        group: root
+      with_items: "{{ groups['pxe_servers'] }}"
+      when: network_setup | lower == "systemd-networkd"
+
+# Debian Block
+    - name: Generate post-install scripts for Debian family
+      template:
+        src: "pxe/configs/debian/vm-post-install-script.sh.j2"
+        dest: /var/www/pxe/scripts/vm-post-install-debian-script.sh
+        mode: "0644"
+        owner: root
+        group: root
+      with_items: "{{ groups['pxe_servers'] }}"
+      when: images[default_vm_image]['image_type'] | lower == "debian"
+
+# Redhat Block
+    - name: Generate post-install scripts for RedHat family
+      template:
+        src: "pxe/configs/redhat/vm-post-install-script.sh.j2"
+        dest: /var/www/pxe/scripts/vm-post-install-redhat-script.sh
+        mode: "0644"
+        owner: root
+        group: root
+      with_items: "{{ groups['pxe_servers'] }}"
+      when: images[default_vm_image]['image_type'] | lower == "redhat"
+
+    - name: tftp configs for servers
+      template:
+        src: "pxe/tftp/boot.ipxe.macaddr.j2"
+        dest: "/var/lib/tftpboot/ipxe/{{ hostvars[item]['server_mac_address'] | replace(':', '-') | lower }}"
+        mode: "0644"
+        owner: root
+        group: root
+      with_items: "{{ groups['pxe_servers'] }}"
+
+    - name: Preseeds for pxe vm
+      template:
+        src: "pxe/configs/{{ images[default_vm_image]['image_type'] | lower }}/vm.config.j2"
+        dest: /var/www/pxe/configs/vm.config
+        mode: "0644"
+        owner: root
+        group: root
+      with_dict: "{{ images }}"
+
+    - name: Preseeds for pxe vm-compute
+      template:
+        src: "pxe/configs/{{ images[default_vm_image]['image_type'] | lower }}/vm-compute.config.j2"
+        dest: /var/www/pxe/configs/vm-compute.config
+        mode: "0644"
+        owner: root
+        group: root
+      with_dict: "{{ images }}"
+
+    - name: Ensure permissions are correct
+      file:
+        dest: "{{ item }}"
+        mode: u=rwX,g=rX,o=rX
+        recurse: yes
+      with_items:
+        - "/var/lib/tftpboot"
+        - "/var/www/pxe"
+
+  handlers:
+    - name: restart nginx
+      service:
+        name: "nginx"
+        state: restarted
+        enabled: yes
+
+    - name: restart tftp-hpa
+      service:
+        name: "tftpd-hpa"
+        state: restarted
+        enabled: yes
+
+    - name: restart inetd
+      service:
+        name: "inetutils-inetd"
+        state: restarted
+        enabled: yes
+

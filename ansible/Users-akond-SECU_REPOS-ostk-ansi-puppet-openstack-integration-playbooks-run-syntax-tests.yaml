@@ -1,0 +1,13 @@
+- hosts: all
+  tasks:
+    - shell:
+        cmd: |
+          export PUPPET_GEM_VERSION='~> {{ puppet }}'
+          mkdir .bundled_gems
+          export GEM_HOME=`pwd`/.bundled_gems
+          gem install bundler --no-rdoc --no-ri --verbose
+          $GEM_HOME/bin/bundle install --retry 3
+          $GEM_HOME/bin/bundle exec rake syntax
+        chdir: '{{ ansible_user_dir }}/workspace'
+      environment: '{{ zuul | zuul_legacy_vars }}'
+

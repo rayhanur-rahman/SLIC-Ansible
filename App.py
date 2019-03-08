@@ -1,5 +1,7 @@
 import yaml, re
 import os
+from datetime import datetime
+
 
 
 class Node:
@@ -179,52 +181,70 @@ def parseYaml(filename):
     tree(root, False, response)
     return response
 
-
-def parseBatch2():
-    listofFiles = os.listdir('/home/brokenquark/Workspace/SLIC-Ansible/ansible/')
+def parseBatch(dirName):
+    listofFiles = os.listdir(dirName)
     responses = []
     for file in listofFiles:
-        if file.endswith('.yaml') or file.endswith('.yaml'):
-            response = parseYaml(f'/home/brokenquark/Workspace/SLIC-Ansible/ansible/{file}')
-            # print(f'{file}: {response}')
-            responses.append({
-                'file': file,
-                'smells': response
-            })
+        if file.endswith('.yml') or file.endswith('.yaml'):
+            try:
+                response = parseYaml(f'{dirName}{file}')
+                responses.append({
+                    'file': f'{dirName}{file}',
+                    'smells': response
+                })
+            except:
+                print('failure')
+                pass
+
     return responses
 
+def analyzePlayBooks(dirName):
+    response = parseBatch(dirName)
 
-response = parseBatch2()
+    output = open('output.csv', 'a')
 
-output = open('output.csv', 'w')
-output.write(f"file, hardcoded-secret, empty-password, use of http, improper ip address binding, suspicious comment, no-integrity-check, total\n")
+    smellCounts = {
+        'hardcoded-secret': 0,
+        'empty-password': 0,
+        'use of http': 0,
+        'improper ip address binding': 0,
+        'no-integrity-check': 0,
+        'suspicious comment': 0
+    }
 
-smellCounts = {
-    'hardcoded-secret': 0,
-    'empty-password': 0,
-    'use of http': 0,
-    'improper ip address binding': 0,
-    'no-integrity-check': 0,
-    'suspicious comment': 0
-}
+    for item in response:
+        total = 0
+        if len(item['smells']) > 0:
+            for element in item['smells']:
+                smellCounts[element['smell-type']] += 1
+                total += 1
 
+        output.write(f"{datetime.now()}, {item['file']}, {smellCounts['hardcoded-secret']}, {smellCounts['empty-password']}, {smellCounts['use of http']}, {smellCounts['improper ip address binding']}, {smellCounts['suspicious comment']}, {smellCounts['no-integrity-check']}, {total}\n")
 
+        smellCounts['hardcoded-secret'] = 0
+        smellCounts['empty-password'] = 0
+        smellCounts['improper ip address binding'] = 0
+        smellCounts['no-integrity-check'] = 0
+        smellCounts['suspicious comment'] = 0
+        smellCounts['use of http'] = 0
 
-for item in response:
-    total = 0
-    if len(item['smells']) > 0:
-        for element in item['smells']:
-            smellCounts[element['smell-type']] += 1
-            total += 1
+    output.close()
+    return
 
-    output.write(f"{item['file']}, {smellCounts['hardcoded-secret']}, {smellCounts['empty-password']}, {smellCounts['use of http']}, {smellCounts['improper ip address binding']}, {smellCounts['suspicious comment']}, {smellCounts['no-integrity-check']}, {total}")
-    output.write('\n')
+# analyzePlayBooks('/home/brokenquark/Workspace/SLIC-Ansible/ansible/')
 
-    smellCounts['hardcoded-secret'] = 0
-    smellCounts['empty-password'] = 0
-    smellCounts['improper ip address binding'] = 0
-    smellCounts['no-integrity-check'] = 0
-    smellCounts['suspicious comment'] = 0
-    smellCounts['use of http'] = 0
+def getSubDirNames(root):
+    rootDirs = []
+    for dirName in next(os.walk(root))[1]:
+        rootDirs.append(f'{root}{dirName}/')
 
-output.close()
+    output = open('output.csv', 'a')
+    output.write(f"MONTH,FILE_NAME,HARD_CODE_SECR,EMPT_PASS,HTTP_USAG,BIND_USAG,SUSP_COMM,INTE_CHCK,TOTAL\n")
+    output.close()
+
+    for rootDir in rootDirs:
+        print(f'gathering facts from: {rootDir}...')
+        analyzePlayBooks(rootDir)
+    return
+
+getSubDirNames('/run/media/brokenquark/8E30E13030E12047/playbooks/')

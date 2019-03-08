@@ -1,0 +1,108 @@
+---
+# Copyright 2018, Rackspace US, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in witing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- name: Save VM disk images for re-use
+  hosts: vm_hosts
+  gather_facts: "{{ gather_facts | default(true) }}"
+  environment: "{{ deployment_environment_variables | default({}) }}"
+  tags:
+    - save-vms
+  tasks:
+    - name: Get info about existing virt storage pools
+      virt_pool:
+        command: info
+      register: _virt_pools
+
+    - name: Get info about existing VM's
+      virt:
+        command: list_vms
+      register: _virt_list
+
+    - name: Shut down all running VM's
+      virt:
+        name: "{{ item }}"
+        command: shutdown
+      failed_when: false
+      with_items: "{{ _virt_list.list_vms }}"
+
+    - name: Wait for shut down to complete
+      command: |
+        virsh domstate {{ item }}
+      register: _vm_shutdown
+      until: _vm_shutdown.stdout.find('shut off') != -1
+      retries: 5
+      delay: 60
+      with_items: "{{ _virt_list.list_vms }}"
+
+    - name: Commit, compress and save VM Disk Image and prepare new copy-on-write image
+      shell: |
+        if [[ -e {{ item }}.img ]]; then
+          if [[ -e {{ item }}-base.img ]]; then
+            qemu-img commit {{ item }}.img
+          else
+            qemu-img convert -O qcow2 -c {{ item }}.img {{ item }}-base.img
+            qemu-img create -f qcow2 -b {{ item }}-base.img {{ item }}.img
+          fi
+          exit 2
+        fi
+      args:
+        executable: /bin/bash
+        chdir: "{{ _virt_pools.pools.default.path | default('/data/images') }}"
+      with_items: "{{ _virt_list.list_vms }}"
+      register: _save_disk_image
+      changed_when: _save_disk_image.rc == 2
+      failed_when: _save_disk_image.rc not in [0, 2]
+
+    - name: Save VM definition
+      copy:
+        src: "/etc/libvirt/qemu/{{ item }}.xml"
+        dest: "{{ _virt_pools.pools.default.path | default('/data/images') }}/"
+        remote_src: yes
+      with_items: "{{ _virt_list.list_vms }}"
+
+    - name: Get the current SHA1 for the manifest
+      command: "git rev-parse HEAD"
+      args:
+        chdir: "{{ playbook_dir }}"
+      register: _repo_sha
+      changed_when: false
+
+    - name: Add pip freeze results to the data
+      shell: "pip --disable-pip-version-check freeze > pip-requirements.txt"
+      args:
+        executable: /bin/bash
+        chdir: "{{ _virt_pools.pools.default.path | default('/data/images') }}"
+      changed_when: false
+
+    - name: Find all the files for the manifest
+      find:
+        paths: "{{ _virt_pools.pools.default.path | default('/data/images') }}"
+        patterns:
+          - "*-base.img"
+          - "*.xml"
+          - "*.txt"
+        get_checksum: yes
+      register: _manifest_files
+
+    - name: Prepare the manifest file content
+      set_fact:
+        _manifest_content: >-
+          { 'openstack-ansible-ops_SHA1': '{{ _repo_sha.stdout }}', 'files': {{ _manifest_files.files | json_query('[*].{path: path, checksum: checksum}') | sort(attribute='path') }} }
+
+    - name: Write out the manifest file
+      copy:
+        content: "{{ _manifest_content | to_nice_json }}"
+        dest: "{{ _virt_pools.pools.default.path | default('/data/images') }}/manifest.json"
+

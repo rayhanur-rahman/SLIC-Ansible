@@ -1,0 +1,192 @@
+---
+# Tempest is being configured to use a known network
+tempest_public_subnet_cidr: 10.0.248.0/26
+
+# This makes running neutron in a distributed system easier and a lot less noisy
+neutron_l2_population: True
+
+{% if http_proxy is defined and http_proxy %}
+proxy_env_url: "{{ http_proxy }}"
+
+{% if global_environment_variables is defined and global_environment_variables | bool %}
+{% raw %}
+no_proxy_env: "localhost,127.0.0.1,{{ internal_lb_vip_address }},{{ external_lb_vip_address }},{% for host in groups['all_containers'] %}{{ hostvars[host]['container_address'] }}{% if not loop.last %},{% endif %}{% endfor %}"
+global_environment_variables:
+  HTTP_PROXY: "{{ proxy_env_url }}"
+  HTTPS_PROXY: "{{ proxy_env_url }}"
+  NO_PROXY: "{{ no_proxy_env }}"
+  http_proxy: "{{ proxy_env_url }}"
+  https_proxy: "{{ proxy_env_url }}"
+  no_proxy: "{{ no_proxy_env }}"
+{% endraw %}
+{% endif %}
+
+{% if deployment_environment_variables is defined and deployment_environment_variables | bool %}
+{% raw %}
+deployment_environment_variables:
+  http_proxy: "{{ proxy_env_url }}"
+  https_proxy: "{{ proxy_env_url }}"
+  no_proxy: "localhost,127.0.0.1,{{ internal_lb_vip_address }},{{ external_lb_vip_address }},{% for host in groups['keystone_all'] %}{{ hostvars[host]['container_address'] }}{% if not loop.last %},{% endif %}{% endfor %}"
+{% endraw %}
+{% endif %}
+
+glance_glance_api_conf_overrides:
+  glance_store:
+    http_proxy_information: "http:http://, https:http://"
+{% endif %}
+
+# Reduce memory footprint for mnaio
+galera_innodb_buffer_pool_size: 1024M
+galera_gcache_size: 128M
+
+{% if enable_ceph_storage | bool %}
+### Ceph Config Overrides
+## Ceph cluster fsid (must be generated before first run)
+generate_fsid: true
+
+## ceph-ansible settings
+## See https://github.com/ceph/ceph-ansible/tree/master/group_vars for
+## additional configuration options availble.
+monitor_address_block: 10.0.236.0/22
+public_network: 10.0.236.0/22
+cluster_network: 10.0.244.0/22
+osd_scenario: lvm
+journal_size: {{ ceph_journal_size }}
+# ceph-ansible automatically creates pools & keys for OpenStack services
+openstack_config: true
+cinder_ceph_client: cinder
+glance_ceph_client: glance
+glance_default_store: rbd
+glance_rbd_store_pool: images
+nova_libvirt_images_rbd_pool: vms
+{% raw %}
+cinder_backends:
+  ceph:
+    volume_driver: cinder.volume.drivers.rbd.RBDDriver
+    rbd_pool: volumes
+    rbd_ceph_conf: /etc/ceph/ceph.conf
+    rbd_store_chunk_size: 8
+    volume_backend_name: rbddriver
+    rbd_user: "{{ cinder_ceph_client }}"
+    rbd_secret_uuid: "{{ cinder_ceph_client_uuid }}"
+    report_discard_supported: true
+{% endraw %}
+{% endif %}
+
+{% if osa_enable_elk_metrics | bool %}
+# NOTE(d34dh0r53): The disk detection to determine the logstash_queue_type
+# can fail spectacularly on an MNAIO so I'm hard setting it here to bypass
+# the detection code.
+{% raw %}
+logstash_queue_type: memory
+haproxy_extra_services:
+  - service:
+      haproxy_service_name: elastic-logstash
+      haproxy_ssl: True
+      haproxy_backend_nodes: "{{ groups['Kibana'] | default([]) }}"  # Kibana nodes are also Elasticsearch coordination nodes
+      haproxy_port: 9201  # This is set using the "elastic_hap_port" variable
+      haproxy_check_port: 9200  # This is set using the "elastic_port" variable
+      haproxy_backend_port: 9200  # This is set using the "elastic_port" variable
+      haproxy_balance_type: tcp
+  - service:
+      haproxy_service_name: Kibana
+      haproxy_ssl: True
+      haproxy_backend_nodes: "{{ groups['Kibana'] | default([]) }}"
+      haproxy_port: 8443
+      haproxy_backend_port: 81
+      haproxy_balance_type: tcp
+  - service:
+      haproxy_service_name: apm-server
+      haproxy_ssl: True
+      haproxy_backend_nodes: "{{ groups['apm-server'] | default([]) }}"
+      haproxy_port: 8200
+      haproxy_balance_type: tcp
+{% endraw %}
+{% endif %}
+
+{% if osa_enable_os_profiler | bool %}
+{% raw %}
+profiler_overrides: &os_profiler
+  profiler:
+    enabled: true
+    trace_sqlalchemy: true
+    hmac_keys: '{{ os_profiler_hmac_token }}'
+    connection_string: "Elasticsearch://'{{ internal_lb_vip_address }}':9201"
+    es_doc_type: "notification"
+    es_scroll_time: "2m"
+    es_scroll_size: "10000"
+    filter_error_trace: "false"
+
+aodh_aodh_conf_overrides: *os_profiler
+barbican_config_overrides: *os_profiler
+ceilometer_ceilometer_conf_overrides: *os_profiler
+cinder_cinder_conf_overrides: *os_profiler
+designate_designate_conf_overrides: *os_profiler
+glance_glance_api_conf_overrides: *os_profiler
+gnocchi_conf_overrides: *os_profiler
+heat_heat_conf_overrides: *os_profiler
+horizon_config_overrides: *os_profiler
+ironic_ironic_conf_overrides: *os_profiler
+keystone_keystone_conf_overrides: *os_profiler
+magnum_config_overrides: *os_profiler
+neutron_neutron_conf_overrides: *os_profiler
+nova_nova_conf_overrides: *os_profiler
+octavia_octavia_conf_overrides: *os_profiler
+rally_config_overrides: *os_profiler
+sahara_conf_overrides: *os_profiler
+swift_swift_conf_overrides: *os_profiler
+tacker_tacker_conf_overrides: *os_profiler
+trove_config_overrides: *os_profiler
+{% endraw %}
+{% endif %}
+
+{% if osa_enable_uwsgi_stats | bool %}
+keystone_uwsgi_ini_overrides:
+  uwsgi:
+    stats: "/tmp/keystone-uwsgi-stats.sock"
+
+cinder_api_uwsgi_ini_overrides:
+  uwsgi:
+    stats: "/tmp/cinder-api-uwsgi-stats.sock"
+
+glance_api_uwsgi_ini_overrides:
+  uwsgi:
+    stats: "/tmp/glance-api-uwsgi-stats.sock"
+
+heat_api_uwsgi_ini_overrides:
+  uwsgi:
+    stats: "/tmp/heat-api-uwsgi-stats.sock"
+
+heat_api_cfn_init_overrides:
+  uwsgi:
+    stats: "/tmp/heat-api-cfn-uwsgi-stats.sock"
+
+nova_api_metadata_uwsgi_ini_overrides:
+  uwsgi:
+    stats: "/tmp/nova-api-metadata-uwsgi-stats.sock"
+
+nova_api_os_compute_uwsgi_ini_overrides:
+  uwsgi:
+    stats: "/tmp/nova-api-os-compute-uwsgi-stats.sock"
+
+nova_placement_uwsgi_ini_overrides:
+  uwsgi:
+    stats: "/tmp/nova-placement-uwsgi-stats.sock"
+
+octavia_api_uwsgi_ini_overrides:
+  uwsgi:
+    stats: "/tmp/octavia-api-uwsgi-stats.sock"
+
+sahara_api_uwsgi_ini_overrides:
+  uwsgi:
+    stats: "/tmp/sahara-api-uwsgi-stats.sock"
+
+ironic_api_uwsgi_ini_overrides:
+  uwsgi:
+    stats: "/tmp/ironic-api-uwsgi-stats.sock"
+
+magnum_api_uwsgi_ini_overrides:
+  uwsgi:
+    stats: "/tmp/magnum-api-uwsgi-stats.sock"
+{% endif %}
+
