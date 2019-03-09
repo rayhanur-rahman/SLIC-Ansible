@@ -177,7 +177,7 @@ def parseYaml(filename):
     tree(root, False, response)
     return response
 
-def xxx():
+def detectSmells():
     file = open('ymlpaths.txt', 'r')
     output = open('output.csv', 'a')
     output.write(f"MONTH,FILE_NAME,HARD_CODE_SECR,EMPT_PASS,HTTP_USAG,BIND_USAG,SUSP_COMM,INTE_CHCK,TOTAL\n")
@@ -220,4 +220,4 @@ def xxx():
 
     return
 
-xxx()
+detectSmells()
