@@ -1,3 +1,0 @@
-graphite_host_template: "1.2.3.4.5"
-graphite_prefix_template: "CI"
-

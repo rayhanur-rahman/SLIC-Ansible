@@ -1,4 +1,0 @@
-browbeat_dependencies:
-                  - rsync
-                  - ansible
-

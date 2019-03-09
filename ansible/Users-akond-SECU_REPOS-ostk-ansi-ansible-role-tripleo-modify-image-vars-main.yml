@@ -1,5 +1,0 @@
-# we support 'docker' or 'buildah'
-build_commands:
-  docker: docker build
-  buildah: buildah bud
-

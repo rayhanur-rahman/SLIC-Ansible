@@ -1,4 +1,0 @@
----
-ironic_api_url: "http://localhost:6385"
-ironic_inspector_api_url: "http://localhost:5050"
-
