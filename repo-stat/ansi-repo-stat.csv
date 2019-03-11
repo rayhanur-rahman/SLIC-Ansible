@@ -1502,6 +1502,7 @@ ID, REPO, STATUS
 1500,MaxIV-KitsControls@netspot,NOT_ENOUGH_DEVELOPERS
 1501,MaxiReglisse@geosync-ansible,NOT_ENOUGH_DEVELOPERS
 1502,Maxim-Mazurok@phpDocumentor2,IS_FORKED
+1503,Maxima-Research@ansible,NOT_ENOUGH_DEVELOPERS
 1504,MaximilianMeister@velum,IS_FORKED
 1505,Maxlab@DesignPatternsPHP,IS_FORKED
 1506,MediaWiki-stable@1.26.0,============NOT_FOUND============
@@ -3038,7 +3039,7 @@ ID, REPO, STATUS
 3037,angrygoat@DE-Reference,NOT_ENOUGH_DEVELOPERS
 3038,angstwad@ansible,IS_FORKED
 3039,angstwad@ansible-docker-rackspace,NOT_ENOUGH_DEVELOPERS
-3040,angussidney@metasmoke,IS_FORKED
+3040,angussidney@metasmoke,============NOT_FOUND============
 3041,anhtrankg@drupal_8.0,NOT_ENOUGH_DEVELOPERS
 3042,anifes@upside-interview-d8,NOT_ENOUGH_DEVELOPERS
 3043,anik3tra0@taskbox-may,NOT_ENOUGH_DEVELOPERS

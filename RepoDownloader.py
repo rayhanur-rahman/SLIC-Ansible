@@ -17,10 +17,10 @@ def filterRepo(rootDir):
         repos.append(repo)
         for fileName in fileList:
             count += 1
-            if (not fileName.endswith('rb') and not fileName.endswith('rb')) or 'test' in repo['path']:
+            if (not fileName.endswith('yml') and not fileName.endswith('yaml')) or 'test' in repo['path']:
                 unnecessaryScriptCount += 1
                 try:
-                    os.remove(f'{dirName}/{fileName}')
+                    if '.git' not in repo['path']: os.remove(f'{dirName}/{fileName}')
                 except:
                     pass
             else:
@@ -29,7 +29,7 @@ def filterRepo(rootDir):
 
     status = None
     if 100 * (unnecessaryScriptCount / count) > 90:
-        status = 'NOT_ENOUGH_COOKBOOKS'
+        status = 'NOT_ENOUGH_PLAYBOOKS'
         try:
             shutil.rmtree(f'{rootDir}')
         except:
@@ -44,7 +44,7 @@ def filterRepo(rootDir):
 
 
 def cloneRepo(owner, repoName):
-    g = Github('brokenquark','***')
+    g = Github('brokenquark','mousum#06')
     # g = Github()
 
     #repo = g.get_repo(f'{owner}/{repoName}')
@@ -82,7 +82,7 @@ def cloneRepo(owner, repoName):
             dir = f'{owner}@{repoName}'
             if commitsPerMonth >= 2:
                 gitUrl = f'https://github.com/{owner}/{repoName}'
-                dir = f'/home/brokenquark/repo-chef/{dir}/'
+                dir = f'/home/brokenquark/repo-ansi/{dir}/'
                 subprocess.call(f'git clone {gitUrl} {dir}', shell=True)
                 status = filterRepo(dir)
             else:
@@ -98,7 +98,7 @@ def cloneRepo(owner, repoName):
 
 repoList = []
 
-file = open('repo-chef.csv', 'r')
+file = open('repoList/repo-ansible.csv', 'r')
 for line in file:
     repoList.append(f'{line.split(",")[0]}/{line.split(",")[1]}')
 
@@ -107,16 +107,18 @@ filteredRepoList = list(filteredRepoList)
 filteredRepoList.sort()
 print(len(filteredRepoList))
 
-# cloneRepo('brokenquark', 'NCSUCC18')
+for i in range(10688, 14285):
+    if i%1000==0:
+        print('waiting...')
+        time.sleep(600)
 
-for i in range(4226, 5501):
     owner = filteredRepoList[i].split('/')[0]
     repo= filteredRepoList[i].split('/')[1]
     # print(f'#{i} : {owner}@{repo}')
     try:
         status = cloneRepo(owner, repo)
         print(f'{i} | {owner}@{repo} | {status}')
-        file = open('chef-repo-stat.csv', 'a')
+        file = open('repo-stat/ansi-repo-stat.csv', 'a')
         file.write(f'{i},{owner}@{repo},{status}\n')
         file.close()
     except:
