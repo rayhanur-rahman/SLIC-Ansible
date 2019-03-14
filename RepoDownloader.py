@@ -44,7 +44,7 @@ def filterRepo(rootDir):
 
 
 def cloneRepo(owner, repoName):
-    g = Github('brokenquark','mousum#06')
+    g = Github('brokenquark','***')
     # g = Github()
 
     #repo = g.get_repo(f'{owner}/{repoName}')
