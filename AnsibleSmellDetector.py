@@ -55,7 +55,8 @@ def tree(node, checkSubTree, response):
     # print(f'{node.key}:{node.value}')
 
     listOfUserNameAndPassword = ['root','passno','pass-no', 'pass_no', 'auth_token', 'authetication_token','auth-token', 'authentication-token', 'user', 'uname', 'username', 'user-name', 'user_name', 'owner-name', 'owner_name', 'owner', 'admin', 'login', 'pass', 'pwd', 'password', 'passwd', 'secret', 'uuid', 'crypt', 'certificate', 'userid', 'loginid', 'token', 'ssh_key', 'md5', 'rsa', 'ssl_content', 'ca_content', 'ssl-content', 'ca-content', 'ssh_key_content', 'ssh-key-content', 'ssh_key_public', 'ssh-key-public', 'ssh_key_private', 'ssh-key-private', 'ssh_key_public_content', 'ssh_key_private_content', 'ssh-key-public-content', 'ssh-key-private-content']
-    listOfPassWord = ['pass', 'pwd', 'password', 'passwd']
+    listOfPassWord = ['pass', 'pwd', 'password', 'passwd', 'passno', 'pass-no', 'pass_no' ]
+    listOfUserName = ['root', 'user', 'uname', 'username', 'user-name', 'user_name', 'owner-name', 'owner_name', 'owner', 'admin', 'login', 'userid', 'loginid']
     listOfSSHDirectory = ['source', 'destination', 'path', 'directory', 'src', 'dest', 'file']
     miscelleneous = ['key','id', 'cert']
 
@@ -79,6 +80,18 @@ def tree(node, checkSubTree, response):
                         'smell-type': 'hardcoded-secret',
                         'smell-instance': f'{str(node.key)}:{str(node.value)}'
                     })
+
+                    if item in listOfPassWord:
+                        response.append({
+                            'smell-type': 'hardcoded-password',
+                            'smell-instance': f'{str(node.key)}:{str(node.value)}'
+                        })
+                    if item in listOfUserName:
+                        response.append({
+                            'smell-type': 'hardcoded-username',
+                            'smell-instance': f'{str(node.key)}:{str(node.value)}'
+                        })
+
                     break
 
     for item in listOfSSHDirectory:
@@ -180,7 +193,7 @@ def parseYaml(filename):
 def detectSmells():
     file = open('ymlpaths.txt', 'r')
     output = open('output.csv', 'a')
-    output.write(f"MONTH,FILE_NAME,HARD_CODE_SECR,EMPT_PASS,HTTP_USAG,BIND_USAG,SUSP_COMM,INTE_CHCK,TOTAL\n")
+    output.write(f"MONTH,FILE_NAME,HARD_CODE_SECR,EMPT_PASS,HTTP_USAG,BIND_USAG,SUSP_COMM,INTE_CHCK,HARD_CODE_UNAME,HARD_CODE_PASS,TOTAL\n")
     output.close()
 
     smellCounts = {
@@ -189,7 +202,9 @@ def detectSmells():
         'use of http': 0,
         'improper ip address binding': 0,
         'no-integrity-check': 0,
-        'suspicious comment': 0
+        'suspicious comment': 0,
+        'hardcoded-username': 0,
+        'hardcoded-password': 0
     }
 
     for line in file:
@@ -204,7 +219,7 @@ def detectSmells():
                     total += 1
 
             output = open('output.csv', 'a')
-            output.write(f"{datetime.now()}, {line.strip()}, {smellCounts['hardcoded-secret']}, {smellCounts['empty-password']}, {smellCounts['use of http']}, {smellCounts['improper ip address binding']}, {smellCounts['suspicious comment']}, {smellCounts['no-integrity-check']}, {total}\n")
+            output.write(f"{datetime.now()}, {line.strip()}, {smellCounts['hardcoded-secret']}, {smellCounts['empty-password']}, {smellCounts['use of http']}, {smellCounts['improper ip address binding']}, {smellCounts['suspicious comment']}, {smellCounts['no-integrity-check']}, {smellCounts['hardcoded-username']}, {smellCounts['hardcoded-password']}, {total}\n")
 
             smellCounts['hardcoded-secret'] = 0
             smellCounts['empty-password'] = 0
@@ -212,6 +227,8 @@ def detectSmells():
             smellCounts['no-integrity-check'] = 0
             smellCounts['suspicious comment'] = 0
             smellCounts['use of http'] = 0
+            smellCounts['hardcoded-username'] = 0
+            smellCounts['hardcoded-password'] = 0
 
             output.close()
         except:
