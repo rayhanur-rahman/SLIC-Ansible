@@ -36,11 +36,11 @@ def filterRepo(rootDir):
             pass
     else:
         status = 'ALL_OKAY'
-        # file = open('ymlpaths.txt', 'a')
+        # file = open('ymlpaths2.txt', 'a')
         # file.write(paths)
         # file.close()
     print(f'\t#########--{(100 - 100*(unnecessaryScriptCount/count)):.2f}--#########')
-    return status
+    return [status, (100 - 100*(unnecessaryScriptCount/count))]
 
 
 def cloneRepo(owner, repoName):
@@ -55,7 +55,7 @@ def cloneRepo(owner, repoName):
         repo = g.get_repo(f'{owner}/{repoName}')
     except:
         # print('not found')
-        status = '============NOT_FOUND============'
+        status = ['============NOT_FOUND============', '']
         return status
 
     if not repo.fork:
@@ -76,7 +76,7 @@ def cloneRepo(owner, repoName):
                 commitsPerMonth = math.ceil(math.fabs(numberOfCommits / ((lastCommit - firstCommit).days/30)))
             else:
                 # print('very short timed repository')
-                status = 'NOT_ENOUGH_COMMITS'
+                status = ['NOT_ENOUGH_COMMITS','']
                 return status
 
             dir = f'{owner}@{repoName}'
@@ -87,13 +87,13 @@ def cloneRepo(owner, repoName):
                 status = filterRepo(dir)
             else:
                 # print('not enough commits')
-                status = 'NOT_ENOUGH_COMMITS'
+                status = ['NOT_ENOUGH_COMMITS','']
         else:
             # print('not enough authors')
-            status = 'NOT_ENOUGH_DEVELOPERS'
+            status = ['NOT_ENOUGH_DEVELOPERS','']
     else:
         # print('is forked')
-        status = 'IS_FORKED'
+        status = ['IS_FORKED','']
     return status
 
 repoList = []
@@ -107,10 +107,10 @@ filteredRepoList = list(filteredRepoList)
 filteredRepoList.sort()
 print(len(filteredRepoList))
 
-for i in range(10688, 14285):
-    if i%1000==0:
-        print('waiting...')
-        time.sleep(600)
+for i in range(13335, 14285):
+    # if i%1000==0:
+    #     print('waiting...')
+    #     time.sleep(60)
 
     owner = filteredRepoList[i].split('/')[0]
     repo= filteredRepoList[i].split('/')[1]
@@ -119,7 +119,7 @@ for i in range(10688, 14285):
         status = cloneRepo(owner, repo)
         print(f'{i} | {owner}@{repo} | {status}')
         file = open('repo-stat/ansi-repo-stat.csv', 'a')
-        file.write(f'{i},{owner}@{repo},{status}\n')
+        file.write(f'{i},{owner}@{repo},{status[0]},{status[1]},\n')
         file.close()
     except:
         print(f'terminating at {i}')
