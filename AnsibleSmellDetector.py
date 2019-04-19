@@ -191,8 +191,8 @@ def parseYaml(filename):
     return response
 
 def detectSmells():
-    file = open('ymlpaths.txt', 'r')
-    output = open('output.csv', 'a')
+    file = open('ymlPathsUpdated.txt', 'r')
+    output = open('output-updated.csv', 'a')
     output.write(f"MONTH,FILE_NAME,HARD_CODE_SECR,EMPT_PASS,HTTP_USAG,BIND_USAG,SUSP_COMM,INTE_CHCK,HARD_CODE_UNAME,HARD_CODE_PASS,TOTAL\n")
     output.close()
 
@@ -218,7 +218,7 @@ def detectSmells():
                     smellCounts[element['smell-type']] += 1
                     total += 1
 
-            output = open('output.csv', 'a')
+            output = open('output-updated.csv', 'a')
             output.write(f"{datetime.now()}, {line.strip()}, {smellCounts['hardcoded-secret']}, {smellCounts['empty-password']}, {smellCounts['use of http']}, {smellCounts['improper ip address binding']}, {smellCounts['suspicious comment']}, {smellCounts['no-integrity-check']}, {smellCounts['hardcoded-username']}, {smellCounts['hardcoded-password']}, {total}\n")
 
             smellCounts['hardcoded-secret'] = 0
@@ -237,9 +237,9 @@ def detectSmells():
 
     return
 
-# detectSmells()
+detectSmells()
 
-url = '/home/brokenquark/repo-ansi/2015-Middleware-Keynote@demo-ansible/playbooks/vars.yml'
-response = parseYaml(url)
-
-print(response)
+# url = '/home/brokenquark/repo-ansi/2015-Middleware-Keynote@demo-ansible/playbooks/vars.yml'
+# response = parseYaml(url)
+#
+# print(response)

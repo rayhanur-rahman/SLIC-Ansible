@@ -36,9 +36,9 @@ from dateutil import parser
 #
 
 
-file = open('output.csv', 'r')
+file = open('output-updated.csv', 'r')
 count = 0
-dump = open('output2.csv', 'w')
+dump = open('output-updated2.csv', 'w')
 for line in file:
     if count == 0:
         count+=1
