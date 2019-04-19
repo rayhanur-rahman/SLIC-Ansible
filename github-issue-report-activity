@@ -1,0 +1,165 @@
+Greetings,
+
+I am a security researcher, who is looking for security smells in Ansible scripts.
+I found instances where certain keywords such as TODO, HACK, FIXME, bug repository IDs, in comments within Chef scripts.
+According to the Common Weakness Enumeration organization this is a security weakness
+(CWE-546: Suspicious Comment https://cwe.mitre.org/data/definitions/546.html).
+
+I am trying to find out if you agree with the findings. I think it is possible to have a nuanced perspective. Any feedback is appreciated.
+
+Any feedback is appreciated.
+
+Source: 
+
+
+https://github.com/2015-Middleware-Keynote/demo-ansible/blob/master/playbooks/post_setup.yml
+[{'smell-type': 'suspicious comment', 'smell-instance': "# ** NOTE: Still using this because there's some weird bug when calling\n"}]
+1
+
+https://github.com/LearnEra/LearnEra-Configuration/blob/master/playbooks/roles/jenkins_master/tasks/main.yml
+[{'smell-type': 'suspicious comment', 'smell-instance': '# Should be resolved in the next release, but until then we need to do this\n'}, {'smell-type': 'suspicious comment', 'smell-instance': '# https://issues.jenkins-ci.org/browse/JENKINS-20407\n'}, {'smell-type': 'suspicious comment', 'smell-instance': '# certain issues.  If these changes get merged\n'}, {'smell-type': 'suspicious comment', 'smell-instance': '# See https://issues.jenkins-ci.org/browse/JENKINS-13129\n'}]
+4
+
+https://github.com/UXE/edx-configuration/blob/master/playbooks/roles/edxapp/tasks/deploy.yml
+[{'smell-type': 'suspicious comment', 'smell-instance': '# chown - https://github.com/npm/npm/issues/3565\n'}, {'smell-type': 'suspicious comment', 'smell-instance': '# https://code.launchpad.net/~wligtenberg/django-openid-auth/mysql_fix/+merge/22726\n'}, {'smell-type': 'suspicious comment', 'smell-instance': '# not sure if this fix will ever get merged\n'}]
+3
+
+https://github.com/VaneCloud/openstack-ansible/blob/master/playbooks/roles/lxc_container_create/tasks/container_create.yml
+[{'smell-type': 'suspicious comment', 'smell-instance': '# This is being defined due to an issue with dangling veth pairs.\n'}, {'smell-type': 'suspicious comment', 'smell-instance': '#  been submitted to either the kernel or LXC to fix the veth issues.\n'}, {'smell-type': 'hardcoded-secret', 'smell-instance': 'owner:root'}, {'smell-type': 'hardcoded-username', 'smell-instance': 'owner:root'}, {'smell-type': 'hardcoded-secret', 'smell-instance': 'owner:root'}, {'smell-type': 'hardcoded-username', 'smell-instance': 'owner:root'}]
+2
+
+https://github.com/antshin72/configuration/blob/master/playbooks/roles/jenkins_master/tasks/main.yml
+[{'smell-type': 'suspicious comment', 'smell-instance': '# Should be resolved in the next release, but until then we need to do this\n'}, {'smell-type': 'suspicious comment', 'smell-instance': '# https://issues.jenkins-ci.org/browse/JENKINS-20407\n'}, {'smell-type': 'suspicious comment', 'smell-instance': '# certain issues.  If these changes get merged\n'}, {'smell-type': 'suspicious comment', 'smell-instance': '# See https://issues.jenkins-ci.org/browse/JENKINS-13129\n'}]
+4
+
+https://github.com/negritobomb/edxplat/blob/master/playbooks/roles/edxapp/tasks/deploy.yml
+3
+[{'smell-type': 'suspicious comment', 'smell-instance': '# chown - https://github.com/npm/npm/issues/3565\n'}, {'smell-type': 'suspicious comment', 'smell-instance': '# https://code.launchpad.net/~wligtenberg/django-openid-auth/mysql_fix/+merge/22726\n'}, {'smell-type': 'suspicious comment', 'smell-instance': '# not sure if this fix will ever get merged\n'}]
+
+https://github.com/openshift/openshift-tools/blob/prod/openshift/installer/vendored/openshift-ansible-3.5.127/playbooks/common/openshift-cluster/upgrades/v3_5/validator.yml
+4
+[{'smell-type': 'suspicious comment', 'smell-instance': '# Pre upgrade checks for known data problems, if this playbook fails you should\n'}, {'smell-type': 'suspicious comment', 'smell-instance': '# 1 - SDN Data issues, never seen in the wild but known possible due to code audits\n'}, {'smell-type': 'suspicious comment', 'smell-instance': '#     https://github.com/openshift/origin/issues/12697\n'}, {'smell-type': 'suspicious comment', 'smell-instance': '# 2 - Namespace protections, https://bugzilla.redhat.com/show_bug.cgi?id=1428934\n'}]
+
+
+Greetings,
+
+I am a security researcher, who is looking for security smells in Ansible scripts.
+I found instances where usernames and passwords are specified within a Ansible script.
+According to the Common Weakness Enumeration organization this is a security weakness
+(CWE-798: Hard-coded credentials https://cwe.mitre.org/data/definitions/798.html).
+
+I am trying to find out if you agree with the findings and the reasons the usernames and passwords were introduced. Any feedback is appreciated.
+
+Any feedback is appreciated.
+
+
+
+https://github.com/yanyao/openstack-deployment-liberty/blob/master/playbooks/roles/os_nova/defaults/main.yml
+12
+
+https://github.com/sudheerchintala/LearnEra-Configuration/blob/master/playbooks/secure_example/vars/edxapp_ref_vars.yml
+34
+
+https://github.com/rcbops/ansible-lxc-rpc/blob/master/rpc_deployment/playbooks/openstack/keystone-add-all-services.yml
+11
+
+https://github.com/quarkslab/irma/blob/master/ansible/playbooks/group_vars/all.yml
+22
+
+https://github.com/hmcmooc/ec2-edx-configuration/blob/master/playbooks/roles/edxapp/defaults/main.yml
+91
+
+
+Greetings,
+
+I am a security researcher, who is looking for security smells in Ansible scripts.
+I found instances where empty passwords are specified within a Ansible script.
+According to the Common Weakness Enumeration organization this is a security weakness
+(CWE-258: Empty Password in Configuration File https://cwe.mitre.org/data/definitions/258.html).
+
+I am trying to find out if you agree with the findings. Any feedback is appreciated.
+
+Any feedback is appreciated.
+
+https://github.com/d34dh0r53/os-ansible-deployment/blob/master/playbooks/roles/os_heat/files/templates/AWS_RDS_DBInstance.yaml
+3
+
+https://github.com/michaelsteiner19/open-edx-configuration/blob/master/playbooks/roles/redis/defaults/main.yml
+1
+
+https://github.com/pdehaye/theming-configuration/blob/master/playbooks/roles/edxapp/vars/main.yml
+15
+
+
+Greetings,
+
+I am a security researcher, who is looking for security smells in Ansible scripts. I found instances where the HTTP protocol is used instead of HTTPS (HTTP with TLS). According to the Common Weakness Enumeration organization this is a security weakness (https://cwe.mitre.org/data/definitions/319.html). I was wondering why HTTP is used? Is it because of lack of tool support?
+
+I am trying to find out if developers are forced to adopt bad practices due to lack of tool support when it comes to the HTTPS protocol. Maybe it is due to dependency on a resource that uses HTTP?
+
+Any feedback is appreciated.
+
+
+
+https://github.com/gc3-uzh-ch/elasticluster/blob/master/elasticluster/share/playbooks/roles/rstudio/tasks/main.yml
+2
+
+https://github.com/michaelsteiner19/open-edx-configuration/blob/master/playbooks/roles/edxapp/defaults/main.yml
+6
+
+https://github.com/chenshuchuan/configuration/blob/master/playbooks/roles/edxapp/defaults/main.yml
+1
+
+https://github.com/carlosthe19916/openshift-ansible/blob/master/playbooks/adhoc/zabbix_setup/setup_zabbix.yml
+1
+
+https://github.com/bugcy013/edx_infra/blob/master/playbooks/roles/snort/defaults/main.yml
+2
+
+
+Greetings,
+
+I am a security researcher, who is looking for security smells in Ansible scripts. I noticed instances of binding to 0.0.0.0. Binding an address to 0.0.0.0 indicates allowing connections from all IP addresses. I would like to draw attention to these instances. Binding to 0.0.0.0 may lead to denial of service attacks. Practitioners have reported how binding to 0.0.0.0 facilitated security issues for MySQL (https://serversforhackers.com/c/mysql-network-security), Memcached (https://news.ycombinator.com/item?id=16493480), and Kibana (https://www.elastic.co/guide/en/kibana/5.0/breaking-changes-5.0.html).
+
+Any feedback is appreciated.
+
+
+
+https://github.com/rhevm-qe-automation/ovirt-ansible/blob/master/examples/playbooks/remote_db.yml
+1
+
+https://github.com/quarkslab/irma/blob/master/ansible/playbooks/group_vars/brain.yml
+1
+
+https://github.com/negritobomb/edxplat/blob/master/playbooks/roles/forum/defaults/main.yml
+1
+
+https://github.com/gashac03/ubuntu/blob/master/playbooks/roles/edx_service_rds/defaults/main.yml
+4
+
+https://github.com/d34dh0r53/os-ansible-deployment/blob/master/playbooks/roles/os_keystone/defaults/main.yml
+1
+
+
+Greetings,
+
+I am a security researcher, who is looking for security smells in Ansible scripts. I found instances where no integrity check is used after downloading an iso or package binaries. According to the Common Weakness Enumeration organization this is a security weakness (Missing Support for Integrity Check: https://cwe.mitre.org/data/definitions/353.html). 
+
+Any feedback is appreciated.
+
+https://github.com/LearnEra/LearnEra-Configuration/blob/master/playbooks/roles/nltk/defaults/main.yml
+3
+
+https://github.com/antshin72/configuration/blob/master/playbooks/roles/nltk/defaults/main.yml
+1
+
+https://github.com/gashac03/ubuntu/blob/master/playbooks/roles/snort/defaults/main.yml
+3
+
+https://github.com/gc3-uzh-ch/elasticluster/blob/master/elasticluster/share/playbooks/roles/jupyter/tasks/pyspark.yml
+2
+
+https://github.com/hmcmooc/ec2-edx-configuration/blob/master/playbooks/roles/snort/defaults/main.yml
+1
+
+total: 240

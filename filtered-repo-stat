@@ -3,8 +3,8 @@ forked: 4268
 not enough authors: 8717
 not enough commits: 1
 not found: 517
-not enough playbooks: 433
-ok: 349
+not enough playbooks: 713
+ok: 69
 total: 14285
 
 # chef Repos 
@@ -16,7 +16,7 @@ not enough cookbooks: 36
 ok: 438
 total: 5508
 
-total yaml files: 103714
-total non yaml files: 395038
+total yaml files: 13152
+total non yaml files: 485600
 
-sloc of all yaml files: 5717776
+sloc of all yaml files: 602982

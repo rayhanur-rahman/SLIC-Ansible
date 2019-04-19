@@ -1,72 +1,25 @@
-from collections import Counter
+from github import Github
+from datetime import datetime
 import math
+import time, os, subprocess, shutil
 
-# file = open('repo-stat/chef-repo-stat.csv')
+# file = open('repo-stat/ansi-updated.csv', 'r')
+# file2 = open('ymlPathsUpdated.txt', 'w')
 #
-# is_forked = 0
-# not_enough_developers = 0
-# not_found = 0
-# not_enough_playbooks = 0
-# not_enough_commits = 0
-# all_okay = 0
-#
+# sloc = 0
 # for line in file:
-#     data = line.split(',')
-#     if data[2].strip() == 'IS_FORKED': is_forked += 1
-#     if data[2].strip() == 'NOT_ENOUGH_DEVELOPERS': not_enough_developers += 1
-#     if data[2].strip() == 'NOT_ENOUGH_COMMITS': not_enough_commits += 1
-#     if data[2].strip() == '============NOT_FOUND============': not_found += 1
-#     if data[2].strip() == 'NOT_ENOUGH_COOKBOOKS': not_enough_playbooks += 1
-#     if data[2].strip() == 'ALL_OKAY': all_okay += 1
+#     rows = line.split(',')
+#     if rows[2] == 'ALL_OKAY':
+#         path = f'/home/brokenquark/repo-ansi/{rows[1]}/'
+#         for dirName, subdirList, fileList in os.walk(path):
+#             foldernames = [x.lower() for x in dirName.split('/')]
+#             for fileName in fileList:
+#                 if 'playbooks' in foldernames and 'test' not in foldernames:
+#                     file2.write(f'{dirName}/{fileName}\n')
 #
-# print(f'forked: {is_forked}')
-# print(f'not enough authors: {not_enough_developers}')
-# print(f'not enough commits: {not_enough_commits}')
-# print(f'not found: {not_found}')
-# print(f'not enough scripts: {not_enough_playbooks}')
-# print(f'ok: {all_okay}')
-#
+# file2.close()
 
-# file = open('repo-stat/anis-2.csv')
-# repo_stat = []
-#
-# for line in file:
-#     data = line.split(',')
-#     if data[2].strip() == 'ALL_OKAY':
-#         repo_stat.append({
-#             'name': data[1].strip(),
-#             'percentage': data[3].strip()
-#         })
-#
-#
-# file2 = open('ymlpaths.txt')
-#
-# repoNames = []
-# for line in file2:
-#     data = line.split('/')
-#     repoNames.append(data[4].strip())
-#
-#
-#
-# ansibleCounts = Counter(repoNames).items()
-#
-# totalAnsibleFiles = 0
-# totalNonAnsibleFiles = 0
-#
-# for x in repo_stat:
-#     for y in ansibleCounts:
-#         if x['name'] == y[0]:
-#             x['ansible-count'] = y[1]
-#             x['non-ansible-count'] = math.ceil(100 * y[1] / float(x['percentage']))
-#             totalAnsibleFiles += x['ansible-count']
-#             totalNonAnsibleFiles += x['non-ansible-count']
-#
-# print(totalAnsibleFiles)
-# print(totalNonAnsibleFiles)
-
-
-
-file = open('ymlpaths.txt', 'r')
+file = open('ymlPathsUpdated.txt', 'r')
 
 failure = 0
 sloc = 0
