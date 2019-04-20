@@ -44,7 +44,7 @@ def filterRepo(rootDir):
 
 
 def cloneRepo(owner, repoName):
-    g = Github('brokenquark','***')
+    g = Github('brokenquark','******')
     # g = Github()
 
     #repo = g.get_repo(f'{owner}/{repoName}')
@@ -107,7 +107,7 @@ filteredRepoList = list(filteredRepoList)
 filteredRepoList.sort()
 print(len(filteredRepoList))
 
-for i in range(13335, 14285):
+for i in range(0, 1):
     # if i%1000==0:
     #     print('waiting...')
     #     time.sleep(60)

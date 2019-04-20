@@ -237,9 +237,9 @@ def detectSmells():
 
     return
 
-detectSmells()
+# detectSmells()
 
-# url = '/home/brokenquark/repo-ansi/2015-Middleware-Keynote@demo-ansible/playbooks/vars.yml'
-# response = parseYaml(url)
-#
-# print(response)
+url = '/home/brokenquark/repo-ansi/gc3-uzh-ch@elasticluster/elasticluster/share/playbooks/roles/jupyter/tasks/pyspark.yml'
+response = parseYaml(url)
+
+print(response)
