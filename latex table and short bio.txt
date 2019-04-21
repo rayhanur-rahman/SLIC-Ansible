@@ -1,0 +1,61 @@
+-name:install docker
+: <MAP,KEY:name,VAL:install docker>
+
+package:
+    name:python3
+    gpgcheck:false
+: <MAP,KEY:package,VAL:<MAP,KEY:name,VAL:python3>,<MAP,KEY:gpgcheck,VAL:false>>
+
+-distribution:
+    -[ubuntu,fedora]
+: <MAP,KEY:distribution,VAL:<LIST,<LIST,[ubuntu,fedora]>>>
+
+- dependency: 
+    -g++
+    -gdb
+: <MAP,KEY:dependency,VAL:<LIST,[g++,gdb]>>
+
+-auth:{uname:'{{root}}',pwd:'{{pwd}}'}
+:<MAP,KEY:auth,VAL:<MAP,KEY:uname ,VAL:{{root}}>,<MAP,KEY:pwd,VAL:{{pwd}}>>
+
+LATEX TABLE
+\begin{table}[]
+\caption{Table 1}
+\label{tab:my-table}
+\begin{tabular}{|l|l|}
+\hline
+\multicolumn{1}{|c|}{\textbf{Code Snippet}}                                              & \multicolumn{1}{c|}{\textbf{Output of Parser}}                                                                              \\ \hline
+- name: run bash                                                                         & <MAP,KEY:name,VAL:run bash>                                                                                                 \\ \hline
+\begin{tabular}[c]{@{}l@{}}package:\\     name:python3\\     gpgcheck:false\end{tabular} & \begin{tabular}[c]{@{}l@{}}<MAP,KEY:package,VAL:<MAP,\\ KEY:name,VAL:python3>,<MAP,\\ KEY:gpgcheck,VAL:false>>\end{tabular} \\ \hline
+\begin{tabular}[c]{@{}l@{}}-distribution:\\     -[ubuntu,fedora]\end{tabular}            & \begin{tabular}[c]{@{}l@{}}<MAP,KEY:distribution,VAL:\\ <LIST,<LIST,[ubuntu,fedora]>>>\end{tabular}                         \\ \hline
+\begin{tabular}[c]{@{}l@{}}- dependency: \\     -g++\\     -gdb\end{tabular}             & \begin{tabular}[c]{@{}l@{}}<MAP,KEY:dependency,VAL:\\ <LIST,[g++,gdb]>>\end{tabular}                                        \\ \hline
+\begin{tabular}[c]{@{}l@{}}auth:{uname:'{{root}}',\\ pwd:'{{pwd}}'}\end{tabular}         & \begin{tabular}[c]{@{}l@{}}<MAP,KEY:auth,VAL:<MAP,\\ KEY:uname ,VAL:{{root}}>,\\ <MAP,KEY:pwd,VAL:{{pwd}}>>\end{tabular}    \\ \hline
+\end{tabular}
+\end{table}
+
+empty password => iskey(x) ∧ isValue(y) ∧ length(y) = 0 ∧ isPasswordProperty(x)
+hardcoded secret => isKey(x) and isValue(y) ∧ length(y) > 0 ∧ notVariable(y) ∧ (isUserNameProperty(x) ∨ isPasswordProperty(x) ∨ isPrivateKeyProperty(x))
+use of http without tls => isValue(y) ∧ valueContainsHTTP(y) ∧ notVariable(y)
+improperIPAddressBinding => isValue(y) ∧ valueContainsZeroIPAddress(y)
+suspicious comment => isComment(line) ∧ hasWrongWords(line) ∧ hasBugInfo(line)
+no integrity check => isKey(x) ∧ isValue(y) ∧ ((truthValue(y) = false ∧ isIntegrityCheckProperty(x)) ∨ isValueDownloadUrl(y) ∧ isNestedProperty(w) ∧ truthValue(z) = false ∧ isIntegrityCheckProperty(w)) 
+
+
+LATEX TABLE
+\begin{table}[]
+\begin{tabular}{ll}
+\multicolumn{1}{c}{\textbf{Smell Name}} & \multicolumn{1}{c}{\textbf{Rule}}                                                                                                                                                   \\
+Empty Password                          & iskey(x) ∧ isValue(y) ∧ length(y) = 0 ∧ isPasswordProperty(x)                                                                                                                       \\
+Hardcoded Secret                        & isKey(x) and isValue(y) ∧ length(y) \textgreater 0 ∧ notVariable(y) ∧ (isUserNameProperty(x) ∨ isPasswordProperty(x) ∨ isPrivateKeyProperty(x))                                     \\
+Invalid IP Address Binding              & isValue(y) ∧ valueContainsZeroIPAddress(y)                                                                                                                                          \\
+No Integrity Check                      & isKey(x) ∧ isValue(y) ∧ ((truthValue(y) = false ∧ isIntegrityCheckProperty(x)) ∨ isValueDownloadUrl(y) ∧ isNestedProperty(w) ∧ truthValue(z) = false ∧ isIntegrityCheckProperty(w)) \\
+Suspicious Comment                      & isComment(line) ∧ hasWrongWords(line) ∧ hasBugInfo(line)                                                                                                                            \\
+Use of HTTP without TLS                 & isValue(y) ∧ valueContainsHTTP(y) ∧ notVariable(y)                                                                                                                                 
+\end{tabular}
+\end{table}
+
+Short Bio 
+Md Rayhanur Rahman is a doctoral student in Department of Computer Science, North Carolina State University, 
+USA. He has done bachelors and masters in software engineering from University of Dhaka. His broad research 
+interest includes analysis of software source code, contextual analysis of security issues in software systems 
+and distributed computing.   
