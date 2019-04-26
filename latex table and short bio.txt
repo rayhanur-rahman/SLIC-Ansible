@@ -59,3 +59,9 @@ Md Rayhanur Rahman is a doctoral student in Department of Computer Science, Nort
 USA. He has done bachelors and masters in software engineering from University of Dhaka. His broad research 
 interest includes analysis of software source code, contextual analysis of security issues in software systems 
 and distributed computing.   
+
+A short description on the parser
+We have used the built in yaml syntax parser in the python sdk. After processing the yaml file, the parser returns an object stucturally similar to json. A tree have been 
+generated from that object where each node contains key, value and children. Key will be a string literal
+and value might be a string literal or list of string literals. This tree representation have been used further
+to build the detection tool for ansible security smell detection.   

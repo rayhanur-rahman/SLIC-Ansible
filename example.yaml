@@ -1,0 +1,17 @@
+--- 
+- name: install docker
+
+- package:
+    name: python3
+    gpgcheck: false
+
+
+- distribution:
+    -[ubuntu,fedora]
+
+- dependency: 
+    -g++
+    -gdb
+
+- auth: { uname: '{{ root }}', pwd: '{{ pwd }}'}
+
