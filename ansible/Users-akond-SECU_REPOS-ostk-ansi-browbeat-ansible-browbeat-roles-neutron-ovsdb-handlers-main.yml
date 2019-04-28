@@ -1,0 +1,10 @@
+---
+#
+# Neutron handlers for browbeat adjustment
+#
+
+- name: restart neutron services
+  service: name={{ item }} state=restarted
+  with_items:
+    - neutron-openvswitch-agent
+

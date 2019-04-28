@@ -1,0 +1,74 @@
+admin by default
+Use of weak crypto. algo
+occur: 0/0
+prec: -
+rec: -
+
+empty password
+occur: 3/3
+prec: 100
+rec: 100
+
+hardcoded secret
+occur: 16/15
+prec: 93.75
+rec: 100
+
+invalid ip binding:
+occur: 3/3
+prec: 100
+rec: 100
+
+Suspicious comment
+occur: 3/4
+prec: 100
+rec: 93.75
+
+http
+occur: 7/7
+prec: 100
+rec: 100
+
+no integrity check
+occur: 2/3
+prec: 100
+rec: 66.66
+
+no smell
+occur: 62/64
+prec: 100
+rec: 96.88
+
+Average
+occur: 25.58
+prec: 89.19
+rec: 97.06
+
+
+
+\begin{table}[htb]
+\centering
+\caption{SLAC's Accuracy for the Ansible Oracle Dataset}
+\setlength\abovecaptionskip{-2pt}
+\label{tab-res-slac-ansi-accu}
+\footnotesize{
+\begin{tabular}{ p{3.5cm} r r r }
+\hline
+\textbf{Smell Name} & \textbf{Occurr.} & \textbf{Precision} & \textbf{Recall} \
+\hline
+Admin by default & 0 & N/A & N/A \
+Empty password & 3 & 100 & 100 \
+Hard-coded secret & 16 & 93.75 & 100 \
+Invalid IP address binding & 3 & 100 & 100 \
+Suspicious comment & 3 & 100 & 93.75 \
+Use of HTTP without TLS & 7 & 100 & 100 \
+Use of weak crypto. algo. & 0 & N/A & N/A \
+No Integrity Check & 2 & 100 & 66.66 \
+\hline
+No smell & 62 & 100 & 96.88 \
+\hline
+Average & 0.2558 & 89.19 & 97.06 \
+\hline
+\end{tabular}
+}
+\end{table}

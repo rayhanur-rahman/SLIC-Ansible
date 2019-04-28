@@ -1,5 +1,6 @@
 import yaml, re
 from datetime import datetime
+from urllib.parse import urlparse
 
 class Node:
     def __init__(self, key):
@@ -126,10 +127,33 @@ def tree(node, checkSubTree, response):
         })
 
     download = ['iso', 'tar', 'tar.gz', 'tar.bzip2', 'zip', 'rar', 'gzip', 'gzip2', 'deb', 'rpm', 'sh', 'run', 'bin']
+    parsedUrl = urlparse(str(node.value))
     if re.match(
             r'^(http:\/\/www\.|https:\/\/www\.|http:\/\/|https:\/\/)?[a-z0-9]+([_\-\.]{1}[a-z0-9]+)*\.[a-z]{2,5}(:[0-9]{1,5})?(\/.*)?$',
             str(node.value)):
         if ('http' in str(node.value).strip().lower() or 'www' in str(node.value).strip().lower()) and 'https' not in str(node.value).strip().lower():
+            response.append({
+                'smell-type': 'use of http',
+                'smell-instance': f'{str(node.key)}:{str(node.value)}'
+            })
+        for item in download:
+            if re.match(r'(http|https|www)[_\-a-zA-Z0-9:\/.]*{text}$'.format(text = item), str(node.value)):
+                if node.parent != None:
+                    parent = node.parent
+                    siblings = parent.children
+                    integrityCheckNotFound = True
+                    for child in siblings:
+                        if 'checksum' in str(child.key).lower().strip() or 'gpg' in str(child.key).lower().strip():
+                            integrityCheckNotFound = False
+                            break
+
+                    if integrityCheckNotFound:
+                        response.append({
+                            'smell-type': 'no-integrity-check',
+                            'smell-instance': f'{str(node.key)}:{str(node.value)}'
+                        })
+    elif parsedUrl.scheme == 'http' or parsedUrl.scheme == 'https':
+        if parsedUrl.scheme == 'http':
             response.append({
                 'smell-type': 'use of http',
                 'smell-instance': f'{str(node.key)}:{str(node.value)}'
@@ -161,12 +185,12 @@ def parseYaml(filename):
     stream = open(filename, 'r')
     file = open(filename, 'r')
 
-    tabuWordsInComments = ['bug', 'debug', 'todo', 'to-do', 'to_do', 'fix', 'issue', 'problem', 'solve', 'hack', 'ticket', 'later']
+    tabuWordsInComments = ['bug', 'debug', 'todo', 'to-do', 'to_do', 'fix', 'issue', 'problem', 'solve', 'hack', 'ticket', 'later', 'incorrect', 'fixme']
 
     for line in file:
-        if line.startswith('#'):
+        if line.strip().startswith('#'):
             for word in tabuWordsInComments:
-                if word in line:
+                if word in line.lower():
                     response.append({
                         'smell-type': 'suspicious comment',
                         'smell-instance': f'{line}'
@@ -239,7 +263,29 @@ def detectSmells():
 
 # detectSmells()
 
-url = '/home/brokenquark/repo-ansi/gc3-uzh-ch@elasticluster/elasticluster/share/playbooks/roles/jupyter/tasks/pyspark.yml'
+
+fn = 'Users/akond/SECU_REPOS/ostk-ansi/ansible-role-tripleo-modify-image/tasks/modify_image.yml'.replace('/', '-')
+url = f'/home/brokenquark/Workspace/SLIC-Ansible/ansible/{fn}'
 response = parseYaml(url)
 
 print(response)
+
+# file = open('Testing/ANSIBLE_FINAL_ORACLE_DATASET.csv', 'r')
+# index = 0
+# for line in file:
+#     if index > 0:
+#         fname = line.split(',')[0]
+#         fname = fname.replace('/', '-')[1:]
+#         try:
+#             print(fname)
+#             # response = parseYaml(f'/home/brokenquark/Workspace/SLIC-Ansible/ansible/{fname}')
+#             # if len(response) > 0:
+#             #     for item in response:
+#             #         print(f'{item["smell-type"]}', end=',')
+#             #     print('')
+#             # else:
+#             #     print('none')
+#         except:
+#             pass
+#     index += 1
+#

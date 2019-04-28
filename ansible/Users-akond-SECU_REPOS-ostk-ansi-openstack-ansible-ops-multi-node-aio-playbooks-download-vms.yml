@@ -1,0 +1,74 @@
+---
+# Copyright 2018, Rackspace US, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in witing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- name: Download saved files using a given manifest_url
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  environment: "{{ deployment_environment_variables | default({}) }}"
+  tags:
+    - download-vms
+  vars:
+    aria2c_parameters: >-
+        --log-level=notice
+        --allow-overwrite=true
+        --max-connection-per-server=4
+        --check-integrity true
+        --retry-wait=30
+        --continue
+    aria2c_log_path: >-
+        /tmp
+  tasks:
+    - name: Get the manifest file
+      uri:
+        url: "{{ manifest_url }}"
+        return_content: yes
+      register: _manifest_file
+
+    - name: Register manifest content as a fact
+      set_fact:
+        _manifest_content: "{{ _manifest_file.content | from_json }}"
+
+    - name: Install aria download manager
+      package:
+        name: "aria2"
+        state: present
+
+    - name: Write artifact URL list
+      copy:
+        content: |
+          {% for item in _manifest_content.files %}
+          {{ manifest_url | regex_replace('/[^/]*$', '') }}/{{ item.path | basename}}
+            dir={{ item.path | dirname }}
+            checksum=sha-1={{ item.checksum }}
+          {% endfor %}
+        dest: "/tmp/aria2c.input"
+
+    - name: Ensure that the aria log file path exists
+      file:
+        path: "{{ aria2c_log_path }}"
+        state: directory
+
+    - name: Download artifacts
+      command: >-
+        aria2c
+        --input-file=/tmp/aria2c.input
+        --log={{ aria2c_log_path }}/aria2c.log
+        {{ aria2c_parameters }}
+      register: _download_artifacts
+      until: _download_artifacts is success
+      retries: 3
+      delay: 30
+
