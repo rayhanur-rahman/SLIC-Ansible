@@ -216,8 +216,8 @@ def parseYaml(filename):
 
 def detectSmells():
     file = open('ymlPathsUpdated.txt', 'r')
-    output = open('output-updated.csv', 'a')
-    output.write(f"MONTH,FILE_NAME,HARD_CODE_SECR,EMPT_PASS,HTTP_USAG,BIND_USAG,SUSP_COMM,INTE_CHCK,HARD_CODE_UNAME,HARD_CODE_PASS,TOTAL\n")
+    output = open('ansible-smell-count.csv', 'a')
+    output.write(f"MONTH,REPO_DIR,FILE_NAME,HARD_CODE_SECR,EMPT_PASS,HTTP_USAG,BIND_USAG,SUSP_COMM,INTE_CHCK,HARD_CODE_UNAME,HARD_CODE_PASS,TOTAL\n")
     output.close()
 
     smellCounts = {
@@ -242,8 +242,37 @@ def detectSmells():
                     smellCounts[element['smell-type']] += 1
                     total += 1
 
-            output = open('output-updated.csv', 'a')
-            output.write(f"{datetime.now()}, {line.strip()}, {smellCounts['hardcoded-secret']}, {smellCounts['empty-password']}, {smellCounts['use of http']}, {smellCounts['improper ip address binding']}, {smellCounts['suspicious comment']}, {smellCounts['no-integrity-check']}, {smellCounts['hardcoded-username']}, {smellCounts['hardcoded-password']}, {total}\n")
+            output = open('ansible-smell-count.csv', 'a')
+            path = [x for x in line.strip().split('/') if x.strip() != ''][0:-1]
+            path = '/' + '/'.join(path)
+            output.write(f"{datetime.now().year}-{datetime.now().month},{path},{line.strip()},{smellCounts['hardcoded-secret']}, {smellCounts['empty-password']}, {smellCounts['use of http']}, {smellCounts['improper ip address binding']}, {smellCounts['suspicious comment']}, {smellCounts['no-integrity-check']}, {smellCounts['hardcoded-username']}, {smellCounts['hardcoded-password']}, {total}\n")
+
+            dump = open('dump.csv', 'a')
+            for index in range(0,smellCounts['hardcoded-secret']):
+                dump.write(f'{line.strip()},HARD_CODE_SECR\n')
+
+            for index in range(0,smellCounts['empty-password']):
+                dump.write(f'{line.strip()},EMPT_PASS\n')
+
+            for index in range(0,smellCounts['use of http']):
+                dump.write(f'{line.strip()},HTTP_USAG\n')
+
+            for index in range(0,smellCounts['improper ip address binding']):
+                dump.write(f'{line.strip()},BIND_USAG\n')
+
+            for index in range(0,smellCounts['suspicious comment']):
+                dump.write(f'{line.strip()},SUSP_COMM\n')
+
+            for index in range(0,smellCounts['no-integrity-check']):
+                dump.write(f'{line.strip()},INTE_CHCK\n')
+
+            for index in range(0,smellCounts['hardcoded-username']):
+                dump.write(f'{line.strip()},HARD_CODE_UNAME\n')
+
+            for index in range(0,smellCounts['hardcoded-password']):
+                dump.write(f'{line.strip()},HARD_CODE_PASS\n')
+
+            dump.close()
 
             smellCounts['hardcoded-secret'] = 0
             smellCounts['empty-password'] = 0
@@ -261,14 +290,14 @@ def detectSmells():
 
     return
 
-# detectSmells()
+detectSmells()
 
 
-fn = 'Users/akond/SECU_REPOS/ostk-ansi/ansible-role-tripleo-modify-image/tasks/modify_image.yml'.replace('/', '-')
-url = f'/home/brokenquark/Workspace/SLIC-Ansible/ansible/{fn}'
-response = parseYaml(url)
-
-print(response)
+# fn = 'Users/akond/SECU_REPOS/ostk-ansi/ansible-role-tripleo-modify-image/tasks/modify_image.yml'.replace('/', '-')
+# url = f'/home/brokenquark/Workspace/SLIC-Ansible/ansible/{fn}'
+# response = parseYaml(url)
+#
+# print(response)
 
 # file = open('Testing/ANSIBLE_FINAL_ORACLE_DATASET.csv', 'r')
 # index = 0
