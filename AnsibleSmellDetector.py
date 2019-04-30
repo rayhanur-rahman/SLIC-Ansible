@@ -248,30 +248,41 @@ def detectSmells():
             output.write(f"{datetime.now().year}-{datetime.now().month},{path},{line.strip()},{smellCounts['hardcoded-secret']}, {smellCounts['empty-password']}, {smellCounts['use of http']}, {smellCounts['improper ip address binding']}, {smellCounts['suspicious comment']}, {smellCounts['no-integrity-check']}, {smellCounts['hardcoded-username']}, {smellCounts['hardcoded-password']}, {total}\n")
 
             dump = open('dump.csv', 'a')
+            atLeastOneSmellFound = False
             for index in range(0,smellCounts['hardcoded-secret']):
                 dump.write(f'{line.strip()},HARD_CODE_SECR\n')
+                atLeastOneSmellFound = True
 
             for index in range(0,smellCounts['empty-password']):
                 dump.write(f'{line.strip()},EMPT_PASS\n')
+                atLeastOneSmellFound = True
 
             for index in range(0,smellCounts['use of http']):
                 dump.write(f'{line.strip()},HTTP_USAG\n')
+                atLeastOneSmellFound = True
 
             for index in range(0,smellCounts['improper ip address binding']):
                 dump.write(f'{line.strip()},BIND_USAG\n')
+                atLeastOneSmellFound = True
 
             for index in range(0,smellCounts['suspicious comment']):
                 dump.write(f'{line.strip()},SUSP_COMM\n')
+                atLeastOneSmellFound = True
 
             for index in range(0,smellCounts['no-integrity-check']):
                 dump.write(f'{line.strip()},INTE_CHCK\n')
+                atLeastOneSmellFound = True
 
             for index in range(0,smellCounts['hardcoded-username']):
                 dump.write(f'{line.strip()},HARD_CODE_UNAME\n')
+                atLeastOneSmellFound = True
 
             for index in range(0,smellCounts['hardcoded-password']):
                 dump.write(f'{line.strip()},HARD_CODE_PASS\n')
+                atLeastOneSmellFound = True
 
+            if not atLeastOneSmellFound:
+                dump.write(f'{line.strip()},NONE\n')
             dump.close()
 
             smellCounts['hardcoded-secret'] = 0
