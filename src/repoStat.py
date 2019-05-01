@@ -2,7 +2,7 @@ from github import Github
 from datetime import datetime
 import math
 import time, os, subprocess, shutil
-
+#
 # file = open('repo-stat/ansi-updated.csv', 'r')
 # file2 = open('ymlPathsUpdated.txt', 'w')
 #
@@ -19,7 +19,7 @@ import time, os, subprocess, shutil
 #
 # file2.close()
 
-file = open('ymlPathsUpdated.txt', 'r')
+file = open('../yml directory list/ymlPathsUpdated.txt', 'r')
 
 failure = 0
 sloc = 0

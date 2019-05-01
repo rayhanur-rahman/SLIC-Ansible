@@ -16,7 +16,7 @@ not enough cookbooks: 36
 ok: 438
 total: 5508
 
-total yaml files: 13152
-total non yaml files: 485600
+total yaml files: 13149
+total non yaml files: 485603
 
-sloc of all yaml files: 602982
+sloc of all yaml files: 602857

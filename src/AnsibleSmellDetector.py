@@ -215,8 +215,8 @@ def parseYaml(filename):
     return response
 
 def detectSmells():
-    file = open('ymlPathsUpdated.txt', 'r')
-    output = open('ansible-smell-count.csv', 'a')
+    file = open('ymlPathsOracle.txt', 'r')
+    output = open('ansible-smell-count-oracle.csv', 'a')
     output.write(f"MONTH,REPO_DIR,FILE_NAME,HARD_CODE_SECR,EMPT_PASS,HTTP_USAG,BIND_USAG,SUSP_COMM,INTE_CHCK,HARD_CODE_UNAME,HARD_CODE_PASS,TOTAL\n")
     output.close()
 
@@ -242,7 +242,7 @@ def detectSmells():
                     smellCounts[element['smell-type']] += 1
                     total += 1
 
-            output = open('ansible-smell-count.csv', 'a')
+            output = open('ansible-smell-count-oracle.csv', 'a')
             path = [x for x in line.strip().split('/') if x.strip() != ''][0:-1]
             path = '/' + '/'.join(path)
             output.write(f"{datetime.now().year}-{datetime.now().month},{path},{line.strip()},{smellCounts['hardcoded-secret']}, {smellCounts['empty-password']}, {smellCounts['use of http']}, {smellCounts['improper ip address binding']}, {smellCounts['suspicious comment']}, {smellCounts['no-integrity-check']}, {smellCounts['hardcoded-username']}, {smellCounts['hardcoded-password']}, {total}\n")
@@ -318,14 +318,8 @@ detectSmells()
 #         fname = fname.replace('/', '-')[1:]
 #         try:
 #             print(fname)
-#             # response = parseYaml(f'/home/brokenquark/Workspace/SLIC-Ansible/ansible/{fname}')
-#             # if len(response) > 0:
-#             #     for item in response:
-#             #         print(f'{item["smell-type"]}', end=',')
-#             #     print('')
-#             # else:
-#             #     print('none')
+#
 #         except:
 #             pass
 #     index += 1
-#
+
