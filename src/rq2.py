@@ -4,7 +4,7 @@ import math
 import time, os, subprocess, shutil
 from prettytable import PrettyTable
 
-file = open('/home/brokenquark/Workspace/SLIC-Ansible/smell-count-data/ansible-smell-count-openstack.csv', 'r')
+file = open('/home/brokenquark/Workspace/SLIC-Ansible/RQ1/openstackf1.csv', 'r')
 
 index = 0
 
@@ -51,7 +51,7 @@ for line in file:
 
 noOfFile = index - 1
 
-file = open('../yml directory list/ymlPathsUpdated.txt', 'r')
+file = open('../ymlPaths/Openstack.txt', 'r')
 
 failure = 0
 sloc = 0
