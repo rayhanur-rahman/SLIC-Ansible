@@ -2,9 +2,8 @@ from github import Github
 from datetime import datetime
 import math
 import time, os, subprocess, shutil
-#
+# #
 # file = open('repo-stat/ansi-updated.csv', 'r')
-# file2 = open('ymlPathsUpdated.txt', 'w')
 #
 # sloc = 0
 # for line in file:
@@ -18,20 +17,27 @@ import time, os, subprocess, shutil
 #                     file2.write(f'{dirName}/{fileName}\n')
 #
 # file2.close()
+#
+# # file = open('../yml directory list/ymlPathsUpdated.txt', 'r')
+# #
+# # failure = 0
+# # sloc = 0
+# #
+# # for line in file:
+# #     try:
+# #         f = open(f'{line.strip()}', 'r')
+# #         for l in f:
+# #             if len(l.strip()) > 0:
+# #                 sloc += 1
+# #
+# #     except: failure += 1
+# #
+# # print(sloc)
+# # print(failure)
 
-file = open('../yml directory list/ymlPathsUpdated.txt', 'r')
+total = 0
+for dirName, subdirList, fileList in os.walk('/home/brokenquark/ostk-ansi/ostk-ansi'):
+    for fileName in fileList:
+        total += 1
 
-failure = 0
-sloc = 0
-
-for line in file:
-    try:
-        f = open(f'{line.strip()}', 'r')
-        for l in f:
-            if len(l.strip()) > 0:
-                sloc += 1
-
-    except: failure += 1
-
-print(sloc)
-print(failure)
+print(total)
