@@ -3,7 +3,7 @@ SLIC-Ansible
 The is the source code for Security Linter for Infrastructure as Code (SLIC) for Ansible Playbooks. SLIC is a static analysis tool that looks for security smells in infrastructure as code (IaC) scripts. This project is aimed to identify security smells in Ansible playbooks. 
 
 
-The security smells are listed in the research paper available in paper/SLAC_JRNL_TSE2019.pdf: The paper is under peer view. 
+The security smells are listed in the research paper available in paper/SLAC_JRNL_TSE2019.pdf: The paper is submitted for peer review. 
 
 Here is the steps to reproduce the work:
 
