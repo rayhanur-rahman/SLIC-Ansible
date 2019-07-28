@@ -1,0 +1,192 @@
+---
+# Copyright 2018, Rackspace US, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# TODO(odyssey4me):
+# Set a fact for the selective inclusion of the build package list.
+# Perhaps do this if the distro/architecture of the target host differs
+# from the build host.
+
+- name: Install distro packages for venv build
+  package:
+    name: "{{ (venv_wheel_build_enable | bool) | ternary(venv_install_distro_package_list, (venv_build_base_distro_package_list | union(venv_build_distro_package_list) | union(venv_install_distro_package_list))) }}"
+    state: "{{ venv_distro_package_state }}"
+    update_cache: "{{ (ansible_pkg_mgr in ['apt', 'zypper']) | ternary('yes', omit) }}"
+    cache_valid_time: "{{ (ansible_pkg_mgr == 'apt') | ternary(venv_distro_cache_valid_time, omit) }}"
+  when:
+    - (venv_build_distro_package_list | length > 0) or
+      (venv_install_distro_package_list | length > 0)
+  register: _install_distro_packages
+  until: _install_distro_packages is success
+  retries: 5
+  delay: 2
+
+- name: Ensure a fresh venv_install_destination_path if venv_rebuild is enabled
+  file:
+    path: "{{ venv_install_destination_path }}"
+    state: absent
+  when:
+    - venv_rebuild | bool
+
+- name: Create the venv_install_destination_path parent directory
+  file:
+    path: "{{ venv_install_destination_path | dirname }}"
+    state: directory
+
+# NOTE(odyssey4me):
+# Not using --always-copy for CentOS/SuSE due to
+# https://github.com/pypa/virtualenv/issues/565
+- name: Create the virtualenv (if it does not exist)
+  command: >-
+    virtualenv
+    {{ _venv_create_extra_options }}
+    --python={{ venv_python_executable }}
+    {{ (ansible_pkg_mgr == 'apt') | ternary('--always-copy', '') }}
+    {{ venv_install_destination_path }}
+  args:
+    creates: "{{ venv_install_destination_path }}/bin/activate"
+
+# Note(odyssey4me):
+# This requirements file is not used for anything except to determine
+# if requirements have changed. This helps reduce the execution time
+# of the role and to make the role execution idempotent. If not for
+# the conditional when installing the packages, any git constraints
+# would result in the package for that constraint always being
+# reinstalled.
+- name: Build requirements file for the venv
+  copy:
+    dest: "{{ venv_install_destination_path }}/requirements.txt"
+    content: |
+      {% for item in (venv_default_pip_packages | union(venv_pip_packages)) | sort %}
+      {{ item }}
+      {% endfor %}
+  register: _requirement_file
+
+- name: Build global constraints file for the venv
+  copy:
+    dest: "{{ venv_install_destination_path }}/global-constraints.txt"
+    content: |
+      {% for item in venv_build_global_constraints %}
+      {{ item }}
+      {% endfor %}
+  register: _global_constraint_file
+
+- name: Build constraints file for the venv
+  copy:
+    dest: "{{ venv_install_destination_path }}/constraints.txt"
+    content: |
+      {% if (venv_wheel_build_enable | bool) and
+            (_constraints_file_slurp is defined) and
+            (_constraints_file_slurp.content is defined) %}
+      {{ _constraints_file_slurp.content | b64decode }}
+      {% else %}
+      {%   for item in venv_build_constraints %}
+      {{ item }}
+      {%   endfor %}
+      {% endif %}
+  register: _constraint_file
+
+- name: Upgrade pip/setuptools/wheel to the versions we want
+  pip:
+    name:
+      - pip
+      - setuptools
+      - wheel
+    state: "{{ venv_pip_package_state }}"
+    virtualenv: "{{ venv_install_destination_path }}"
+    extra_args: >-
+      --constraint {{ venv_install_destination_path }}/global-constraints.txt
+      --constraint {{ venv_install_destination_path }}/constraints.txt
+      --log /var/log/python_venv_build.log
+      {{ venv_default_pip_install_args }}
+      {{ venv_pip_install_args }}
+  environment:
+    PIP_CONFIG_FILE: "{{ (venv_pip_upgrade_noconf | bool) | ternary('/dev/null', '') }}"
+  register: _update_virtualenv_packages
+  until: _update_virtualenv_packages is success
+  retries: 5
+  delay: 2
+  notify:
+    - venv changed
+
+- name: Install python packages into the venv
+  block:
+    - name: Install python packages into the venv
+      pip:
+        name: "{{ (venv_default_pip_packages | union(venv_pip_packages)) | sort }}"
+        state: "{{ venv_pip_package_state }}"
+        virtualenv: "{{ venv_install_destination_path }}"
+        extra_args: >-
+          --constraint {{ venv_install_destination_path }}/global-constraints.txt
+          --constraint {{ venv_install_destination_path }}/constraints.txt
+          --pre
+          --log /var/log/python_venv_build.log
+          {{ venv_default_pip_install_args }}
+          {{ venv_pip_install_args }}
+      when: (_requirement_file is changed) or (_global_constraint_file is changed) or (_constraint_file is changed)
+      register: _install_venv_pip_packages
+      until: _install_venv_pip_packages is success
+      retries: 5
+      delay: 2
+      notify:
+        - venv changed
+  rescue:
+    - name: Remove venv requirements/constraints files due to install failure
+      file:
+        path: "{{ item }}"
+        state: absent
+      with_items:
+        - "{{ venv_install_destination_path }}/constraints.txt"
+        - "{{ venv_install_destination_path }}/global-constraints.txt"
+        - "{{ venv_install_destination_path }}/requirements.txt"
+    - name: Show venv install failure message
+      fail:
+        msg: >
+          The python packages have failed to install, please check the log file
+          located at /var/log/python_venv_build.log for more information.
+
+- name: Add symlinks from distribution python packages
+  when:
+    - venv_packages_to_symlink | length > 0
+  block:
+    - name: Find the venv's python version
+      find:
+        paths: "{{ venv_install_destination_path }}/lib/"
+        patterns: "python*"
+        file_type: directory
+        recurse: no
+      register: _python_venv_details
+
+    - name: Set python venv details
+      set_fact:
+        venv_python_version: "{{ (_python_venv_details.files[0].path | basename) }}"
+        venv_python_major_version: "{{ (_python_venv_details.files[0].path | basename)[:-2] }}"
+        venv_python_lib_folder: "{{ _python_venv_details.files[0].path }}"
+
+    - name: Search for lib files to link
+      shell: >-
+        {{ (ansible_pkg_mgr == 'apt') | ternary('dpkg -L ' ~ (venv_packages_to_symlink | join(' ')), 'rpm -ql ' ~ (venv_packages_to_symlink | join(' ')) ) }}
+        | egrep '^.*{{ venv_python_major_version }}.*/(site|dist)-packages/.*'
+      args:
+        warn: no
+      changed_when: false
+      register: _python_files
+
+    - name: Link the python host package files into venv
+      file:
+        src: "{{ item }}"
+        dest: "{{ venv_python_lib_folder }}/site-packages/{{ item | basename }}"
+        state: link
+        force: yes
+      with_items: "{{ _python_files.stdout_lines }}"

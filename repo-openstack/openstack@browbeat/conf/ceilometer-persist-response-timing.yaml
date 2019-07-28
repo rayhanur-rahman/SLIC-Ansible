@@ -1,0 +1,98 @@
+# Ceilometer stress test that boots persisting xtiny cirros instances.
+# It boots 20 each iteration with a concurrency of 5 instances.  Inbetween
+# each iteration it measures response time of several Ceilometer APIs.
+# Currently it maxs at 200 instances
+browbeat:
+  cloud_name: openstack
+  rerun: 10
+  rerun_type: complete
+ansible:
+  hosts: ansible/hosts
+  metadata_playbook: ansible/gather/stockpile.yml
+  ssh_config: ansible/ssh-config
+  container_cli: docker
+elasticsearch:
+  enabled: false
+  host: 1.1.1.1
+  port: 9200
+  regather: false
+  metadata_files:
+    - name: hardware-metadata
+      file: metadata/hardware-metadata.json
+    - name: environment-metadata
+      file: metadata/environment-metadata.json
+    - name: software-metadata
+      file: metadata/software-metadata.json
+    - name: version
+      file: metadata/version.json
+grafana:
+  enabled: true
+  host: example.grafana.com
+  port: 3000
+  dashboards:
+    - openstack-general-system-performance
+perfkit:
+  sleep_before: 0
+  sleep_after: 0
+  default:
+    image: centos7
+    machine_type: m1.small
+    os_type: rhel
+    openstack_image_username: centos
+    openstack_floating_ip_pool: browbeat_public
+    openstack_network: browbeat_private
+    timing_measurements: runtimes
+    ignore_package_requirements: true
+rally:
+  sleep_before: 5
+  sleep_after: 5
+  plugins:
+    - browbeat: rally/rally-plugins/browbeat
+    - nova: rally/rally-plugins/nova
+shaker:
+  server: 1.1.1.1
+  port: 5555
+  flavor: m1.small
+  join_timeout: 600
+  sleep_before: 0
+  sleep_after: 0
+  shaker_region: regionOne
+  external_host: 2.2.2.2
+
+workloads:
+  # Measure Ceilometer Response Timings
+  - name: Ceilometer
+    enabled: true
+    type: rally
+    concurrency:
+      - 8
+    times: 500
+    scenarios:
+      - name: list_meters
+        enabled: true
+        file: rally/CeilometerMeters/list_meters-cc.yml
+      - name: create_and_query_samples-01
+        enabled: true
+        file: rally/CeilometerQueries/create_and_query_samples-cc.yml
+      - name: list_resources
+        enabled: true
+        file: rally/CeilometerResource/list_resources-cc.yml
+      - name: list_samples
+        enabled: true
+        file: rally/CeilometerSamples/list_samples-cc.yml
+      - name: get_stats
+        enabled: true
+        file: rally/CeilometerStats/get_stats-cc.yml
+  # Boot 20 instances
+  - name: BrowbeatNovaPersist
+    enabled: true
+    type: rally
+    concurrency:
+      - 5
+    times: 20
+    scenarios:
+      - name: nova-boot-20
+        enabled: true
+        image_name: cirros
+        flavor_name: m1.xtiny
+        file: rally/rally-plugins/nova/nova_boot_persist.yml

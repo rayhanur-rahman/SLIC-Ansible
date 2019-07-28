@@ -1,0 +1,46 @@
+---
+#
+# Playbook to sync ceilometer polling across the controller and compute nodes.
+# Requires atd installed and runinng on controllers and compute nodes.
+#
+# Versions tested: Newton, Ocata, Pike
+#
+# Example:
+#
+# ansible-playbook -i hosts browbeat/sync-ceilometer-polling.yml -e 'task_time=18:25'
+#
+
+- hosts: controller,compute
+  remote_user: "{{ host_remote_user }}"
+  gather_facts: false
+  vars_files:
+    - ../install/group_vars/all.yml
+  pre_tasks:
+    - name: Get OSP Version
+      slurp:
+        src: "/etc/rhosp-release"
+      register: osp_version
+      become: true
+
+    - name: (Newton, Ocata) Set Controller Task
+      set_fact:
+        the_task: "systemctl restart openstack-ceilometer-central.service"
+      when: "('Newton' in osp_version['content'] | b64decode or 'Ocata' in osp_version['content'] | b64decode) and ('controller' in group_names)"
+
+    - name: (Newton, Ocata) Set Compute Task
+      set_fact:
+        the_task: "systemctl restart openstack-ceilometer-compute.service"
+      when: "('Newton' in osp_version['content'] | b64decode or 'Ocata' in osp_version['content'] | b64decode) and ('compute' in group_names)"
+
+    - name: (Pike) Set Controller Task
+      set_fact:
+        the_task: "docker restart ceilometer_agent_central"
+      when: "('Pike' in osp_version['content'] | b64decode) and ('controller' in group_names)"
+
+    - name: (Pike) Set Compute Task
+      set_fact:
+        the_task: "docker restart ceilometer_agent_compute"
+      when: "('Pike' in osp_version['content'] | b64decode) and ('compute' in group_names)"
+
+  roles:
+    - run-task-at

@@ -1,0 +1,72 @@
+---
+# Copyright 2014, Rackspace US, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- name: Galera container config
+  hosts: galera_all
+  gather_facts: "{{ osa_gather_facts | default(True) }}"
+  serial: 1
+  user: root
+  tasks:
+    - include_tasks: common-tasks/os-log-dir-setup.yml
+      vars:
+        log_dirs:
+          - src: "/openstack/log/{{ inventory_hostname }}-mysql_logs"
+            dest: "/var/log/mysql_logs"
+    - include_tasks: "common-tasks/os-{{ container_tech | default('lxc') }}-container-setup.yml"
+      when: not is_metal
+      vars:
+        list_of_bind_mounts: "{{ galera_container_bind_mounts }}"
+        extra_container_config_no_restart:
+          - "lxc.start.order=10"
+    - include_tasks: common-tasks/unbound-clients.yml
+      when:
+        - hostvars['localhost']['resolvconf_enabled'] | bool
+  environment: "{{ deployment_environment_variables | default({}) }}"
+  tags:
+    - galera
+
+- name: Install galera server
+  hosts: galera_all
+  gather_facts: "{{ osa_gather_facts | default(True) }}"
+  serial: 1
+  user: root
+  roles:
+    - role: haproxy_endpoints
+      haproxy_state: disabled
+      when: "groups['haproxy'] | default([]) | length > 0"
+    - role: "galera_server"
+    - role: haproxy_endpoints
+      haproxy_state: enabled
+      when: "groups['haproxy'] | default([]) | length > 0"
+    - role: "system_crontab_coordination"
+      tags:
+        - crontab
+
+  post_tasks:
+    - include_tasks: "common-tasks/rsyslog-client.yml"
+      vars:
+        rsyslog_client_log_rotate_file: galera_log_rotate
+        rsyslog_client_log_dir: "/var/log/mysql_logs"
+        rsyslog_client_log_files:
+          - /var/log/mysql.log
+          - /var/log/mysql.err
+        rsyslog_client_config_name: "99-galera-rsyslog-client.conf"
+
+  vars:
+    galera_server_id: "{{ inventory_hostname | string_2_int }}"
+    galera_wsrep_node_name: "{{ container_name | default(inventory_hostname) }}"
+  environment: "{{ deployment_environment_variables | default({}) }}"
+  tags:
+    - galera

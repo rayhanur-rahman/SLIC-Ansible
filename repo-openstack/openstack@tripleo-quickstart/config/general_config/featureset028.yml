@@ -1,0 +1,57 @@
+# Summary of the feature set.
+# Deploy an Openstack environment with OVN configured in the overcloud
+composable_scenario: scenario007-multinode.yaml
+validate_template: scenario007-multinode.yaml
+deployed_server: true
+
+network_isolation: false
+enable_pacemaker: true
+overcloud_ipv6: false
+containerized_overcloud: false
+
+# This enables TLS for the undercloud which will also make haproxy bind to the
+# configured public-vip and admin-vip.
+undercloud_generate_service_certificate: false
+
+# This enables the deployment of the overcloud with SSL.
+ssl_overcloud: false
+
+# This featureset is extremely resource intensive, so we disable telemetry
+# in order to reduce the overall memory footprint
+# This is not required in newton
+telemetry_args: >-
+   {% if release != 'newton' %}
+   -e {{ overcloud_templates_path }}/environments/disable-telemetry.yaml
+   {% endif %}
+
+extra_args: >-
+  -e {{ overcloud_templates_path }}/environments/services/neutron-ovn-non-dvr-ha.yaml
+
+composable_roles: true
+overcloud_roles:
+  - name: Controller
+    CountDefault: 1
+    tags:
+      - primary
+      - controller
+    networks:
+      - External
+      - InternalApi
+      - Storage
+      - StorageMgmt
+      - Tenant
+
+# Tempest configuration, keep always at the end of the file
+# Run tempest in containers when at least undercloud is containerized
+tempest_format: >-
+  {% if containerized_undercloud|bool -%}
+  container
+  {%- else -%}
+  packages
+  {%- endif -%}
+
+test_ping: false
+run_tempest: true
+test_white_regex: ''
+tempest_whitelist:
+  - 'tempest.scenario.test_network_basic_ops.TestNetworkBasicOps.test_network_basic_ops'

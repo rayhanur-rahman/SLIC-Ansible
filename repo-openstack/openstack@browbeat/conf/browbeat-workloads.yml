@@ -1,0 +1,106 @@
+# Complete set of Workload Benchmarks
+browbeat:
+  cloud_name: openstack
+  rerun: 1
+  rerun_type: iteration
+ansible:
+  hosts: ansible/hosts
+  metadata_playbook: ansible/gather/stockpile.yml
+  ssh_config: ansible/ssh-config
+  container_cli: docker
+elasticsearch:
+  enabled: false
+  host: 1.1.1.1
+  port: 9200
+  regather: false
+  metadata_files:
+    - name: hardware-metadata
+      file: metadata/hardware-metadata.json
+    - name: environment-metadata
+      file: metadata/environment-metadata.json
+    - name: software-metadata
+      file: metadata/software-metadata.json
+    - name: version
+      file: metadata/version.json
+grafana:
+  enabled: true
+  host: example.grafana.com
+  port: 3000
+  dashboards:
+    - openstack-general-system-performance
+perfkit:
+  sleep_before: 0
+  sleep_after: 0
+  default:
+    image: centos7
+    machine_type: m1.small
+    os_type: rhel
+    openstack_image_username: centos
+    openstack_floating_ip_pool: browbeat_public
+    openstack_network: browbeat_private
+    timing_measurements: runtimes
+    ignore_package_requirements: true
+rally:
+  sleep_before: 5
+  sleep_after: 5
+  plugins:
+    - workloads: rally/rally-plugins/workloads
+shaker:
+  server: 1.1.1.1
+  port: 5555
+  flavor: m1.small
+  join_timeout: 600
+  sleep_before: 0
+  sleep_after: 0
+  shaker_region: regionOne
+  external_host: 2.2.2.2
+
+workloads:
+  - name: workloads
+    enabled: true
+    type: rally
+    concurrency:
+      - 1
+    times: 1
+    scenarios:
+      - name: browbeat-linpack
+        enabled: true
+        image_name: browbeat-linpack
+        flavor_name: m1.small
+        external_network:
+        net_id:
+        file: rally/rally-plugins/workloads/linpack.yml
+
+      - name: sysbench
+        enabled: true
+        user: root
+        image_name: browbeat-sysbench
+        flavor_name: m1.small
+        external_network:
+        net_id:
+        # test_name: Type of Sysbench Benchmark to be run. Example: cpu
+        test_name: cpu
+        cpu_max_prime:
+        file: rally/rally-plugins/workloads/sysbench.yml
+
+      - name: browbeat-pbench-uperf
+        enabled: true
+        user: root
+        image_name: browbeat-uperf
+        flavor_name: m1.small
+        # hypervisor_server: "nova:overcloud-compute-1.localdomain"
+        # hypervisor_client: "nova:overcloud-compute-0.localdomain"
+        external_network:
+        net_id:
+        protocols: tcp,udp
+        instances: 1
+        num_pairs: 1
+        samples: 1
+        test_types: stream,rr
+        message_sizes: 64,1024,16384
+        test_name: browbeat-pbench-uperf
+        send_results: true
+        cloudname:
+        elastic_host:
+        elastic_port: 9200
+        file: rally/rally-plugins/workloads/pbench-uperf.yml

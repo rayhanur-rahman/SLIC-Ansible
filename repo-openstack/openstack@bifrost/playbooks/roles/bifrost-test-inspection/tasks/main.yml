@@ -1,0 +1,33 @@
+# Copyright (c) 2018 StackHPC Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+---
+- name: Check node hardware inspection data
+  command: "openstack baremetal introspection data save {{ uuid }}"
+  register: inspection_data
+  environment:
+    OS_CLOUD: "{% if enable_keystone | default(false) | bool %}bifrost{% else %}bifrost-inspector{% endif %}"
+
+# TODO(mgoddard): More validation of data format and contents.
+- name: Validate the inspection data format
+  assert:
+    that:
+      - "'inventory' in data"
+      - "'memory' in inventory"
+      - "'cpu' in inventory"
+      - "'bmc_address' in inventory"
+      - "'interfaces' in inventory"
+      - "'disks' in inventory"
+  vars:
+    data: "{{ inspection_data.stdout | from_json }}"
+    inventory: "{{ data.inventory }}"

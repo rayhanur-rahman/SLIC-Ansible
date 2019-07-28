@@ -1,0 +1,48 @@
+# Copyright (c) 2015 Hewlett-Packard Development Company, L.P.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+---
+- name: "If in noauth mode, set auth parameters accordingly."
+  set_fact:
+    auth_type: None
+    auth: {}
+  when: noauth_mode is defined and noauth_mode | bool == true
+
+- name: "Execute os_client_config to collect facts"
+  os_client_config:
+  no_log: yes
+  when: noauth_mode is defined and noauth_mode | bool == false
+
+# NOTE(TheJulia): The first record returned by os_client_config
+# is utilized as the default. A user can still define the parameters
+# if so desired.
+- name: "Set os_client_config's auth parameters if not already set."
+  set_fact:
+    auth: "{{ openstack.clouds[0].auth }}"
+    auth_type: "{{ openstack.clouds[0].auth_type }}"
+  when: auth is undefined
+  no_log: yes
+
+# Note(TheJulia): This step allows us to collect things that
+# ironic knows, that we do not know potentially, such as an UUID
+# should a node have been created without one.
+- name: "Collecting node facts"
+  os_ironic_facts:
+    cloud: "{{ cloud_name | default(omit) }}"
+    auth_type: "{{ auth_type }}"
+    auth: "{{ auth }}"
+    ironic_url: "{{ ironic_url | default(omit) }}"
+    uuid: "{{ uuid | default() }}"
+    name: "{{ name | default() }}"
+    skip_items:
+      - instance_info

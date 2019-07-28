@@ -1,0 +1,12 @@
+# Deploy an HA openstack environment.
+
+# Three controller nodes and one compute node are defined
+# hardware-specific files
+overcloud_nodes:
+
+# Tell tripleo which nodes to deploy.
+topology_map:
+  Controller:
+    scale: 3
+  Compute:
+    scale: 1

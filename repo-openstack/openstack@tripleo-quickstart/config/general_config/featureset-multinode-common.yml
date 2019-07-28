@@ -1,0 +1,11 @@
+# general multinode job configuration
+enable_vbmc: false
+gating_repo_enabled: true
+deploy_multinode: true
+step_overcloud_image: false
+step_glance_upload: true
+step_register: false
+hypervisor_wait: false
+network_isolation: false
+package_installs: true
+non_root_user_setup: true

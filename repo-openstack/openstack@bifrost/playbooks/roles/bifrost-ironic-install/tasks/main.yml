@@ -1,0 +1,73 @@
+# Copyright (c) 2015 Hewlett-Packard Development Company, L.P.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+---
+# NOTE(cinerama) openSUSE Tumbleweed & Leap have different distribution
+# IDs which are not currently accounted for in Ansible, so adjust facts
+# so we can have shared defaults for the whole SuSE family.
+# This change can be removed when the pull request at
+# https://github.com/ansible/ansible/pull/17575 lands in a new version.
+- name: Ensure openSUSE Tumbleweed has the correct family
+  set_fact:
+    ansible_os_family: "Suse"
+  when: ansible_os_family | search("openSUSE Tumbleweed")
+
+- name: Ensure openSUSE Leap has the correct family
+  set_fact:
+    ansible_os_family: "Suse"
+  when: (ansible_os_family | search("SUSE LINUX")) or
+        (ansible_os_family | search("openSUSE Leap"))
+
+# NOTE(cinerama) dummy-defaults.yml is an empty defaults file. We use it
+# here to ensure that with_first_found won't fail should we not have
+# defaults for a particular distribution, version, etc.
+- name: Include OS family-specific defaults
+  include_vars: "{{ item }}"
+  with_first_found:
+    - "../defaults/required_defaults_{{ ansible_os_family }}_family.yml"
+    - "../defaults/dummy-defaults.yml"
+
+- name: Include OS distribution-specific defaults
+  include_vars: "{{ item }}"
+  with_first_found:
+    - "../defaults/required_defaults_{{ ansible_distribution | regex_replace(' ', '_') }}.yml"
+    - "../defaults/dummy-defaults.yml"
+
+- name: Include OS version-specific defaults
+  include_vars: "{{ item }}"
+  with_first_found:
+    - "../defaults/required_defaults_{{ ansible_distribution | regex_replace(' ', '_') }}_{{ ansible_distribution_release }}.yml"
+    - "../defaults/required_defaults_{{ ansible_distribution | regex_replace(' ', '_') }}_{{ ansible_distribution_version }}.yml"
+    - "../defaults/dummy-defaults.yml"
+
+- name: "Install RabbitMQ if required"
+  import_role:
+    name: bifrost-rabbitmq
+  when: use_rabbitmq | bool
+
+- name: "Install Ironic deps"
+  include: install.yml
+  when: skip_package_install | bool != True
+
+- name: "Bootstrap Ironic"
+  include: bootstrap.yml
+  when: skip_bootstrap | bool != True
+
+- name: "Start Ironic services"
+  include: start.yml
+  when: skip_start | bool != True
+
+- name: "Perform online data migrations"
+  include: migrations.yml
+  when: skip_migrations | bool != True

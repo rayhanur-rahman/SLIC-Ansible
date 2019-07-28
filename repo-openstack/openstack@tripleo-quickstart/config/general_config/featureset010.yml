@@ -1,0 +1,124 @@
+composable_scenario: multinode-containers.yaml
+composable_services: false
+
+network_isolation: false
+enable_pacemaker: false
+overcloud_ipv6: false
+containerized_overcloud: true
+
+containerized_undercloud: >-
+  {% if release not in ['newton','ocata','pike','queens'] -%}
+  true
+  {%- else -%}
+  false
+  {%- endif -%}
+
+undercloud_templates_path: /usr/share/openstack-tripleo-heat-templates
+undercloud_custom_env_files: "{{ working_dir }}/undercloud-parameter-defaults.yaml"
+undercloud_cloud_domain: "localdomain"
+undercloud_undercloud_hostname: "undercloud.{{ undercloud_cloud_domain }}"
+undercloud_resource_registry_args:
+  "OS::TripleO::Undercloud::Net::SoftwareConfig": "{{ undercloud_templates_path }}/ci/common/net-config-simple-bridge.yaml"
+
+# This enables TLS for the undercloud which will also make haproxy bind to the
+# configured public-vip and admin-vip.
+undercloud_generate_service_certificate: false
+
+# This enables the deployment of the overcloud with SSL.
+ssl_overcloud: false
+
+# This enables the run of several tripleo-validations tests through Mistral
+run_tripleo_validations: true
+# This enables the run of tripleo-validations negative tests through shell
+# scripts
+run_tripleo_validations_negative_tests: true
+# Exit tripleo-quickstart on validations failure
+exit_on_validations_failure: false
+
+composable_roles: true
+overcloud_roles:
+  - name: Controller
+    CountDefault: 1
+    tags:
+      - primary
+      - controller
+    networks:
+      - External
+      - InternalApi
+      - Storage
+      - StorageMgmt
+      - Tenant
+
+deployed_server: >-
+  {% if release in ['newton','ocata','pike'] -%}
+  true
+  {%- else -%}
+  false
+  {%- endif -%}
+deploy_steps_ansible_workflow: >-
+  {% if release not in ['newton','ocata','pike'] -%}
+  true
+  {%- else -%}
+  false
+  {%- endif -%}
+config_download_args: >-
+  {% if release in ['queens'] -%}
+  -e /usr/share/openstack-tripleo-heat-templates/environments/config-download-environment.yaml
+  --config-download
+  --deployed-server
+  {%- endif %}
+  {% if release not in ['newton','ocata','pike'] -%}
+  -e {{ working_dir }}/config-download.yaml
+  --disable-validations
+  --verbose
+  {%- endif -%}
+
+# Tempest configuration, keep always at the end of the file
+# If `run_tempest` is `true`, run tempests tests, otherwise do not
+# run them.
+test_ping: false
+
+# Settings for os_tempest
+run_tempest: >-
+  {% if release not in ['pike', 'queens', 'rocky', 'stein'] -%}
+  false
+  {%- else -%}
+  true
+  {%- endif -%}
+
+use_os_tempest: >-
+  {% if release not in ['pike', 'queens', 'rocky', 'stein'] -%}
+  true
+  {%- else -%}
+  false
+  {%- endif -%}
+
+tempest_test_whitelist:
+  - 'tempest.scenario.test_network_basic_ops.TestNetworkBasicOps'
+
+test_white_regex: 'tempest.scenario.test_network_basic_ops.TestNetworkBasicOps.test_network_basic_ops'
+
+# Run tempest in containers when at least undercloud is containerized
+tempest_format: >-
+  {% if containerized_undercloud|bool -%}
+  container
+  {%- else -%}
+  packages
+  {%- endif -%}
+undercloud_enable_tempest: >-
+  {% if release not in ['newton', 'ocata', 'pike', 'queens'] -%}
+  true
+  {%- else -%}
+  false
+  {%- endif -%}
+
+undercloud_container_cli: >-
+  {% if release in ['rocky'] -%}
+  docker
+  {%- else -%}
+  podman
+  {%- endif -%}
+# the variable is only used in overcloud-deploy role
+# for stein and beyond, so it's safe to set it to podman,
+# as for stable branches the variable won't be used.
+overcloud_container_cli: podman

@@ -1,0 +1,6 @@
+---
+- project:
+    templates:
+      - ansible-role-jobs
+      - windmill-jobs-fedora-latest
+      - windmill-jobs-bionic

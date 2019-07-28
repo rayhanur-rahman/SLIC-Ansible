@@ -1,0 +1,69 @@
+---
+- name: Check DLRN hash format
+  fail:
+    msg: "The DLRN hash or tag is not recognized. The hash or tag should not contain path slashes."
+  when:
+    - not dlrn_hash_tag is match("[a-zA-Z0-9]{40}_[a-zA-Z0-9]{8}")
+    - dlrn_hash_tag not in known_hash_tags
+
+- name: Check DLRN hash - passed ready hash
+  set_fact:
+    dlrn_hash: "{{ dlrn_hash_tag }}"
+    cacheable: true
+  when: dlrn_hash_tag is match("[a-zA-Z0-9]{40}_[a-zA-Z0-9]{8}")
+
+- when: dlrn_hash_tag in known_hash_tags
+  block:
+
+    - name: Get DLRN hash - passed tag
+      shell: >
+        curl -s {{ dlrn_baseurl }}/{{ dlrn_hash_tag }}/delorean.repo \
+        | grep baseurl | grep -Eo '[a-zA-Z0-9]{40}_[a-zA-Z0-9]{8}'
+      register: full_hash_result
+      retries: 3
+
+    - name: Set fact for dlrn_hash
+      set_fact:
+        dlrn_hash: "{{ full_hash_result.stdout }}"
+        cacheable: true
+
+# TODO: Fix for fedora
+- when: overcloud_release is defined and (overcloud_release | length != 0)
+  block:
+
+    - name: Get DLRN overcloud hash
+      shell: >
+        curl -s https://trunk.rdoproject.org/centos7-{{ overcloud_release }}/{{ dlrn_hash_tag }}/delorean.repo \
+        | grep baseurl | grep -Eo '[a-zA-Z0-9]{40}_[a-zA-Z0-9]{8}'
+      register: full_overcloud_hash_result
+      retries: 3
+
+    - name: Set fact for overcloud dlrn_hash
+      set_fact:
+        overcloud_dlrn_hash: "{{ full_overcloud_hash_result.stdout }}"
+        cacheable: true
+
+    - name: Set fact for overcloud dlrn_hash path
+      set_fact:
+        overcloud_dlrn_hash_path: "{{ overcloud_dlrn_hash[:2] }}/{{ overcloud_dlrn_hash[2:4] }}/{{ overcloud_dlrn_hash }}"
+        cacheable: true
+
+    - name: Set fact for the overcloud Docker image tag
+      set_fact:
+        overcloud_docker_image_tag: "{{ overcloud_dlrn_hash }}"
+        cacheable: true
+
+- name: Set fact for dlrn_hash path
+  set_fact:
+    dlrn_hash_path: "{{ dlrn_hash[:2] }}/{{ dlrn_hash[2:4] }}/{{ dlrn_hash }}"
+    cacheable: true
+
+- name: Set fact for the Docker image tag
+  set_fact:
+    docker_image_tag: "{{ dlrn_hash }}"
+    cacheable: true
+
+- name: Set fact for task already run
+  set_fact:
+    dlrn_task_run: true
+    cacheable: true

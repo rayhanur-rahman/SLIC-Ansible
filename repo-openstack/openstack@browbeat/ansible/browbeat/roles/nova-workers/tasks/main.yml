@@ -1,0 +1,25 @@
+---
+#
+# Nova tasks for Browbeat
+# * Can change worker count
+#
+
+- name: Ensure nova.conf is properly configured
+  become: true
+  ini_file:
+    dest: /etc/nova/nova.conf
+    mode: 0640
+    section: "{{ item.section }}"
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+    backup: yes
+  with_items:
+    - { section: DEFAULT, option: ec2_workers, value: "{{ workers }}" }
+    - { section: DEFAULT, option: osapi_compute_workers, value: "{{ workers }}" }
+    - { section: DEFAULT, option: metadata_workers, value: "{{ workers }}" }
+    - { section: conductor, option: workers, value: "{{ workers }}" }
+  notify:
+    - unmanage nova services
+    - restart nova services
+    - manage nova services
+    - cleanup nova services

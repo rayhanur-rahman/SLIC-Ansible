@@ -1,0 +1,81 @@
+---
+# Copyright 2015, Rackspace US, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- name: Bootstrap the All-In-One (AIO)
+  hosts: localhost
+  gather_facts: True
+  user: root
+  roles:
+    - role: "sshd"
+    - role: "bootstrap-host"
+  vars_files:
+    - "{{ playbook_dir }}/../playbooks/defaults/repo_packages/openstack_services.yml"
+  environment: "{{ deployment_environment_variables | default({}) }}"
+  vars:
+    ansible_python_interpreter: "/usr/bin/python"
+    sftp_subsystem:
+        'apt': 'sftp /usr/lib/openssh/sftp-server'
+        'yum': 'sftp /usr/libexec/openssh/sftp-server'
+        'zypper': 'sftp /usr/lib/ssh/sftp-server'
+    sshd:
+      ListenAddress:
+        - 0.0.0.0
+        - '::'
+      Port: 22
+      Protocol: 2
+      HostKey:
+        - "/etc/ssh/ssh_host_rsa_key"
+        - "/etc/ssh/ssh_host_ecdsa_key"
+        - "/etc/ssh/ssh_host_ed25519_key"
+      UsePrivilegeSeparation: yes
+      KeyRegenerationInterval: 3600
+      ServerKeyBits: 1024
+      SyslogFacility: "AUTH"
+      LogLevel: "INFO"
+      LoginGraceTime: 120
+      StrictModes: yes
+      RSAAuthentication: yes
+      PubkeyAuthentication: yes
+      IgnoreRhosts: yes
+      RhostsRSAAuthentication: no
+      HostbasedAuthentication: no
+      PermitEmptyPasswords: no
+      PermitRootLogin: yes
+      ChallengeResponseAuthentication: no
+      PasswordAuthentication: no
+      X11DisplayOffset: 10
+      PrintMotd: no
+      PrintLastLog: no
+      TCPKeepAlive: yes
+      AcceptEnv: "LANG LC_*"
+      Subsystem: "{{ sftp_subsystem[ansible_pkg_mgr] }}"
+      UsePAM: yes
+      UseDNS: no
+      X11Forwarding: no
+      Compression: yes
+      CompressionLevel: 6
+      MaxSessions: 100
+      MaxStartups: "100:100:100"
+      GSSAPIAuthentication: no
+      GSSAPICleanupCredentials: no
+  post_tasks:
+    - name: Check that new network interfaces are up
+      assert:
+        that:
+          - ansible_eth12['active'] == true
+          - ansible_eth13['active'] == true
+          - ansible_eth14['active'] == true
+      when:
+        - (bootstrap_host_container_tech | default('unknown')) != 'nspawn'

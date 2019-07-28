@@ -1,0 +1,47 @@
+---
+
+- name: Make sure dependencies are installed
+  package: name={{item}} state=present
+  become: true
+  with_items: "{{ browbeat_dependencies }}"
+
+- name: Copy browbeat to the undercloud
+  synchronize: "src={{ local_working_dir }}/browbeat dest={{ ansible_env.HOME }}/ use_ssh_args=yes"
+  when: ansible_user != "zuul"
+
+- name: Register the working directory to copy from
+  stat:
+    path: "/home/zuul/workspace/"
+  register: zuul_workspace
+
+- name: Copy browbeat to the undercloud - zuul v3
+  synchronize: "src={{ ansible_user_dir }}/{{ zuul.projects['opendev.org/x/browbeat'].src_dir }} dest={{ ansible_env.HOME }}/"
+  when: ansible_user == "zuul" and zuul_workspace.stat.exists and zuul is defined and zuul.projects is defined
+
+- name: Copy browbeat to the undercloud - zuul legacy
+  synchronize: "src={{ ansible_user_dir }}/workspace/openstack/browbeat dest={{ ansible_env.HOME }}/"
+  when: ansible_user == "zuul" and zuul_workspace.stat.exists and zuul is not defined and zuul.projects is not defined
+
+- name: Copy browbeat to the undercloud - zuul user reproducer
+  synchronize: "src=/opt/stack/browbeat dest={{ ansible_env.HOME }}/"
+  when: ansible_user == "zuul" and not zuul_workspace.stat.exists
+
+- name: Set hosts gen as executable
+  shell: "chmod +x {{ ansible_env.HOME }}/browbeat/ansible/generate_tripleo_hostfile.sh"
+
+- name: Fetch Browbeat vars file
+  fetch:
+    "src={{ ansible_env.HOME }}/browbeat/ansible/install/group_vars/all.yml \
+     dest=/tmp/all.yml \
+     flat=yes"
+  when: ansible_user != "zuul"
+
+- name: Fetch Browbeat vars file - zuul
+  fetch:
+    "src={{ ansible_env.HOME }}/browbeat/ansible/install/group_vars/zuul_all.yml \
+     dest=/tmp/all.yml \
+     flat=yes"
+  when: ansible_user == "zuul"
+
+- name: Load Browbeat vars
+  include_vars: /tmp/all.yml

@@ -1,0 +1,16 @@
+---
+- project:
+    templates:
+      - tripleo-multinode-container-minimal
+    check:
+      jobs:
+        - openstack-tox-linters
+        - tripleo-ci-centos-7-scenario001-standalone
+    gate:
+      jobs:
+        - openstack-tox-linters
+        - tripleo-ci-centos-7-scenario001-standalone
+      queue: tripleo
+    post:
+      jobs:
+        - publish-openstack-python-branch-tarball

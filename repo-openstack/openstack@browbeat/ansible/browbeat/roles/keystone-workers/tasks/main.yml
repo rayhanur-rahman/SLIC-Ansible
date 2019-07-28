@@ -1,0 +1,156 @@
+---
+#
+# Keystone tasks for browbeat
+# * Change eventlet worker count or httpd process/thread count
+# * Change keystone deployed in eventlet or httpd
+#
+
+- name: Determine if keystone is deployed in eventlet
+  shell: ps afx | grep "[Kk]eystone-all" -c
+  register: deployed
+  when: keystone_deployment is undefined
+  ignore_errors: true
+  changed_when: false
+
+- name: Set keystone_deployment variable/fact to httpd
+  set_fact: keystone_deployment='httpd'
+  when: keystone_deployment is undefined and deployed.stdout|int == 0
+
+- name: Set keystone_deployment variable/fact to eventlet
+  set_fact: keystone_deployment='eventlet'
+  when: keystone_deployment is undefined
+
+- name: Get keystone admin ip address
+  become: true
+  command: crudini --get /etc/keystone/keystone.conf DEFAULT admin_bind_host
+  register: admin_ip_addr
+  changed_when: false
+
+- name: Get keystone public ip address
+  become: true
+  command: crudini --get /etc/keystone/keystone.conf DEFAULT public_bind_host
+  register: public_ip_addr
+  changed_when: false
+
+#
+# Configure keystone eventlet/httpd
+#
+
+- name: Configure eventlet workers
+  become: true
+  ini_file:
+    dest: /etc/keystone/keystone.conf
+    mode: 0640
+    section: "{{ item.section }}"
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+    backup: true
+  with_items:
+    - { section: DEFAULT, option: public_workers, value: "{{ workers }}" }
+    - { section: DEFAULT, option: admin_workers, value: "{{ workers }}" }
+    - { section: eventlet_server, option: public_workers, value: "{{ workers }}" }
+    - { section: eventlet_server, option: admin_workers, value: "{{ workers }}" }
+  when: "'eventlet' in keystone_deployment"
+  notify:
+    - pacemaker unmanaged default
+    - stop keystone eventlet
+    - restart keystone
+    - pacemaker managed default
+    - cleanup keystone
+
+- name: Unconfigure keystone in httpd if eventlet
+  become: true
+  file:
+    path: /etc/httpd/conf.d/10-keystone_wsgi_{{ item }}.conf
+    state: absent
+  with_items:
+    - admin
+    - main
+  when: "'eventlet' in keystone_deployment"
+  notify:
+    - restart httpd
+    - cleanup httpd
+
+- name: Create keystone in httpd wsgi directory
+  become: true
+  file:
+    path: /var/www/cgi-bin/keystone
+    state: directory
+    owner: keystone
+    group: keystone
+  when: "'httpd' in keystone_deployment"
+
+- name: Copy keystone in httpd files over
+  become: true
+  copy:
+    src: keystone_httpd
+    dest: /var/www/cgi-bin/keystone/{{ item }}
+    owner: keystone
+    group: keystone
+    mode: 0744
+    backup: true
+  with_items:
+    - admin
+    - main
+  when: "'httpd' in keystone_deployment"
+  ignore_errors: true
+
+- name: Configure httpd processes/threads
+  become: true
+  template:
+    src: keystone_wsgi.conf.j2
+    dest: /etc/httpd/conf.d/10-keystone_wsgi_{{ item.interface }}.conf
+    owner: root
+    group: root
+    mode: 0644
+    backup: true
+  with_items:
+    - ip_address: "{{ admin_ip_addr.stdout | default('') }}"
+      interface: "admin"
+      processes: "{{ workers }}"
+      port: 35357
+      threads: "{{ threads }}"
+    - ip_address: "{{ public_ip_addr.stdout | default('') }}"
+      interface: "main"
+      processes: "{{ workers }}"
+      port: 5000
+      threads: "{{ threads }}"
+  when: "'httpd' in keystone_deployment"
+  notify:
+    - pacemaker unmanaged default
+    - stop keystone eventlet
+    - restart httpd
+
+- name: Configure/Unconfigure httpd ports.conf for keystone (httpd)
+  become: true
+  lineinfile:
+    dest: /etc/httpd/conf/ports.conf
+    line: "Listen {{item}}"
+    backup: true
+  with_items:
+    - "{{ public_ip_addr.stdout | default('') }}:5000"
+    - "{{ admin_ip_addr.stdout | default('') }}:35357"
+  when: "'httpd' in keystone_deployment"
+  notify:
+    - pacemaker unmanaged default
+    - stop keystone eventlet
+    - restart keystone
+    - pacemaker managed default
+    - cleanup keystone
+
+- name: Configure/Unconfigure httpd ports.conf for keystone (eventlet)
+  become: true
+  lineinfile:
+    dest: /etc/httpd/conf/ports.conf
+    line: "Listen {{item}}"
+    state: absent
+  with_items:
+    - "{{ public_ip_addr.stdout | default('') }}:5000"
+    - "{{ admin_ip_addr.stdout | default('') }}:35357"
+  when: "'eventlet' in keystone_deployment"
+  notify:
+    - pacemaker unmanaged default
+    - stop keystone eventlet
+    - restart keystone
+    - pacemaker managed default
+    - cleanup keystone

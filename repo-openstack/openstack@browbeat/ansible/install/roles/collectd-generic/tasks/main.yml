@@ -1,0 +1,46 @@
+---
+#
+# Install/run Collectd for Browbeat (Generic)
+#
+
+- name: Install collectd rpms
+  package:
+    name: "{{ item }}"
+    state: present
+  become: true
+  with_items: "{{collectd_packages[config_type]}}"
+
+- name: Install package that provides semanage
+  package:
+    name: policycoreutils-python
+    state: present
+  become: true
+
+- name: Configure collectd.conf
+  template:
+    src: "{{config_type}}.collectd.conf.j2"
+    dest: /etc/collectd.conf
+    owner: root
+    group: root
+    mode: 0644
+  become: true
+
+- name: Check for collectd permissive
+  shell: semodule -l | grep -q permissive_collectd_t
+  become: true
+  register: collectd_permissive
+  ignore_errors: true
+  changed_when: false
+
+- name: Set permissive for collectd
+  command: semanage permissive -a collectd_t
+  become: true
+  when: collectd_permissive.rc != 0
+  ignore_errors: true
+
+- name: Setup collectd service
+  service:
+    name: collectd
+    state: restarted
+    enabled: true
+  become: true

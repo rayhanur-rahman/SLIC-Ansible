@@ -1,0 +1,17 @@
+- hosts: all
+  tasks:
+    - shell:
+        cmd: |
+          set -e
+          set -x
+          if [ -d /home/zuul/src/opendev.org/$ZUUL_PROJECT ]; then
+              cp -dR /home/zuul/src/opendev.org/$ZUUL_PROJECT/. .
+          else
+              git clone https://opendev.org/$ZUUL_PROJECT .
+          fi
+        executable: /bin/bash
+        chdir: '{{ ansible_user_dir }}/workspace'
+      environment: '{{ zuul | zuul_legacy_vars }}'
+
+    - include_role:
+        name: bindep

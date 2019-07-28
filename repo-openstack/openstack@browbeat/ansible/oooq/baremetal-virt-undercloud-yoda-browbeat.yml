@@ -1,0 +1,79 @@
+---
+- import_playbook: baremetal-prep-virthost.yml
+
+
+- name: Validate IPMI and instackenv.json
+  hosts: undercloud
+  gather_facts: yes
+  roles:
+    - validate-ipmi
+
+- name:  Deploy the undercloud
+  hosts: undercloud
+  gather_facts: no
+  roles:
+    - undercloud-deploy
+
+- import_playbook: undercloud-metrics.yml
+
+- name:  copy over config files
+  hosts: undercloud
+  gather_facts: no
+  roles:
+    - overcloud-prep-config
+
+- name:  Perpare the baremetal overcloud
+  hosts: undercloud
+  gather_facts: yes
+  roles:
+    - baremetal-prep-overcloud
+
+- name:  Prepare overcloud containers
+  hosts: undercloud
+  gather_facts: no
+  roles:
+    - { role: overcloud-prep-containers, when: containerized_overcloud|bool }
+
+- name:  Prepare the overcloud images for deployment
+  hosts: undercloud
+  gather_facts: no
+  roles:
+    - overcloud-prep-images
+
+- name:  Prepare overcloud flavors
+  hosts: undercloud
+  gather_facts: no
+  roles:
+    - overcloud-prep-flavors
+
+- name:  Prepare the undercloud networks for the overcloud deployment
+  hosts: undercloud
+  gather_facts: no
+  roles:
+    - overcloud-prep-network
+
+- name: Prepare the SSL Configuration for the overcloud deployment
+  hosts: undercloud
+  gather_facts: no
+  roles:
+    - { role: overcloud-ssl, when: ssl_overcloud|bool }
+
+- name: Configure Browbeat
+  hosts: undercloud
+  roles:
+    - browbeat/pre-install-setup
+    - browbeat/oooq-metadata
+
+- name: Install Browbeat
+  hosts: undercloud
+  vars:
+    - results_in_httpd: false
+  roles:
+    - browbeat/common
+    - browbeat/browbeat
+    - browbeat/template-configs
+
+- name: Run Browbeat
+  hosts: undercloud
+  roles:
+    - browbeat/browbeat-run

@@ -1,0 +1,47 @@
+---
+# Copyright 2018, Rackspace US, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- name: Verify that venv_install_destination_path has been provided
+  fail:
+    msg: |
+      The variable venv_install_destination_path is required and
+      has not been set.
+  when:
+    - venv_install_destination_path is not defined
+
+- name: Collect the version of virtualenv
+  shell: |
+    virtualenv --version 2>/dev/null || echo 'none'
+  args:
+    executable: /bin/bash
+  changed_when: false
+  failed_when: false
+  register: _virtualenv_version
+
+- name: Fail when required virtualenv version is not present
+  fail:
+    msg: >-
+      The required virtualenv version is not present.
+      The minimum version of 1.10 is required, but
+      {{ _virtualenv_version.stdout }} is installed.
+  when:
+    - ((_virtualenv_version.stdout | trim) == 'none') or
+      ((_virtualenv_version.stdout | trim) is version_compare('1.10', '<'))
+
+- name: Set extra virtualenv parameters
+  set_fact:
+    _venv_create_extra_options: >-
+      {{ ((_virtualenv_version.stdout | trim) is version_compare('14.0.0', '<')) | ternary('--never-download', '--no-download') }}
+      {{ ((_virtualenv_version.stdout | trim) is version_compare('1.7.0', '<')) | ternary('--no-site-packages', '') }}

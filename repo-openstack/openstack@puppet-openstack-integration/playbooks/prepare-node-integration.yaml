@@ -1,0 +1,46 @@
+- hosts: all
+  tasks:
+    - shell:
+        cmd: |
+          set -e
+          set -x
+          ZUUL_BRANCH_REAL=${ZUUL_BRANCH:-master}
+          # Workaround for puppet-ceph, where we need to checkout
+          # puppet-openstack-integration from stable/pike when working on
+          # stable/jewel.
+          # Ceph Jewel works with Newton to Pike
+          if [[ "$ZUUL_BRANCH" == "stable/jewel" ]]; then
+              ZUUL_BRANCH_REAL='stable/pike'
+          fi
+          if [ -d /home/zuul/src/opendev.org/openstack/puppet-openstack-integration ]; then
+              [ ! -d puppet-openstack-integration ] && mkdir puppet-openstack-integration
+              cp -dR /home/zuul/src/opendev.org/openstack/puppet-openstack-integration/. puppet-openstack-integration
+          else
+              git clone -b $ZUUL_BRANCH_REAL https://opendev.org/openstack/puppet-openstack-integration puppet-openstack-integration
+          fi
+        executable: /bin/bash
+        chdir: '{{ ansible_user_dir }}/workspace'
+      environment: '{{ zuul | zuul_legacy_vars }}'
+
+    - include_role:
+        name: bindep
+      vars:
+        bindep_dir: "src/opendev.org/openstack/puppet-openstack-integration"
+
+    - name: Create folder for gems
+      file:
+        path: "{{ ansible_user_dir }}/workspace/puppet-openstack-integration/.bundled_gems"
+        state: directory
+
+    - name: Install bundler
+      shell:
+        cmd: |
+          ruby <<EOF
+          cmd = 'gem install bundler --no-rdoc --no-ri --verbose'
+          if Gem::Version.new(RUBY_VERSION) < Gem::Version.new('2.3.0') then
+              cmd += ' -v 1.17.3'
+          end
+          system(cmd)
+          EOF
+      environment:
+        GEM_HOME: "{{ ansible_user_dir }}/workspace/puppet-openstack-integration/.bundled_gems"

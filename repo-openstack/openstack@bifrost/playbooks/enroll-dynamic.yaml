@@ -1,0 +1,11 @@
+---
+- hosts: baremetal
+  name: "Enroll hardware from inventory into Ironic"
+  become: no
+  gather_facts: no
+  roles:
+    - role: ironic-enroll-dynamic
+      delegate_to: "{{ groups['target'][0] if groups['target'] is defined else 'localhost' }}"
+    - role: ironic-inspect-node
+      when: inspect_nodes | default('false') | bool == true
+      delegate_to: "{{ groups['target'][0] if groups['target'] is defined else 'localhost' }}"

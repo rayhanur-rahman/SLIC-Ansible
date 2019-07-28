@@ -1,0 +1,35 @@
+---
+#
+# Configure ceilometer.conf tasks
+#
+
+- name: Configure ceilometer.conf
+  become: true
+  ini_file:
+    dest: "{{ceilometer_config_file}}"
+    mode: 0640
+    # (akrzos) Commented out Group as to prevent in Pike incorrect permissions on config file
+    # group: ceilometer
+    section: "{{ item.section }}"
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+    backup: yes
+  with_items:
+    - "{{ceilometer_configuration}}"
+
+- name: (Newton, Ocata) Restart Ceilometer Agent Notification
+  systemd:
+    name: openstack-ceilometer-notification
+    state: restarted
+  when: "('Newton' in osp_version['content'] | b64decode or 'Ocata' in osp_version['content'] | b64decode) and (restart_notification)"
+
+- name: (Newton, Ocata) Restart Ceilometer Collector
+  systemd:
+    name: openstack-ceilometer-collector
+    state: restarted
+  when: "('Newton' in osp_version['content'] | b64decode or 'Ocata' in osp_version['content'] | b64decode) and (restart_collector)"
+
+- name: (Pike) Restart Ceilometer Agent Notification
+  become: true
+  command: docker restart ceilometer_agent_notification
+  when: "('Pike' in osp_version['content'] | b64decode) and (restart_notification)"

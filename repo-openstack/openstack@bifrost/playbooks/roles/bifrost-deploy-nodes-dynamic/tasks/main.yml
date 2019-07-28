@@ -1,0 +1,108 @@
+# Copyright (c) 2015 Hewlett-Packard Development Company, L.P.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+---
+# TODO(TheJulia) It would make sense to perform basic validation prior
+# to deployment, although direct definition of instance info on
+# the pass-through could mean that the user could deploy
+# things that are not directly accessible or reasonable
+# to be inspected.
+- name: "Obtain setup facts"
+  setup:
+    gather_timeout: "{{ fact_gather_timeout }}"
+
+- name: "If in noauth mode, unset authentication parameters."
+  set_fact:
+    auth_type: None
+    auth: {}
+  when: noauth_mode is defined and noauth_mode | bool == true
+
+- name: "Execute os_client_config to collect facts"
+  os_client_config:
+  no_log: yes
+  when: noauth_mode is defined and noauth_mode | bool == false
+
+# NOTE(TheJulia): The first record returned by os_client_config
+# is utilized as the default. A user can still define the parameters
+# if so desired.
+- name: "Set os_client_config's auth parameters if not already set."
+  set_fact:
+    auth: "{{ openstack.clouds[0].auth }}"
+    auth_type: "{{ openstack.clouds[0].auth_type }}"
+  when: auth is undefined
+  no_log: yes
+
+- name: "Setup DHCP for nodes."
+  template:
+    src: dhcp-host.j2
+    dest: "/etc/dnsmasq.d/bifrost.dhcp-hosts.d/{{ inventory_hostname }}"
+    owner: root
+    group: root
+    mode: 0644
+  when: inventory_dhcp | bool == true
+  become: yes
+- name: "Setup DNS address for nodes."
+  template:
+    src: dns-address.j2
+    dest: "/etc/dnsmasq.d/host_record_{{ inventory_hostname }}"
+    owner: root
+    group: root
+    mode: 0644
+  when: inventory_dns | bool == true
+  become: yes
+- name: "Sending dnsmasq HUP"
+  # Note(TheJulia): We need to actually to send a hup signal directly as
+  # Ansible's reloaded state does not pass through to the init script.
+  command: killall -HUP dnsmasq
+  become: yes
+  when: (inventory_dhcp | bool == true) or (inventory_dns | bool == true)
+- name: "Deploy to hardware - Using custom instance_info."
+  os_ironic_node:
+    auth_type: "{{ auth_type | default(omit) }}"
+    auth: "{{ auth | default(omit) }}"
+    ironic_url: "{{ ironic_url }}"
+    uuid: "{{ uuid }}"
+    state: present
+    config_drive: "{{ deploy_url_protocol }}://{{ hostvars[inventory_hostname]['ansible_' + ans_network_interface]['ipv4']['address'] }}:{{ file_url_port }}/configdrive-{{ uuid }}.iso.gz"
+    instance_info: "{{ instance_info }}"
+    wait: "{{ wait_for_node_deploy }}"
+    timeout: " {{ wait_timeout | default(1800) }}"
+  when: instance_info is defined and instance_info | to_json != '{}'
+- name: "Collect the checksum of the deployment image."
+  stat:
+    path: "{{ deploy_image }}"
+    get_checksum: yes
+    checksum_algorithm: md5
+  register: test_deploy_image
+  become: yes
+  when: instance_info is not defined or ( instance_info is defined and instance_info | to_json == '{}' )
+- name: "Error if deploy_image is not present, and instance_info is not defined"
+  fail: msg="The user-defined deploy_image, which is the image to be written to the remote node(s) upon deployment, was not found. Cannot proceed."
+  when: instance_info is not defined and test_deploy_image.stat.exists | bool == false
+- name: "Deploy to hardware - bifrost default"
+  os_ironic_node:
+    cloud: "{{ cloud_name | default(omit) }}"
+    auth_type: "{{ auth_type | default(omit) }}"
+    auth: "{{ auth | default(omit) }}"
+    ironic_url: "{{ ironic_url | default(omit) }}"
+    uuid: "{{ uuid }}"
+    state: present
+    config_drive: "{{ deploy_url_protocol }}://{{ hostvars[inventory_hostname]['ansible_' + ans_network_interface]['ipv4']['address'] }}:{{ file_url_port }}/configdrive-{{ uuid }}.iso.gz"
+    instance_info:
+      image_source: "{{ deploy_url_protocol }}://{{ hostvars[inventory_hostname]['ansible_' + ans_network_interface]['ipv4']['address'] }}:{{ file_url_port }}/{{deploy_image_filename}}"
+      image_checksum: "{{ test_deploy_image.stat.checksum }}"
+      image_disk_format: "qcow2"
+      root_gb: 10
+    wait: "{{ wait_for_node_deploy }}"
+    timeout: " {{ wait_timeout | default(1800) }}"
+  when: instance_info is not defined or ( instance_info is defined and instance_info | to_json == '{}' )

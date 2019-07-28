@@ -1,0 +1,154 @@
+# Copyright 2018, VEXXHOST, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- project-template:
+    name: openstack-ansible-deploy-base-jobs
+    check:
+      jobs:
+        - openstack-ansible-linters
+        - openstack-ansible-varstest-aio
+        - openstack-tox-docs
+    gate:
+      jobs:
+        - openstack-ansible-linters
+        - openstack-ansible-varstest-aio
+        - openstack-tox-docs
+    periodic:
+      jobs:
+        - openstack-ansible-deploy-translations-ubuntu-bionic
+    experimental:
+      jobs:
+        - openstack-ansible-deploy-aio_nspawn-ubuntu-bionic
+        - openstack-ansible-deploy-aio_qdrouterd-ubuntu-bionic
+        - openstack-ansible-deploy_with_ansible_devel-aio-ubuntu-bionic
+        - openstack-ansible-deploy_with_ansible_next-aio-ubuntu-bionic
+
+- project-template:
+    name: openstack-ansible-deploy-aio_lxc-jobs
+    check:
+      jobs:
+        - openstack-ansible-deploy-aio_lxc-centos-7
+        - openstack-ansible-deploy-aio_lxc-debian-stable
+        - openstack-ansible-deploy-aio_lxc-ubuntu-bionic
+    gate:
+      jobs:
+        - openstack-ansible-deploy-aio_lxc-centos-7
+        - openstack-ansible-deploy-aio_lxc-debian-stable
+        - openstack-ansible-deploy-aio_lxc-ubuntu-bionic
+    periodic:
+      jobs:
+        - openstack-ansible-deploy-aio_lxc-ubuntu-bionic
+        - openstack-ansible-upgrade-aio_lxc-ubuntu-bionic
+    experimental:
+      jobs:
+        - openstack-ansible-deploy-aio_lxc-opensuse-150
+
+- project-template:
+    name: openstack-ansible-deploy-aio_distro_lxc-jobs
+    experimental:
+      jobs:
+        - openstack-ansible-deploy-aio_distro_lxc-centos-7
+        - openstack-ansible-deploy-aio_distro_lxc-opensuse-150
+        - openstack-ansible-deploy-aio_distro_lxc-ubuntu-bionic
+
+- project-template:
+    name: openstack-ansible-deploy-aio_metal-jobs
+    check:
+      jobs:
+        - openstack-ansible-deploy-aio_metal-debian-stable
+        - openstack-ansible-deploy-aio_metal-centos-7
+        - openstack-ansible-deploy-aio_metal-opensuse-15
+        - openstack-ansible-deploy-aio_metal-ubuntu-bionic
+    gate:
+      jobs:
+        - openstack-ansible-deploy-aio_metal-debian-stable
+        - openstack-ansible-deploy-aio_metal-centos-7
+        - openstack-ansible-deploy-aio_metal-opensuse-15
+        - openstack-ansible-deploy-aio_metal-ubuntu-bionic
+    periodic:
+      jobs:
+        - openstack-ansible-deploy-aio_metal-opensuse-15
+
+- project-template:
+    name: openstack-ansible-deploy-aio_telemetry_metal-jobs
+    check:
+      jobs:
+        - openstack-ansible-deploy-aio_telemetry_metal-centos-7
+        - openstack-ansible-deploy-aio_telemetry_metal-debian-stable
+        - openstack-ansible-deploy-aio_telemetry_metal-ubuntu-bionic
+    gate:
+      jobs:
+        - openstack-ansible-deploy-aio_telemetry_metal-centos-7
+        - openstack-ansible-deploy-aio_telemetry_metal-debian-stable
+        - openstack-ansible-deploy-aio_telemetry_metal-ubuntu-bionic
+    experimental:
+      jobs:
+        - openstack-ansible-deploy-aio_telemetry_metal-opensuse-150
+
+- project-template:
+    name: openstack-ansible-deploy-aio_distro_metal-jobs
+    check:
+      jobs:
+        - openstack-ansible-deploy-aio_distro_metal-centos-7
+        - openstack-ansible-deploy-aio_distro_metal-opensuse-15:
+            voting: false
+        - openstack-ansible-deploy-aio_distro_metal-ubuntu-bionic
+    gate:
+      jobs:
+        - openstack-ansible-deploy-aio_distro_metal-centos-7
+        - openstack-ansible-deploy-aio_distro_metal-ubuntu-bionic
+    periodic:
+      jobs:
+        - openstack-ansible-deploy-aio_distro_metal-opensuse-15
+
+- project-template:
+    name: openstack-ansible-deploy-aio_nspawn-jobs
+    check:
+      jobs:
+        - openstack-ansible-deploy-aio_nspawn-centos-7:
+            voting: false
+        - openstack-ansible-deploy-aio_nspawn-opensuse-150:
+            voting: false
+        - openstack-ansible-deploy-aio_nspawn-ubuntu-bionic:
+            voting: false
+    gate:
+      jobs: []
+
+- project-template:
+    name: openstack-ansible-deploy-ceph-jobs
+    check:
+      jobs:
+        - openstack-ansible-deploy-aio_ceph-ubuntu-bionic
+    gate:
+      jobs:
+        - openstack-ansible-deploy-aio_ceph-ubuntu-bionic
+    periodic:
+      jobs:
+        - openstack-ansible-deploy-aio_ceph-ubuntu-bionic
+        - openstack-ansible-upgrade-aio_ceph-ubuntu-bionic
+
+- project-template:
+    name: openstack-ansible-deploy-proxy-jobs
+    check:
+      jobs:
+        - openstack-ansible-deploy-aio_proxy-ubuntu-bionic
+    gate:
+      jobs:
+        - openstack-ansible-deploy-aio_proxy-ubuntu-bionic
+
+- project-template:
+    name: openstack-ansible-deploy-distro_ceph-jobs
+    experimental:
+      jobs:
+        - openstack-ansible-deploy-aio_distro_ceph-opensuse-150

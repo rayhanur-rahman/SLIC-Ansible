@@ -1,0 +1,145 @@
+---
+# Copyright 2014, Rackspace US, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- name: Setup the utility location(s)
+  hosts: utility_all
+  user: root
+  gather_facts: "{{ osa_gather_facts | default(True) }}"
+  environment: "{{ deployment_environment_variables | default({}) }}"
+  vars_files:
+    - "defaults/repo_packages/openstack_services.yml"
+    - "defaults/{{ install_method }}_install.yml"
+  vars:
+    utility_upper_constraints_url: "{{ requirements_git_url | default('https://opendev.org/openstack/requirements/raw/' ~ requirements_git_install_branch | default('master')) ~ '/upper-constraints.txt' }}"
+  tags:
+    - utility
+  handlers:
+    - name: Create openstack client bash_completion script
+      shell: >-
+        openstack complete > /etc/bash_completion.d/openstack_client
+      args:
+        executable: /bin/bash
+      listen:
+        - "venv changed"
+  pre_tasks:
+    - include_tasks: "common-tasks/os-{{ container_tech | default('lxc') }}-container-setup.yml"
+      when: not is_metal
+
+    - include_tasks: common-tasks/os-log-dir-setup.yml
+      vars:
+        log_dirs:
+          - src: "/openstack/log/{{ inventory_hostname }}-utility"
+            dest: "/var/log/utility"
+
+    - include_tasks: common-tasks/unbound-clients.yml
+      when:
+        - hostvars['localhost']['resolvconf_enabled'] | bool
+
+    - name: Create log directory (not is_metal)
+      file:
+        dest: "/var/log/utility"
+        state: "directory"
+        force: "yes"
+      when: not is_metal | bool
+
+  roles:
+    - role: "galera_client"
+    - role: "openstack_openrc"
+      tags:
+        - openrc
+
+  post_tasks:
+    - name: Add OpenStack client to distro packages
+      set_fact:
+        utility_distro_packages: "{{ (utility_distro_packages | default([])) + utility_distro_openstack_clients_packages }}"
+      when: install_method == "distro"
+
+    - name: Install distro packages
+      package:
+        name: "{{ utility_distro_packages | default([]) }}"
+        state: "{{ utility_package_state }}"
+        update_cache: "{{ (ansible_pkg_mgr in ['apt', 'zypper']) | ternary('yes', omit) }}"
+        cache_valid_time: "{{ (ansible_pkg_mgr == 'apt') | ternary(cache_timeout, omit) }}"
+      register: install_packages
+      until: install_packages is success
+      retries: 5
+      delay: 2
+
+    - name: Distribute private ssh key
+      copy:
+        content: "{{ utility_ssh_private_key }}"
+        dest: /root/.ssh/id_rsa
+        mode: 0600
+        owner: root
+        group: root
+      when: utility_ssh_private_key is defined
+
+    - name: Install openstack clients (source-based install)
+      when:
+        - install_method == "source"
+      block:
+        - name: Get list of repo packages
+          uri:
+            url: "{{ utility_upper_constraints_url }}"
+            return_content: yes
+          register: _abs_reqs
+          run_once: true
+          tags:
+            - always
+
+        - name: Derive the list of openstack clients
+          set_fact:
+            _openstack_client_list: >-
+              {%- set package_list = [] %}
+              {%- for l in _abs_reqs.content.split('\n') %}
+              {%-   if (l is match('^python-.*client==.*$')) or
+                       (l is match('^(aodh|gnocchi)client==.*$')) or
+                       (l is match('^osc-placement==.*$'))
+              %}
+              {%-     set _ = package_list.append(l | regex_replace('==.*$', '')) %}
+              {%-   endif %}
+              {%- endfor %}
+              {{- package_list }}
+          run_once: true
+          tags:
+            - always
+
+        - name: Install the python venv
+          include_role:
+            name: "python_venv_build"
+          vars:
+            venv_install_destination_path: "{{ utility_venv_bin | dirname }}"
+            venv_pip_install_args: "{{ pip_install_options | default('') }}"
+            venv_build_constraints:
+              - "--constraint {{ utility_upper_constraints_url }}"
+            venv_pip_packages: "{{ _openstack_client_list | union(utility_pip_packages) }}"
+
+        - name: Create symlinks for openstack clients
+          shell: |
+            {% set _bin_name = item | regex_replace('^(?:python-)?(\w*)(?:client)$', '\\1') %}
+            set -e
+            return_code=0
+            if [[ -e "{{ utility_venv_bin }}/{{ _bin_name }}" && ! -L "/usr/local/bin/{{ _bin_name }}" ]]; then
+              ln -sfn {{ utility_venv_bin }}/{{ _bin_name }} /usr/local/bin/{{ _bin_name }}
+              return_code=2
+            fi
+            exit ${return_code}
+          args:
+            executable: /bin/bash
+          with_items: "{{ _openstack_client_list }}"
+          register: _client_symlink
+          changed_when: _client_symlink.rc == 2
+          failed_when: _client_symlink.rc not in [0,2]
+          notify: "Create openstack client bash_completion script"

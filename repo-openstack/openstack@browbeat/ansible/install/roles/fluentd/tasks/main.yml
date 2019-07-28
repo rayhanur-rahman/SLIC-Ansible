@@ -1,0 +1,205 @@
+---
+#
+# Install/run fluentd for browbeat
+#
+
+- name: Copy fluentd yum repo file
+  copy:
+    src=fluentd.repo
+    dest=/etc/yum.repos.d/fluentd.repo
+    owner=root
+    group=root
+    mode=0644
+  become: true
+
+- name: Import fluentd GPG Key
+  rpm_key:
+    key=https://packages.treasuredata.com/GPG-KEY-td-agent
+    state=present
+
+- name: Install fluentd
+  yum: name={{ item }} state=present
+  become: true
+  with_items:
+    - td-agent
+
+- name: Setup fluentd configuration files
+  template:
+    src=td-agent.conf.j2
+    dest=/etc/td-agent/td-agent.conf
+    owner=root
+    group=root
+    mode=0644
+  become: true
+  register: fluentd_needs_restart
+
+### begin firewall settings here ###
+# we need TCP/42185 and TCP/9919 open
+# determine firewall status and take action
+# 1) use firewall-cmd if firewalld is utilized
+# 2) insert iptables rule if iptables is used
+
+# Firewalld
+- name: Determine if firewalld is in use
+  shell: systemctl is-enabled firewalld.service | egrep -qv 'masked|disabled'
+  ignore_errors: true
+  register: firewalld_in_use
+  no_log: true
+  tags:
+    # Skip ANSIBLE0012 Commands should not change things if nothing needs doing
+    # Actually need to determine if firewalld is in use.
+    - skip_ansible_lint
+
+- name: Determine if firewalld is active
+  shell: systemctl is-active firewalld.service | grep -vq inactive
+  ignore_errors: true
+  register: firewalld_is_active
+  no_log: true
+  tags:
+    # Skip ANSIBLE0012 Commands should not change things if nothing needs doing
+    # Need to know if firewalld is active.
+    - skip_ansible_lint
+
+- name: Determine if TCP/{{fluentd_syslog_port}} is already active
+  shell: firewall-cmd --list-ports | egrep -q "^{{fluentd_syslog_port}}/tcp"
+  ignore_errors: true
+  register: firewalld_fluentd_syslog_port_exists
+  no_log: true
+  tags:
+    # Skip ANSIBLE0012 Commands should not change things if nothing needs doing
+    # Need to determine is port already in use.
+    - skip_ansible_lint
+
+# add firewall rule via firewall-cmd
+- name: Add firewall rule for TCP/{{fluentd_syslog_port}} (firewalld)
+  command: "{{ item }}"
+  with_items:
+    - firewall-cmd --zone=public --add-port={{fluentd_syslog_port}}/tcp --permanent
+    - firewall-cmd --reload
+  ignore_errors: true
+  become: true
+  when: firewalld_in_use.rc == 0 and firewalld_is_active.rc == 0 and firewalld_fluentd_syslog_port_exists.rc != 0
+
+# iptables-services
+- name: check firewall rules for TCP/{{fluentd_syslog_port}} (iptables-services)
+  shell: grep "dport {{fluentd_syslog_port}} \-j ACCEPT" /etc/sysconfig/iptables | wc -l
+  ignore_errors: true
+  register: iptables_fluentd_syslog_port_exists
+  failed_when: iptables_fluentd_syslog_port_exists == 127
+  no_log: true
+  tags:
+    # Skip ANSIBLE0012 Commands should not change things if nothing needs doing
+    # Need to check firewall rules.
+    - skip_ansible_lint
+
+- name: Add firewall rule for TCP/{{fluentd_syslog_port}} (iptables-services)
+  lineinfile:
+    dest: /etc/sysconfig/iptables
+    line: '-A INPUT -p tcp -m tcp --dport {{fluentd_syslog_port}} -j ACCEPT'
+    regexp: '^INPUT -i lo -j ACCEPT'
+    insertbefore: '-A INPUT -i lo -j ACCEPT'
+    backup: yes
+  when: firewalld_in_use.rc != 0 and firewalld_is_active.rc != 0 and iptables_fluentd_syslog_port_exists.stdout|int == 0
+  register: iptables_needs_restart
+
+- name: Restart iptables-services for TCP/{{fluentd_syslog_port}} (iptables-services)
+  shell: systemctl restart iptables.service
+  ignore_errors: true
+  when: iptables_needs_restart != 0 and firewalld_in_use.rc != 0 and firewalld_is_active.rc != 0
+  tags:
+    # Skip ANSIBLE0013 Use shell only when shell functionality is required
+    # No systemctl module available in current stable release (Ansible 2.1)
+    - skip_ansible_lint
+
+- name: Determine if TCP/{{fluentd_http_port}} is already active
+  shell: firewall-cmd --list-ports | egrep -q "^{{fluentd_http_port}}/tcp"
+  ignore_errors: true
+  register: firewalld_fluentd_http_port_exists
+  no_log: true
+  tags:
+    # Skip ANSIBLE0012 Commands should not change things if nothing needs doing
+    # Need to check if port is already active
+    - skip_ansible_lint
+
+# add firewall rule via firewall-cmd
+- name: Add firewall rule for TCP/{{fluentd_http_port}} (firewalld)
+  command: "{{ item }}"
+  with_items:
+    - firewall-cmd --zone=public --add-port={{fluentd_http_port}}/tcp --permanent
+    - firewall-cmd --reload
+  ignore_errors: true
+  become: true
+  when: firewalld_in_use.rc == 0 and firewalld_is_active.rc == 0 and firewalld_fluentd_http_port_exists.rc != 0
+
+# iptables-services
+- name: check firewall rules for TCP/{{fluentd_http_port}} (iptables-services)
+  shell: grep "dport {{fluentd_http_port}} \-j ACCEPT" /etc/sysconfig/iptables | wc -l
+  ignore_errors: true
+  register: iptables_fluentd_http_port_exists
+  failed_when: iptables_fluentd_http_port_exists == 127
+  no_log: true
+  tags:
+    # Skip ANSIBLE0012 Commands should not change things if nothing needs doing
+    # Need to check if port is already active
+    - skip_ansible_lint
+
+- name: Add firewall rule for TCP/{{fluentd_http_port}} (iptables-services)
+  lineinfile:
+    dest: /etc/sysconfig/iptables
+    line: '-A INPUT -p tcp -m tcp --dport {{fluentd_http_port}} -j ACCEPT'
+    regexp: '^INPUT -i lo -j ACCEPT'
+    insertbefore: '-A INPUT -i lo -j ACCEPT'
+    backup: yes
+  when: firewalld_in_use.rc != 0 and firewalld_is_active.rc != 0 and iptables_fluentd_http_port_exists.stdout|int == 0
+  register: iptables_needs_restart
+
+- name: Restart iptables-services for TCP/{{fluentd_http_port}} (iptables-services)
+  shell: systemctl restart iptables.service
+  ignore_errors: true
+  when: iptables_needs_restart != 0 and firewalld_in_use.rc != 0 and firewalld_is_active.rc != 0
+  tags:
+    # Skip ANSIBLE0013 Use shell only when shell functionality is required
+    # No systemctl module available in current stable release (Ansible 2.1)
+    - skip_ansible_lint
+
+### end firewall settings ###
+
+- name: Install fluentd elasticsearch plugin
+  gem:
+    name=fluent-plugin-elasticsearch
+    state=present
+    include_dependencies=yes
+    user_install=no
+    executable=/usr/sbin/td-agent-gem
+  become: true
+  ignore_errors: false
+
+- name: Install fluentd beats plugin
+  gem:
+    name=fluent-plugin-beats
+    state=present
+    include_dependencies=yes
+    user_install=no
+    executable=/usr/sbin/td-agent-gem
+  become: true
+  ignore_errors: false
+
+- name: Load filebeat JSON index template
+  uri:
+    url: http://localhost:9200/_template/filebeat?pretty
+    method: POST
+    body: "{{ lookup('file', 'filebeat-index-template.json') }}"
+    body_format: json
+  ignore_errors: true
+  become: true
+
+- name: Start fluentd service
+  systemd:
+    name: td-agent.service
+    state: started
+  ignore_errors: true
+  when: fluentd_needs_restart != 0
+
+- name: Setup fluentd service
+  service: name=td-agent state=started enabled=true
+  become: true

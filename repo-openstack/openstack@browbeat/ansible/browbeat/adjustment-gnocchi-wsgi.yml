@@ -1,0 +1,37 @@
+---
+#
+# Playbook to adjust Gnocchi API wsgi settings
+#
+# Versions tested: Newton, Ocata, Pike
+#
+# Examples:
+# ansible-playbook -i hosts browbeat/adjustment-gnocchi-wsgi.yml -e "gnocchi_api_processes=24"
+# ansible-playbook -i hosts browbeat/adjustment-gnocchi-wsgi.yml -e "gnocchi_api_processes=24 gnocchi_api_threads=6"
+#
+
+- hosts: controller
+  remote_user: "{{ host_remote_user }}"
+  gather_facts: false
+  vars_files:
+    - ../install/group_vars/all.yml
+  vars:
+    gnocchi_api_processes: 12
+    gnocchi_api_threads: 1
+  pre_tasks:
+    - name: Get OSP Version
+      slurp:
+        src: "/etc/rhosp-release"
+      register: osp_version
+      become: true
+
+    - name: (Newton, Ocata) Set Config File based on OpenStack Version
+      set_fact:
+        gnocchi_api_apache_file: /etc/httpd/conf.d/10-gnocchi_wsgi.conf
+      when: "('Newton' in osp_version['content'] | b64decode or 'Ocata' in osp_version['content'] | b64decode)"
+
+    - name: (Pike) Set Config File based on OpenStack Version
+      set_fact:
+        gnocchi_api_apache_file: /var/lib/config-data/puppet-generated/gnocchi/etc/httpd/conf.d/10-gnocchi_wsgi.conf
+      when: "'Pike' in osp_version['content'] | b64decode"
+  roles:
+    - gnocchi-api-config

@@ -1,0 +1,42 @@
+{% set flavor_name = flavor_name or "m1.small" %}
+{% set image_name = image_name or "centos7" %}
+{% set subports_per_batch = subports_per_batch or 10 %}
+{% set batches = batches or 10 %}
+{% set sla_max_avg_duration = sla_max_avg_duration or 60 %}
+{% set sla_max_failure = sla_max_failure or 0 %}
+{% set sla_max_seconds = sla_max_seconds or 60 %}
+---
+  NeutronTrunks.boot_server_and_batch_add_subports:
+    -
+      args:
+        flavor:
+            name: {{flavor_name}}
+        image:
+            name: {{image_name}}
+        network_create_args: {}
+        subports_per_batch: {{subports_per_batch}}
+        batches: {{batches}}
+      runner:
+        type: "constant"
+        times: {{times}}
+        concurrency: {{concurrency}}
+      context:
+        users:
+          tenants: 3
+          users_per_tenant: 3
+        quotas:
+          neutron:
+            network: -1
+            subnet: -1
+            port: -1
+            trunk: -1
+          nova:
+            instances: -1
+            cores: -1
+            ram: -1
+      sla:
+        max_avg_duration: {{sla_max_avg_duration}}
+        max_seconds_per_iteration: {{sla_max_seconds}}
+        failure_rate:
+          max: {{sla_max_failure}}
+

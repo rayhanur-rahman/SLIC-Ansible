@@ -1,0 +1,662 @@
+---
+#
+# Vars for Dashboard Generation
+#
+
+dashboard_groups:
+  - undercloud
+  - controller
+  - networker
+  - blockstorage
+  - objectstorage
+  - cephstorage
+  - compute
+
+per_process_metrics:
+  - name: "Process/Thread Counts"
+    y1units: "short"
+    metrics:
+      - name: "Processes"
+        query: ".ps_count.processes"
+      - name: "Threads"
+        query: ".ps_count.threads"
+    nullPointMode: "null"
+  - name: "Process CPU"
+    y1units: "percent"
+    metrics:
+      - name: "System"
+        query: ".ps_cputime.syst"
+      - name: "User"
+        query: ".ps_cputime.user"
+    nullPointMode: "null"
+  - name: "Process Memory"
+    y1units: "bits"
+    metrics:
+      - name: "RSS"
+        query: ".ps_rss"
+      - name: "Virtual"
+        query: ".ps_vm"
+    nullPointMode: "connected"
+  - name: "Process Page Faults"
+    y1units: "short"
+    metrics:
+      - name: "Majflt"
+        query: ".ps_pagefaults.majflt"
+      - name: "Minflt"
+        query: ".ps_pagefaults.minflt"
+    nullPointMode: "null"
+  - name: "Process IOPs(Estimated via SYSCALLS)"
+    y1units: "iops"
+    metrics:
+      - name: "Read"
+        query: ".io_ops.read"
+      - name: "Write"
+        query: ".io_ops.write"
+    nullPointMode: "null"
+  - name: "Process IO Throughput(Estimated via SYSCALLS)"
+    y1units: "bytes"
+    metrics:
+      - name: "Rx"
+        query: ".io_octets.rx"
+      - name: "Tx"
+        query: ".io_octets.tx"
+    nullPointMode: "null"
+  - name: "Process Disk IO Throughput(Estimated via SYSCALLS)"
+    y1units: "bytes"
+    metrics:
+      - name: "Read"
+        query: ".disk_octets.read"
+      - name: "Write"
+        query: ".disk_octets.write"
+    nullPointMode: "null"
+
+per_process_panels:
+
+  #
+  # This dashboard should only contain OpenStack Undercloud Node processes
+  #
+  OpenStack-Undercloud:
+    - name: "Ansible"
+      processes:
+        - ansible-playbook
+    - name: "Aodh"
+      processes:
+        - aodh-evaluator
+        - aodh-listener
+        - aodh-notifier
+        - aodh_wsgi
+    - name: "Ceilometer"
+      processes:
+        - ceilometer-agent-notification
+        - ceilometer-api
+        - ceilometer-collector
+        - ceilometer-polling
+        - ceilometer_wsgi
+    - name: "Docker"
+      processes:
+        - docker-registry
+        - dockerd-current
+        - docker-containerd-current
+    - name: "Everything Else"
+      processes:
+        - httpd
+        - iscsid
+        - memcached
+        - mongod
+        - mysqld
+        - rabbitmq
+    - name: "Glance"
+      processes:
+        - glance-api
+        - glance-registry
+    - name: "Gnocchi"
+      processes:
+        - gnocchi-metricd-master
+        - gnocchi-metricd-scheduler
+        - gnocchi-metricd-processing
+        - gnocchi-metricd-reporting
+        - gnocchi-metricd-janitor
+        - gnocchi-statsd
+        - gnocchi_wsgi
+    - name: "Heat"
+      processes:
+        - heat-api
+        - heat-api-cfn
+        - heat-engine
+        - heat_api_wsgi
+        - heat_api_cfn_ws
+    - name: "Ironic"
+      processes:
+        - ironic-api
+        - ironic-conductor
+        - ironic-inspector
+        - dnsmasq-ironic
+        - dnsmasq-ironicinspector
+        - ironic_wsgi
+    - name: "Keystone"
+      processes:
+        - keystone-admin
+        - keystone-main
+        - keystone-token-flush
+    - name: "Mistral"
+      processes:
+        - mistral-server-api
+        - mistral-server-engine
+        - mistral-server-executor
+    - name: "Neutron"
+      processes:
+        - neutron-dhcp-agent
+        - neutron-l3-agent
+        - neutron-openvswitch-agent
+        - neutron-rootwrap-daemon
+        - neutron-server
+    - name: "Nova"
+      processes:
+        - nova-api
+        - nova_api_wsgi
+        - nova-cert
+        - nova-compute
+        - nova-conductor
+        - nova-scheduler
+        - placement_wsgi
+    - name: "Open vSwitch"
+      processes:
+        - ovs-vswitchd
+        - ovsdb-client
+        - ovsdb-server
+    - name: "Panko"
+      processes:
+        - panko_wsgi
+    - name: "Swift"
+      processes:
+        - swift-account-auditor
+        - swift-account-reaper
+        - swift-account-replicator
+        - swift-account-server
+        - swift-container-auditor
+        - swift-container-replicator
+        - swift-container-server
+        - swift-container-sync
+        - swift-container-updater
+        - swift-object-auditor
+        - swift-object-expirer
+        - swift-object-reconstructor
+        - swift-object-replicator
+        - swift-object-server
+        - swift-object-updater
+        - swift-proxy-server
+    - name: "Zaqar"
+      processes:
+        - zaqar-server
+        - zaqar_wsgi
+    - name: "Collectd"
+      processes:
+        - collectd
+
+  #
+  # This dashboard should only contain OpenStack Controller Node processes
+  #
+  OpenStack-Controller:
+    - name: "Aodh"
+      processes:
+        - aodh-evaluator
+        - aodh-listener
+        - aodh-notifier
+        - aodh_wsgi
+    - name: "Barbican"
+      processes:
+        - barbican_wsgi
+        - barbican-keystone-listener
+        - barbican-worker
+    - name: "Ceilometer"
+      processes:
+        - ceilometer-agent-notification
+        - ceilometer-collector
+        - ceilometer-polling
+        - ceilometer_wsgi
+    - name: "Ceph"
+      processes:
+        - ceph-mon
+    - name: "Cinder"
+      processes:
+        - cinder-api
+        - cinder-scheduler
+        - cinder-volume
+        - cinder_wsgi
+    - name: "Corosync/Pacemaker"
+      processes:
+        - attrd
+        - cib
+        - corosync
+        - crmd
+        - lrmd
+        - pacemakerd
+        - pcsd
+        - pengine
+        - stonithd
+    - name: "Docker"
+      processes:
+        - dockerd-current
+    - name: "Everything Else"
+      processes:
+        - dnsmasq
+        - haproxy
+        - httpd
+        - keepalived
+        - memcached
+        - mongod
+        - mysqld
+        - rabbitmq
+        - redis-server
+        - karaf
+    - name: "Glance"
+      processes:
+        - glance-api
+        - glance-registry
+    - name: "Gnocchi"
+      processes:
+        - gnocchi-metricd-master
+        - gnocchi-metricd-scheduler
+        - gnocchi-metricd-processing
+        - gnocchi-metricd-reporting
+        - gnocchi-metricd-janitor
+        - gnocchi-statsd
+        - gnocchi_wsgi
+        # Old "proctitle" of metricd (osp_version =< Newton)
+        - gnocchi-metricd
+    - name: "Heat"
+      processes:
+        - heat-api
+        - heat-api-cfn
+        - heat-api-cloudwatch
+        - heat-engine
+        - heat_api_cfn
+        - heat_api_cloudwatch
+        - heat_api_wsgi
+    - name: "Horizon"
+      processes:
+        - horizon
+    - name: "Keystone"
+      processes:
+        - keystone-admin
+        - keystone-main
+        - keystone-token-flush
+    - name: "Neutron"
+      processes:
+        - neutron-dhcp-agent
+        - neutron-l3-agent
+        - neutron-metadata-agent
+        - neutron-ns-metadata-proxy
+        - neutron-openvswitch-agent
+        - neutron-rootwrap-daemon
+        - neutron-server
+    - name: "Nova"
+      processes:
+        - nova-api
+        - nova-api-metadata
+        - nova_api_wsgi
+        - nova-conductor
+        - nova-consoleauth
+        - nova-novncproxy
+        - nova-scheduler
+        - placement_wsgi
+    - name: "Octavia"
+      processes:
+        - octavia-worker
+        - octavia-housekeeping
+        - octavia-health-manager
+        - octavia-api
+    - name: "Open vSwitch"
+      processes:
+        - ovs-vswitchd
+        - ovsdb-client
+        - ovsdb-server
+        - ovn-northd
+        - ovn-controller
+        - ovn-controller-vtep
+    - name: "Panko"
+      processes:
+        - panko_wsgi
+    - name: "Swift"
+      processes:
+        - swift-account-auditor
+        - swift-account-reaper
+        - swift-account-replicator
+        - swift-account-server
+        - swift-container-auditor
+        - swift-container-replicator
+        - swift-container-server
+        - swift-container-updater
+        - swift-object-auditor
+        - swift-object-expirer
+        - swift-object-replicator
+        - swift-object-server
+        - swift-object-updater
+        - swift-proxy-server
+    - name: "Collectd"
+      processes:
+        - collectd
+
+  #
+  # This dashboard should only contain OpenStack BlockStorage Node processes
+  #
+  OpenStack-BlockStorage:
+    - name: "Cinder"
+      processes:
+        - cinder-volume
+    - name: "Open vSwitch"
+      processes:
+        - ovs-vswitchd
+        - ovsdb-server
+    - name: "Collectd"
+      processes:
+        - collectd
+
+  #
+  # This dashboard should only contain OpenStack ObjectStorage Node processes
+  #
+  OpenStack-ObjectStorage:
+    - name: "Open vSwitch"
+      processes:
+        - ovs-vswitchd
+        - ovsdb-server
+    - name: "Swift"
+      processes:
+        - swift-account-auditor
+        - swift-account-reaper
+        - swift-account-replicator
+        - swift-account-server
+        - swift-container-auditor
+        - swift-container-replicator
+        - swift-container-server
+        - swift-container-updater
+        - swift-object-auditor
+        - swift-object-expirer
+        - swift-object-replicator
+        - swift-object-server
+        - swift-object-updater
+        - rsync
+    - name: "Collectd"
+      processes:
+        - collectd
+
+  #
+  # This dashboard should only contain OpenStack CephStorage Node processes
+  #
+  OpenStack-CephStorage:
+    - name: "Ceph"
+      processes:
+        - ceph-osd
+    - name: "Open vSwitch"
+      processes:
+        - ovs-vswitchd
+        - ovsdb-server
+    - name: "Collectd"
+      processes:
+        - collectd
+
+  #
+  # This dashboard should only contain OpenStack Compute Node processes
+  #
+  OpenStack-Compute:
+    - name: "Ceilometer"
+      processes:
+        - ceilometer-polling
+    - name: "Neutron"
+      processes:
+        - neutron-l3-agent          # DVR enabled case, OSP 10
+        - neutron-ns-metadata-proxy # DVR enabled case, OSP 10
+        - neutron-metadata-agent    # DVR enabled case, OSP 10
+        - neutron-openvswitch-agent
+    - name: "Nova"
+      processes:
+        - nova-compute
+        - privsep-helper
+    - name: "Open vSwitch"
+      processes:
+        - ovs-vswitchd
+        - ovsdb-client
+        - ovsdb-server
+        - ovn-controller
+        - ovn-controller-vtep
+    - name: "QEMU-KVM / Libvirt"
+      processes:
+        - qemu-kvm
+        - libvirtd
+        - virtlockd
+        - virtlogd
+    - name: "Collectd"
+      processes:
+        - collectd
+
+  #
+  # This dashboard "OpenStack" aims to be comprehensive with all processes across:
+  # Undercloud, Controller, BlockStorage, ObjectStorage, CephStorage, Compute Nodes
+  #
+  OpenStack:
+    - name: "Ansible"
+      processes:
+        - ansible-playbook
+    - name: "Aodh"
+      processes:
+        - aodh-evaluator
+        - aodh-listener
+        - aodh-notifier
+        - aodh_wsgi
+    - name: "Barbican"
+      processes:
+        - barbican_wsgi
+        - barbican-keystone-listener
+        - barbican-worker
+    - name: "Ceilometer"
+      processes:
+        - ceilometer-agent-notification
+        - ceilometer-api
+        - ceilometer-collector
+        - ceilometer-polling
+        - ceilometer_wsgi
+    - name: "Ceph"
+      processes:
+        - ceph-mon
+        - ceph-osd
+    - name: "Cinder"
+      processes:
+        - cinder-api
+        - cinder-scheduler
+        - cinder-volume
+        - cinder_wsgi
+    - name: "Corosync/Pacemaker"
+      processes:
+        - attrd
+        - cib
+        - corosync
+        - crmd
+        - lrmd
+        - pacemakerd
+        - pcsd
+        - pengine
+        - stonithd
+    - name: "Docker"
+      processes:
+        - docker-registry
+        - dockerd-current
+        - docker-containerd-current
+    - name: "Everything Else"
+      processes:
+        - dnsmasq
+        - haproxy
+        - httpd
+        - iscsid
+        - keepalived
+        - memcached
+        - mongod
+        - mysqld
+        - rabbitmq
+        - redis-server
+        - karaf
+    - name: "Glance"
+      processes:
+        - glance-api
+        - glance-registry
+    - name: "Gnocchi"
+      processes:
+        - gnocchi-metricd-master
+        - gnocchi-metricd-scheduler
+        - gnocchi-metricd-processing
+        - gnocchi-metricd-reporting
+        - gnocchi-metricd-janitor
+        - gnocchi-statsd
+        - gnocchi_wsgi
+        # Old "proctitle" of metricd (osp_version =< Newton)
+        - gnocchi-metricd
+    - name: "Heat"
+      processes:
+        - heat-api
+        - heat-api-cfn
+        - heat-api-cloudwatch
+        - heat-engine
+        - heat_api_cfn
+        - heat_api_cloudwatch
+        - heat_api_wsgi
+    - name: "Horizon"
+      processes:
+        - horizon
+    - name: "Ironic"
+      processes:
+        - ironic-api
+        - ironic-conductor
+        - ironic-inspector
+        - dnsmasq-ironic
+        - dnsmasq-ironicinspector
+        - ironic_wsgi
+    - name: "Keystone"
+      processes:
+        - keystone-admin
+        - keystone-main
+        - keystone-token-flush
+    - name: "Mistral"
+      processes:
+        - mistral-server-api
+        - mistral-server-engine
+        - mistral-server-executor
+    - name: "Neutron"
+      processes:
+        - neutron-dhcp-agent
+        - neutron-l3-agent
+        - neutron-metadata-agent
+        - neutron-ns-metadata-proxy
+        - neutron-openvswitch-agent
+        - neutron-rootwrap-daemon
+        - neutron-server
+    - name: "Nova"
+      processes:
+        - nova-api
+        - nova-api-metadata
+        - nova_api_wsgi
+        - nova-cert
+        - nova-compute
+        - nova-conductor
+        - nova-consoleauth
+        - nova-novncproxy
+        - nova-scheduler
+        - placement_wsgi
+        - privsep-helper
+    - name: "Octavia"
+      processes:
+        - octavia-worker
+        - octavia-housekeeping
+        - octavia-health-manager
+        - octavia-api
+
+    - name: "Open vSwitch"
+      processes:
+        - ovs-vswitchd
+        - ovsdb-client
+        - ovsdb-server
+        - ovn-northd
+        - ovn-controller
+        - ovn-controller-vtep
+    - name: "Panko"
+      processes:
+        - panko_wsgi
+    - name: "QEMU-KVM / Libvirt"
+      processes:
+        - qemu-kvm
+        - libvirtd
+        - virtlockd
+        - virtlogd
+    - name: "Swift"
+      processes:
+        - swift-account-auditor
+        - swift-account-reaper
+        - swift-account-replicator
+        - swift-account-server
+        - swift-container-auditor
+        - swift-container-replicator
+        - swift-container-server
+        - swift-container-sync
+        - swift-container-updater
+        - swift-object-auditor
+        - swift-object-expirer
+        - swift-object-reconstructor
+        - swift-object-replicator
+        - swift-object-server
+        - swift-object-updater
+        - swift-proxy-server
+        - rsync
+    - name: "Zaqar"
+      processes:
+        - zaqar-server
+        - zaqar_wsgi
+    - name: "Collectd"
+      processes:
+        - collectd
+
+
+  #
+  # This dashboard is geared towards "Generic" Baremetal machines
+  #
+  Baremetal:
+    - name: "httpd"
+      processes:
+        - httpd
+    - name: "Collectd"
+      processes:
+        - collectd
+
+  #
+  # This dashboard is geared towards "Generic" VM Guests
+  #
+  Guest:
+    - name: "httpd"
+      processes:
+        - httpd
+    - name: "Collectd"
+      processes:
+        - collectd
+
+  #
+  # This dashboard is geared towards Carbon/Graphite/Grafana machines
+  #
+  Graphite:
+    - name: "Summerized"
+      processes:
+        - carbon-cache
+        - carbon-relay
+        - carbon-aggregator
+        - grafana-server
+        - httpd
+    - name: "Carbon"
+      processes:
+        - carbon-cache
+        - carbon-relay
+        - carbon-aggregator
+    - name: "Grafana"
+      processes:
+        - grafana-server
+    - name: "httpd"
+      processes:
+        - httpd
+    - name: "Collectd"
+      processes:
+        - collectd

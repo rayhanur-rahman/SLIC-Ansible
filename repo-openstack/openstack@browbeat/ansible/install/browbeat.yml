@@ -1,0 +1,25 @@
+---
+#
+# Playbook to install Browbeat (Rally + Shaker + PerfKitBenchmarker) on undercloud
+#
+
+- hosts: browbeat
+  remote_user: "{{ browbeat_user }}"
+  roles:
+    - common
+    - browbeat
+    - stockpile
+    - { role: browbeat-results, when: browbeat_results_in_httpd}
+    - firewall
+    - { role: perfkitbenchmarker, when: ansible_distribution_major_version < '8'}
+    - rally
+    - shaker
+    - { role: flavors, when: browbeat_create_flavors}
+    - { role: images, when: browbeat_upload_guest_images}
+    - { role: workloads, when: install_browbeat_workloads}
+  environment: "{{proxy_env}}"
+
+- hosts: controller, compute
+  remote_user: "{{ host_remote_user }}"
+  roles:
+    - no-sshd-dns

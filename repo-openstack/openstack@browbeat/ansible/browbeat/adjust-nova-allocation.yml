@@ -1,0 +1,129 @@
+---
+#
+# Playbook to adjust Nova allocation ratios
+#
+# Versions tested: Newton, Ocata, Pike
+#
+# Newton, Ocata apply changes to the Controllers as Pike applies changes to the Computes
+#
+# Examples:
+# ansible-playbook -i hosts browbeat/adjust-nova-allocation.yml -e "cpu_allocation_ratio=100.0"
+# ansible-playbook -i hosts browbeat/adjust-nova-allocation.yml -e "cpu_allocation_ratio=100.0 ram_allocation_ratio=100.0"
+# ansible-playbook -i hosts browbeat/adjust-nova-allocation.yml -e "cpu_allocation_ratio=100.0 ram_allocation_ratio=100.0 disk_allocation_ratio=100.0"
+#
+# In order for new settings to take affect, you need to restart the Nova services
+# by adding variable restart_nova=true into the extra vars.
+#
+# ansible-playbook -i hosts browbeat/adjust-nova-allocation.yml -e "cpu_allocation_ratio=100.0 ram_allocation_ratio=100.0 disk_allocation_ratio=100.0 restart_nova=true"
+#
+# * Note not setting a variable does not change that configuration item then. Setting no variables
+#   and running the playbook sets all configuration items to defaults (cpu/ram/disk - 16/1/1)
+#
+# ansible-playbook -i hosts browbeat/adjust-nova-allocation.yml
+#
+
+- hosts: controller,compute
+  remote_user: "{{ host_remote_user }}"
+  gather_facts: false
+  vars_files:
+    - ../install/group_vars/all.yml
+  vars:
+    restart_nova: false
+    # Create initial blank configuration list
+    nova_configuration: []
+    # Defaults
+    default_cpu_allocation_ratio: 16
+    default_ram_allocation_ratio: 1
+    default_disk_allocation_ratio: 1
+    # Each configuration item needs to be a list so it can be merged
+    cpu_allocation_ratio_item: []
+    ram_allocation_ratio_item: []
+    disk_allocation_ratio_item: []
+  pre_tasks:
+    - name: Get OSP Version
+      slurp:
+        src: "/etc/rhosp-release"
+      register: osp_version
+      become: true
+
+    - name: (Newton, Ocata) Set Config File based on OpenStack Version
+      set_fact:
+        nova_config_file: /etc/nova/nova.conf
+      when: "('Newton' in osp_version['content'] | b64decode or 'Ocata' in osp_version['content'] | b64decode)"
+
+    - name: (Pike, Queens) Set Config File based on OpenStack Version
+      set_fact:
+        nova_config_file: /var/lib/config-data/puppet-generated/nova_libvirt/etc/nova/nova.conf
+      when: "('Pike' in osp_version['content'] | b64decode or 'Queens' in osp_version['content'] | b64decode)"
+
+    - name: Set default cpu_allocation_ratio/ram_allocation_ratio/disk_allocation_ratio configuration for Nova
+      set_fact:
+        nova_configuration:
+          - section: DEFAULT
+            option: cpu_allocation_ratio
+            value: "{{default_cpu_allocation_ratio}}"
+          - section: DEFAULT
+            option: ram_allocation_ratio
+            value: "{{default_ram_allocation_ratio}}"
+          - section: DEFAULT
+            option: disk_allocation_ratio
+            value: "{{default_disk_allocation_ratio}}"
+      when: cpu_allocation_ratio is undefined and ram_allocation_ratio is undefined and disk_allocation_ratio is undefined
+
+    - name: Set cpu_allocation_ratio configuration for Nova
+      set_fact:
+        cpu_allocation_ratio_item:
+          - section: DEFAULT
+            option: cpu_allocation_ratio
+            value: "{{cpu_allocation_ratio}}"
+      when: cpu_allocation_ratio is defined
+
+    - name: Set ram_allocation_ratio configuration for Nova
+      set_fact:
+        ram_allocation_ratio_item:
+          - section: DEFAULT
+            option: ram_allocation_ratio
+            value: "{{ram_allocation_ratio}}"
+      when: ram_allocation_ratio is defined
+
+    - name: Set disk_allocation_ratio configuration for Nova
+      set_fact:
+        disk_allocation_ratio_item:
+          - section: DEFAULT
+            option: disk_allocation_ratio
+            value: "{{disk_allocation_ratio}}"
+      when: disk_allocation_ratio is defined
+
+    - name: Merge configuration items
+      set_fact:
+        nova_configuration: "{{nova_configuration + cpu_allocation_ratio_item + ram_allocation_ratio_item + disk_allocation_ratio_item }}"
+
+  roles:
+    - nova-config
+
+  post_tasks:
+
+    - name: (Newton, Ocata) Restart Nova Services
+      become: true
+      service:
+        name: "{{ item }}"
+        state: restarted
+      with_items:
+        - openstack-nova-scheduler
+        - openstack-nova-api
+        - openstack-nova-conductor
+        - openstack-nova-novncproxy
+        - openstack-nova-consoleauth
+        - httpd
+      when:
+        - "'Newton' in osp_version['content'] | b64decode or 'Ocata' in osp_version['content'] | b64decode"
+        - "'controller' in group_names"
+        - restart_nova
+
+    - name: (Pike, Queens) Restart Nova Compute Container
+      become: true
+      command: docker restart nova_compute
+      when:
+        - "('Pike' in osp_version['content'] | b64decode or 'Queens' in osp_version['content'] | b64decode)"
+        - "'compute' in group_names"
+        - restart_nova

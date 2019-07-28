@@ -1,0 +1,36 @@
+---
+# Copyright 2016, Rackspace US, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+horizon_external_ssl: "{{ openstack_external_ssl }}"
+horizon_service_region: "{{ service_region }}"
+horizon_enable_cinder_backup: "{{ hostvars['localhost']['cinder_service_backup_program_enabled'] }}"
+horizon_enable_heat_ui: "{{ (groups['heat_all'] is defined) and (groups['heat_all'] | length > 0) }}"
+horizon_enable_ironic_ui: "{{ (groups['ironic_all'] is defined) and (groups['ironic_all'] | length > 0) }}"
+horizon_enable_magnum_ui: "{{ (groups['magnum_all'] is defined) and (groups['magnum_all'] | length > 0) }}"
+horizon_enable_manila_ui: "{{ (groups['manila_all'] is defined) and (groups['manila_all'] | length > 0) }}"
+horizon_enable_masakari_ui: "{{ (groups['masakari_all'] is defined) and (groups['masakari_all'] | length > 0) }}"
+horizon_enable_designate_ui: "{{ (groups['designate_all'] is defined) and (groups['designate_all'] | length > 0) }}"
+horizon_enable_octavia_ui: "{{ (groups['octavia-infra_all'] is defined) and (groups['octavia-infra_all'] | length > 0) }}"
+horizon_enable_neutron_fwaas: "{{ neutron_plugin_base is defined and (neutron_plugin_base | intersect(['firewall', 'firewall_v2']) | length > 0) }}"
+horizon_enable_neutron_vpnaas: "{{ neutron_plugin_base is defined and 'vpnaas' in neutron_plugin_base }}"
+horizon_enable_ha_router: "{{ neutron_plugin_type.split('.')[0] == 'ml2' and (groups['neutron_l3_agent'] | length >= 2) }}"
+
+# Ensure that the package state matches the global setting
+horizon_package_state: "{{ package_state }}"
+
+# If there are any Sahara hosts in the environment, then enable sahara-dashboard
+horizon_enable_sahara_ui: "{{ (groups['sahara_all'] is defined) and (groups['sahara_all'] | length > 0) }}"
+# If there are any Trove hosts in the environment, then enable trove-dashboard
+horizon_enable_trove_ui: "{{ (groups['trove_all'] is defined) and (groups['trove_all'] | length > 0) }}"

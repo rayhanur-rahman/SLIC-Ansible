@@ -1,0 +1,83 @@
+# Summary of the feature set.
+# Deploy an Openstack environment with opnfv configured in the overcloud
+composable_scenario: scenario008-multinode-containers.yaml
+validate_template: scenario008-multinode-containers.yaml
+
+network_isolation: false
+enable_pacemaker: false
+overcloud_ipv6: false
+containerized_overcloud: true
+
+# This enables TLS for the undercloud which will also make haproxy bind to the
+# configured public-vip and admin-vip.
+undercloud_generate_service_certificate: false
+
+# This enables the deployment of the overcloud with SSL.
+ssl_overcloud: false
+
+# This featureset is extremely resource intensive, so we disable telemetry
+# in order to reduce the overall memory footprint
+# This is not required in newton
+telemetry_args: >-
+  {% if release != 'newton' %}
+  -e {{ overcloud_templates_path }}/environments/disable-telemetry.yaml
+  {% endif %}
+
+extra_args: >-
+  -e {{ overcloud_templates_path }}/environments/services/neutron-opendaylight.yaml
+
+# Add ODL Repo
+add_repos:
+  - type: generic
+    filename: opendaylight.repo
+    reponame: opendaylight
+    baseurl: https://nexus.opendaylight.org/content/repositories/opendaylight-oxygen-epel-7-\$basearch-devel/
+
+deployed_server: >-
+  {% if release in ['newton','ocata','pike','queens'] -%}
+  true
+  {%- else -%}
+  false
+  {%- endif -%}
+deploy_steps_ansible_workflow: >-
+  {% if release not in ['newton','ocata','pike','queens'] -%}
+  true
+  {%- else -%}
+  false
+  {%- endif -%}
+config_download_args: >-
+  {% if release not in ['newton','ocata','pike','queens'] -%}
+  -e {{ working_dir }}/config-download.yaml
+  --disable-validations
+  --verbose
+  {%- endif -%}
+
+undercloud_templates_path: /usr/share/openstack-tripleo-heat-templates
+undercloud_custom_env_files: "{{ working_dir }}/undercloud-parameter-defaults.yaml"
+undercloud_cloud_domain: "localdomain"
+undercloud_undercloud_hostname: "undercloud.{{ undercloud_cloud_domain }}"
+undercloud_resource_registry_args:
+  "OS::TripleO::Undercloud::Net::SoftwareConfig": "{{ undercloud_templates_path }}/ci/common/net-config-simple-bridge.yaml"
+undercloud_enable_tempest: >-
+  {% if release not in ['ocata', 'pike', 'queens', 'rocky'] -%}
+  true
+  {%- else -%}
+  false
+  {%- endif -%}
+
+# Tempest configuration, keep always at the end of the file
+# Run tempest in containers when at least undercloud is containerized
+tempest_format: >-
+  {% if containerized_undercloud|bool -%}
+  container
+  {%- else -%}
+  packages
+  {%- endif -%}
+
+# If `run_tempest` is `true`, run tempests tests, otherwise do not
+# run them.
+test_ping: false
+run_tempest: true
+test_white_regex: ''
+tempest_whitelist:
+  - 'tempest.scenario.test_network_basic_ops.TestNetworkBasicOps.test_network_basic_ops'

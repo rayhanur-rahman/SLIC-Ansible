@@ -1,0 +1,33 @@
+---
+- name: Install StatsD
+  package:
+    name: statsd
+    state: present
+  become: True
+
+- name: Create StatsD configuration folder
+  file:
+    path: /etc/statsd
+    state: directory
+  become: True
+
+- name: Template configuration
+  template:
+    src: statsd_config.js.j2
+    dest: /etc/statsd/config.js
+  become: True
+
+- name: Template StatsD service file
+  template:
+    src: statsd.service.j2
+    dest: /etc/systemd/system/statsd.service.j2
+    owner: root
+    group: root
+    mode: 0644
+  become: True
+
+- name: bounce systemd and setup StatsD to run on startup
+  systemd:
+    name: statsd
+    enabled: yes
+    state: restarted

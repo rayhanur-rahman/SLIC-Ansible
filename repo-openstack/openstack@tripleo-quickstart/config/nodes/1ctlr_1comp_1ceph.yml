@@ -1,0 +1,25 @@
+# This config file is used to deploy a dedicated node in the overcloud for ceph
+
+# Define a controller node, a compute node, and a ceph node.
+overcloud_nodes:
+  - name: control_0
+    flavor: control
+    virtualbmc_port: 6230
+
+  - name: compute_0
+    flavor: compute
+    virtualbmc_port: 6231
+
+  - name: ceph_0
+    flavor: ceph
+    virtualbmc_port: 6232
+
+node_count: 3
+
+# Tell tripleo which nodes to deploy.
+topology_map:
+  CephStorage:
+    scale: 1
+
+network_isolation: true
+network_isolation_type: 'single-nic-vlans'

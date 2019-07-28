@@ -1,0 +1,18 @@
+---
+#
+# Configure nova.conf tasks
+#
+
+- name: (Newton, Ocata, Pike) Configure nova.conf
+  become: true
+  ini_file:
+    dest: "{{nova_config_file}}"
+    mode: 0640
+    # (akrzos) Commented out Group as to prevent in Pike incorrect permissions on config file
+    # group: nova
+    section: "{{ item.section }}"
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+    backup: yes
+  with_items:
+    - "{{nova_configuration}}"

@@ -1,0 +1,59 @@
+---
+# Installs rsyslog packages, used with other rsyslog roles
+
+- name: Install rsyslog and rsyslog-elasticsearch
+  package:
+    name: "{{item}}"
+    state: present
+  become: true
+  with_items:
+    - rsyslog
+    - rsyslog-elasticsearch
+    - rsyslog-mmjsonparse
+  register: install_rsyslog
+  ignore_errors: true
+
+# ^ this will work on rhel/centos 7.4 or later, earlier than that
+# we have rsyslog 7.x and must use a repo to get 8.x
+
+# We can't just add the repo and do an upgrade do to irresolvable
+# deps involving some rsyslog components have other package names
+- name: Remove 7.x rsyslog packages
+  package:
+    name: "{{item}}"
+    state: absent
+  become: true
+  with_items:
+    - rsyslog
+    - rsyslog-elasticsearch
+    - rsyslog-mmjsonparse
+    - rsyslog-mmutf8fix
+  when: install_rsyslog|failed
+
+- name: Add repository
+  yum_repository:
+    name: CentOS-7-Base
+    description: Core CentOS7 Packages
+    baseurl: http://mirror.centos.org/centos/7/os/$basearch/
+  become: true
+  when: install_rsyslog|failed
+
+- name: Add key
+  rpm_key:
+    state: present
+    key: https://www.centos.org/keys/RPM-GPG-KEY-CentOS-7
+  become: true
+  when: install_rsyslog|failed
+
+- name: Install rsyslog 8 from external repo
+  package:
+    name: "{{item}}"
+    state: present
+    disablerepo: "*"
+    enablerepo: "CentOS-7-Base"
+  become: true
+  with_items:
+    - rsyslog
+    - rsyslog-elasticsearch
+    - rsyslog-mmjsonparse
+  when: install_rsyslog|failed

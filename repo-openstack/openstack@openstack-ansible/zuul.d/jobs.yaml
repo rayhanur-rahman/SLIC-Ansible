@@ -1,0 +1,266 @@
+---
+# Copyright 2017, Rackspace US, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- job:
+    name: openstack-ansible-deploy-aio
+    parent: base
+    description: |
+      Run functional tests for an OpenStack-Ansible project.
+      Uses the gate-check-commit.sh script, running a default
+      aio deploy.
+    required-projects:
+      - name: openstack/openstack-ansible
+    pre-run:
+      - zuul.d/playbooks/pre-gate-scenario.yml
+      - zuul.d/playbooks/pre-osa-aio.yml
+    run: zuul.d/playbooks/run.yml
+    post-run:
+      - zuul.d/playbooks/post.yml
+    timeout: 10800
+    irrelevant-files:
+      - ^\.git.*
+      - ^.*\.(example|md|rst)$
+      - ^deploy-guide/.*
+      - ^doc/.*
+      - ^releasenotes/.*
+      - ^setup\.(cfg|py)$
+      - ^tox.ini$
+      - ^Vagrantfile
+
+# Ensuring overrides work
+- job:
+    name: openstack-ansible-varstest-aio
+    parent: openstack-ansible-deploy-aio
+    nodeset: ubuntu-bionic
+
+# Experimental job for checking our AIO can deploy with
+# a different ansible version
+- job:
+    name: openstack-ansible-deploy_with_ansible_devel-aio-ubuntu-bionic
+    parent: openstack-ansible-deploy-aio
+    nodeset: ubuntu-bionic
+    branches: ^(devel|master)$
+    required-projects:
+      - name: github.com/ansible/ansible
+        override-checkout: devel
+    vars:
+      ansible_package: "file://{{ ansible_user_dir }}/src/github.com/ansible/ansible"
+
+# Experimental job for checking our AIO can deploy with
+# a different ansible version
+- job:
+    name: openstack-ansible-deploy_with_ansible_next-aio-ubuntu-bionic
+    parent: openstack-ansible-deploy-aio
+    nodeset: ubuntu-bionic
+    branches: ^(devel|master)$
+    required-projects:
+      - name: github.com/ansible/ansible
+        override-checkout: stable-2.7
+    vars:
+      ansible_package: "file://{{ ansible_user_dir }}/src/github.com/ansible/ansible"
+
+# debian
+- job:
+    name: openstack-ansible-deploy-aio_metal-debian-stable
+    parent: openstack-ansible-deploy-aio
+    nodeset: debian-stable
+
+# ubuntu
+- job:
+    name: openstack-ansible-deploy-aio_lxc-ubuntu-bionic
+    parent: openstack-ansible-deploy-aio
+    nodeset: ubuntu-bionic
+
+- job:
+    name: openstack-ansible-deploy-aio_distro_lxc-ubuntu-bionic
+    parent: openstack-ansible-deploy-aio
+    nodeset: ubuntu-bionic
+
+- job:
+    name: openstack-ansible-deploy-aio_ceph-ubuntu-bionic
+    parent: openstack-ansible-deploy-aio
+    nodeset: ubuntu-bionic
+
+- job:
+    name: openstack-ansible-deploy-aio_proxy-ubuntu-bionic
+    parent: openstack-ansible-deploy-aio
+    nodeset: ubuntu-bionic
+
+- job:
+    name: openstack-ansible-deploy-aio_distro_ceph-ubuntu-bionic
+    parent: openstack-ansible-deploy-aio
+    nodeset: ubuntu-bionic
+
+- job:
+    name: openstack-ansible-deploy-aio_metal-ubuntu-bionic
+    parent: openstack-ansible-deploy-aio
+    nodeset: ubuntu-bionic
+
+- job:
+    name: openstack-ansible-deploy-aio_telemetry_metal-ubuntu-bionic
+    parent: openstack-ansible-deploy-aio
+    nodeset: ubuntu-bionic
+
+- job:
+    name: openstack-ansible-deploy-aio_distro_metal-ubuntu-bionic
+    parent: openstack-ansible-deploy-aio
+    nodeset: ubuntu-bionic
+
+- job:
+    name: openstack-ansible-upgrade-aio_lxc-ubuntu-bionic
+    parent: openstack-ansible-deploy-aio
+    nodeset: ubuntu-bionic
+    timeout: 10800
+
+- job:
+    name: openstack-ansible-deploy-aio_nspawn-ubuntu-bionic
+    parent: openstack-ansible-deploy-aio
+    nodeset: ubuntu-bionic
+
+- job:
+    name: openstack-ansible-upgrade-aio_ceph-ubuntu-bionic
+    parent: openstack-ansible-deploy-aio
+    nodeset: ubuntu-bionic
+    timeout: 10800
+
+- job:
+    name: openstack-ansible-deploy-aio_octavia-ubuntu-bionic
+    parent: openstack-ansible-deploy-aio
+    nodeset: ubuntu-bionic
+
+- job:
+    name: openstack-ansible-deploy-aio_qdrouterd-ubuntu-bionic
+    parent: openstack-ansible-deploy-aio
+    nodeset: ubuntu-bionic
+
+- job:
+    name: openstack-ansible-deploy-translations-ubuntu-bionic
+    parent: openstack-ansible-deploy-aio
+    nodeset: ubuntu-bionic
+
+# centos
+- job:
+    name: openstack-ansible-deploy-aio_lxc-centos-7
+    parent: openstack-ansible-deploy-aio
+    nodeset: centos-7
+
+- job:
+    name: openstack-ansible-deploy-aio_distro_lxc-centos-7
+    parent: openstack-ansible-deploy-aio
+    nodeset: centos-7
+
+- job:
+    name: openstack-ansible-deploy-aio_ceph-centos-7
+    parent: openstack-ansible-deploy-aio
+    nodeset: centos-7
+
+- job:
+    name: openstack-ansible-deploy-aio_distro_ceph-centos-7
+    parent: openstack-ansible-deploy-aio
+    nodeset: centos-7
+
+- job:
+    name: openstack-ansible-upgrade-aio_lxc-centos-7
+    parent: openstack-ansible-deploy-aio
+    nodeset: centos-7
+    timeout: 10800
+
+- job:
+    name: openstack-ansible-deploy-aio_metal-centos-7
+    parent: openstack-ansible-deploy-aio
+    nodeset: centos-7
+
+- job:
+    name: openstack-ansible-deploy-aio_telemetry_metal-centos-7
+    parent: openstack-ansible-deploy-aio
+    nodeset: centos-7
+
+- job:
+    name: openstack-ansible-deploy-aio_distro_metal-centos-7
+    parent: openstack-ansible-deploy-aio
+    nodeset: centos-7
+
+- job:
+    name: openstack-ansible-deploy-aio_nspawn-centos-7
+    parent: openstack-ansible-deploy-aio
+    nodeset: centos-7
+
+- job:
+    name: openstack-ansible-upgrade-aio_ceph-centos-7
+    parent: openstack-ansible-deploy-aio
+    nodeset: centos-7
+    timeout: 10800
+
+# debian
+- job:
+    name: openstack-ansible-deploy-aio_telemetry_metal-debian-stable
+    parent: openstack-ansible-deploy-aio
+    nodeset: debian-stable
+
+- job:
+    name: openstack-ansible-deploy-aio_lxc-debian-stable
+    parent: openstack-ansible-deploy-aio
+    nodeset: debian-stable
+
+# opensuse
+- job:
+    name: openstack-ansible-deploy-aio_lxc-opensuse-150
+    parent: openstack-ansible-deploy-aio
+    nodeset: opensuse-150
+
+- job:
+    name: openstack-ansible-deploy-aio_distro_lxc-opensuse-150
+    parent: openstack-ansible-deploy-aio
+    nodeset: opensuse-150
+
+- job:
+    name: openstack-ansible-deploy-aio_ceph-opensuse-150
+    parent: openstack-ansible-deploy-aio
+    nodeset: opensuse-150
+
+- job:
+    name: openstack-ansible-deploy-aio_distro_ceph-opensuse-150
+    parent: openstack-ansible-deploy-aio
+    nodeset: opensuse-150
+
+- job:
+    name: openstack-ansible-deploy-aio_metal-opensuse-150
+    parent: openstack-ansible-deploy-aio
+    nodeset: opensuse-150
+
+- job:
+    name: openstack-ansible-deploy-aio_metal-opensuse-15
+    parent: openstack-ansible-deploy-aio
+    nodeset: opensuse-15
+
+- job:
+    name: openstack-ansible-deploy-aio_telemetry_metal-opensuse-150
+    parent: openstack-ansible-deploy-aio
+    nodeset: opensuse-150
+
+- job:
+    name: openstack-ansible-deploy-aio_distro_metal-opensuse-150
+    parent: openstack-ansible-deploy-aio
+    nodeset: opensuse-150
+
+- job:
+    name: openstack-ansible-deploy-aio_distro_metal-opensuse-15
+    parent: openstack-ansible-deploy-aio
+    nodeset: opensuse-15
+
+- job:
+    name: openstack-ansible-deploy-aio_nspawn-opensuse-150
+    parent: openstack-ansible-deploy-aio
+    nodeset: opensuse-150

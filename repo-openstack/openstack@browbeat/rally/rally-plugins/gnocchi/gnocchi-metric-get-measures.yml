@@ -1,0 +1,24 @@
+{% set sla_max_avg_duration = sla_max_avg_duration or 60 %}
+{% set sla_max_failure = sla_max_failure or 0 %}
+{% set sla_max_seconds = sla_max_seconds or 60 %}
+{% set all_metrics = all_metrics or false %}
+{% set aggregation = aggregation or 'mean' %}
+{% set refresh = refresh or false %}
+---
+BrowbeatGnocchi.metric_get_measures:
+  -
+    args:
+      aggregation: {{aggregation}}
+      refresh: {{refresh}}
+    runner:
+      concurrency: {{concurrency}}
+      times: {{times}}
+      type: "constant"
+    context:
+      browbeat_gnocchi_metric_list:
+        all: {{all_metrics}}
+    sla:
+      max_avg_duration: {{sla_max_avg_duration}}
+      max_seconds_per_iteration: {{sla_max_seconds}}
+      failure_rate:
+        max: {{sla_max_failure}}

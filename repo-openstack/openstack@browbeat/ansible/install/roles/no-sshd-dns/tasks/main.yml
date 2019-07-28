@@ -1,0 +1,18 @@
+# Disables DNS lookup in the overcloud sshd config file. Speeds up operations in environments with slow dns servers hugely.
+---
+
+- name: Disable DNS resolution in Overcloud sshd config
+  lineinfile:
+      dest: /etc/ssh/sshd_config
+      line: "UseDNS no"
+      state: present
+      insertbefore: BOF
+  when: disable_ssh_dns
+  become: true
+  become_user: root
+
+- name: Restart sshd service
+  service: name=sshd state=restarted
+  when: disable_ssh_dns
+  become: true
+  become_user: root

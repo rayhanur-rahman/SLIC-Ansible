@@ -1,0 +1,27 @@
+---
+
+- name: Copy bash file
+  copy:
+    src: uuid_extract.sh
+    dest: /tmp
+
+- name: Parse uuid from variable
+  shell: "sh /tmp/uuid_extract.sh {{ ansible_env.HOME }}/browbeat/log/debug.log"
+  register: browbeat_uuid
+
+- name: Clone and Install Browbeat-ML dependencies
+  pip:
+    name: "git+https://github.com/aakarshg/Browbeat-ML.git@elastic5#egg=bml"
+    virtualenv: "{{ ansible_env.HOME }}/browbeat-venv"
+
+- name: Run Browbeat-ML on uuid
+  shell: "source {{ ansible_env.HOME }}/browbeat-venv/bin/activate; bml --summary-uuid {{browbeat_uuid.stdout}} --update-db True "
+  register: browbeatml_summary
+
+- debug: msg="{{ browbeatml_summary.stdout_lines }}"
+
+- name: Upload timeseries data summaries to cockroach db
+  shell: "source {{ ansible_env.HOME }}/browbeat-venv/bin/activate; bml --upload-timesummary {{browbeat_uuid.stdout}}"
+
+- name: Upload log data summaries to cockroach db
+  shell: "source {{ ansible_env.HOME }}/browbeat-venv/bin/activate; bml --upload-logsummary {{browbeat_uuid.stdout}}"

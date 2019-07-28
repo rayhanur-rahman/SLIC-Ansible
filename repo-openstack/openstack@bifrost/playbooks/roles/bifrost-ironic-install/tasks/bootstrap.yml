@@ -1,0 +1,361 @@
+# Copyright (c) 2015 Hewlett-Packard Development Company, L.P.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+---
+- name: "Fail if authentication configuration conflicts."
+  fail:
+    msg: >
+      noauth_mode and enable_keystone are mutually exclusive options.
+      Please set one to "false".
+  when: >
+    noauth_mode | bool == true and enable_keystone is defined and
+    enable_keystone | bool == true
+
+- name: "If VENV is set in the environment, enable installation into venv"
+  set_fact:
+    enable_venv: true
+  when: lookup('env', 'VENV') | length > 0
+
+# NOTE(sean-k-mooney) only the RabbitMQ server and MySQL db are started
+# during bootstrapping. all other services are started in the Start phase.
+- name: "Start database service"
+  service: name={{ mysql_service_name }} state=started enabled=yes
+  when: ironic.database.host == 'localhost'
+
+- name: "Create ironic user in RabbitMQ"
+  rabbitmq_user:
+    user: "ironic"
+    password: "{{ ironic_db_password }}"
+    force: yes
+    state: present
+    configure_priv: ".*"
+    write_priv: ".*"
+    read_priv: ".*"
+  no_log: true
+  when: use_rabbitmq
+
+- name: "Set mysql_username if environment variable mysql_user is set"
+  set_fact:
+    mysql_username: "{{ lookup('env', 'mysql_user') }}"
+  when: lookup('env', 'mysql_user') | length > 0
+  no_log: true
+
+- name: "Set mysql_password if environment variable mysql_pass is set"
+  set_fact:
+    mysql_password: "{{ lookup('env', 'mysql_pass') }}"
+  when: lookup('env', 'mysql_pass') | length > 0
+  no_log: true
+
+- name: Setting MySQL socket fact
+  set_fact:
+    mysql_socket_path: "/var/{% if ansible_os_family | lower == 'redhat' %}lib{% else %}run{% endif %}/{% if ansible_os_family | lower == 'debian' %}mysqld/mysqld.sock{% else %}mysql/mysql.sock{% endif %}"
+  when: ansible_version.full is version_compare('2.6.5', '>=')
+
+- name: "MySQL - Creating DB"
+  mysql_db:
+    login_unix_socket: "{{ mysql_socket_path | default(omit) }}"
+    name: "{{ ironic.database.name }}"
+    state: present
+    encoding: utf8
+    login_user: "{{ mysql_username | default(None) }}"
+    login_password: "{{ mysql_password | default(None) }}"
+  register: test_created_db
+  when: ironic.database.host == 'localhost'
+
+- name: "MySQL - Creating user for Ironic"
+  mysql_user:
+    login_unix_socket: "{{ mysql_socket_path | default(omit) }}"
+    name: "{{ ironic.database.username }}"
+    password: "{{ ironic.database.password }}"
+    priv: "{{ ironic.database.name }}.*:ALL"
+    state: present
+    login_user: "{{ mysql_username | default(None) }}"
+    login_password: "{{ mysql_password | default(None) }}"
+  when: ironic.database.host == 'localhost'
+
+- name: "Create an ironic service group"
+  group:
+    name: "ironic"
+- name: "Create an ironic service user"
+  user:
+    name: "ironic"
+    group: "ironic"
+- name: "Ensure /etc/ironic exists"
+  file:
+    name: "/etc/ironic"
+    state: directory
+    owner: "ironic"
+    group: "ironic"
+    mode: 0755
+# Note(TheJulia): The rootwrap copies will need to be re-tooled
+# to possibly directly retreive current files if a source install
+# is not utilized.
+- name: "Copy rootwrap.conf from ironic source folder"
+  copy:
+    src: "{{ ironic_git_folder }}/etc/ironic/rootwrap.conf"
+    dest: "/etc/ironic/rootwrap.conf"
+    remote_src: yes
+    mode: 0644
+    owner: root
+    group: root
+  when: skip_install is not defined
+# Note(ashestakov): "copy" module in ansible doesn't support recursive
+# copying on remote host. "cp" command used instead.
+- name: "Copy rootwrap.d contents from ironic source folder"
+  command: cp -r "{{ ironic_git_folder }}/etc/ironic/rootwrap.d/" "/etc/ironic/rootwrap.d"
+  when: skip_install is not defined
+
+- name: "Populate keystone for Bifrost"
+  include: keystone_setup.yml
+  when: enable_keystone is defined and enable_keystone | bool == true
+
+# NOTE(pas-ha) needed to e.g. pick up new interfaces after libvirt install
+- name: "Refresh facts"
+  setup:
+    gather_timeout: "{{ fact_gather_timeout }}"
+
+- name: "Generate ironic Configuration"
+  include: ironic_config.yml
+
+- name: "Set permissions on directory for the ironic user"
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: 0755
+    owner: "ironic"
+    group: "ironic"
+  with_items:
+    - "{{ ironic_log_dir }}"
+    - "{{ ironic_agent_deploy_logs_local_path }}"
+
+- name: "Create ironic DB Schema"
+  command: ironic-dbsync --config-file /etc/ironic/ironic.conf create_schema
+  environment: "{{ bifrost_venv_env if enable_venv else {} }}"
+  when: >
+      ironic.database.host == 'localhost' and
+      test_created_db.changed | bool == true
+
+- name: "Upgrade ironic DB Schema"
+  command: ironic-dbsync --config-file /etc/ironic/ironic.conf upgrade
+  environment: "{{ bifrost_venv_env if enable_venv else {} }}"
+  when: >
+      ironic.database.host != 'localhost' or
+      test_created_db.changed | bool == false
+
+- name: "Create service folder if systemd template is defined"
+  file:
+    path: "{{ init_dest_dir }}"
+    state: directory
+    mode: 0755
+  when: init_template == 'systemd_template.j2'
+
+- name: "Install ironic-inspector to permit use of inspection interface"
+  include: inspector_bootstrap.yml
+  when: enable_inspector | bool == true
+
+- name: "Get ironic-api & ironic-conductor install location"
+  shell: echo $(dirname $(which ironic-api))
+  register: ironic_install_prefix
+  environment: "{{ bifrost_venv_env if enable_venv else {} }}"
+
+- name: "Set permissions for /var/lib/ironic for the ironic user"
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: 0750
+    owner: "ironic"
+    group: "ironic"
+  with_items:
+    - "/var/lib/ironic"
+    - "/var/lib/ironic/master_images"
+    - "/var/lib/ironic/images"
+
+- name: "Place ironic services on Debian family"
+  template:
+    src: "{{ init_template }}"
+    dest: "{{ init_dest_dir }}{{ item.service_name }}{{ init_ext }}"
+    owner: "root"
+    group: "root"
+  with_items:
+    - { service_path: "{{ ironic_install_prefix.stdout | default('') }}", service_name: 'ironic-api', username: 'ironic', args: '--config-file /etc/ironic/ironic.conf'}
+    - { service_path: "{{ ironic_install_prefix.stdout | default('') }}", service_name: 'ironic-conductor', username: 'ironic', args: '--config-file /etc/ironic/ironic.conf'}
+  when:
+    - ansible_distribution not in ["CentOS","RedHat"]
+
+- name: "Place ironic services on RedHat family"
+  template:
+    src: "{{ init_template }}"
+    dest: "{{ init_dest_dir }}{{ item.service_name }}{{ init_ext }}"
+    owner: "root"
+    group: "root"
+  with_items:
+    - { service_path: "{{ ironic_install_prefix.stdout | default('') }}", service_name: 'ironic-api', username: 'ironic', args: '--config-file /etc/ironic/ironic.conf --log-file {{ ironic_log_dir }}/ironic-api.log'}
+    - { service_path: "{{ ironic_install_prefix.stdout | default('') }}", service_name: 'ironic-conductor', username: 'ironic', args: '--config-file /etc/ironic/ironic.conf --log-file {{ ironic_log_dir }}/ironic-conductor.log'}
+  when:
+    - ansible_distribution in ["CentOS","RedHat"]
+
+- name: "Create and populate /tftpboot"
+  include: create_tftpboot.yml
+- name: "Setup Inventory Hosts Directory"
+  file:
+    path: "/etc/dnsmasq.d/bifrost.hosts.d"
+    state: directory
+    owner: "root"
+    group: "root"
+    mode: 0755
+  when: inventory_dhcp | bool == true
+- name: "Setup Inventory DHCP Hosts Directory"
+  file:
+    path: "/etc/dnsmasq.d/bifrost.dhcp-hosts.d"
+    state: directory
+    owner: "root"
+    group: "root"
+    mode: 0755
+  when: inventory_dhcp | bool == true
+- name: "Retrieve interface IP informations"
+  set_fact:
+    itf_infos: "{{ hostvars[inventory_hostname]['ansible_' + ans_network_interface]['ipv4'] }}"
+    dhcp_netaddr: "{{ dhcp_pool_start }}/{{ dhcp_static_mask }}"
+  when: include_dhcp_server | bool == true
+- name: "Compute interface and DHCP network informations"
+  set_fact:
+    itf_netaddr1: "{{ itf_infos['address'] }}/{{ itf_infos['netmask'] }}"
+    itf_netaddr2: "{{ itf_infos['network'] }}/{{ itf_infos['netmask'] }}"
+    itf_broadcast: "{{ itf_infos['broadcast'] }}/{{ itf_infos['netmask'] }}"
+    dhcp_netaddr: "{{ dhcp_netaddr | ipaddr('network') }}/{{ dhcp_static_mask }}"
+  when: include_dhcp_server | bool == true
+- name: "Validate interface network addresses"
+  fail: msg="Interface {{ ans_network_interface }} network incoherence {{ itf_netaddr1 | ipaddr('network') }}/{{ itf_netaddr1 | ipaddr('prefix') }} vs {{ itf_netaddr2 }}/{{ itf_netaddr2 | ipaddr('prefix') }}"
+  when:
+    - include_dhcp_server | bool == true
+    - itf_netaddr1 | ipaddr('network') != itf_netaddr2 | ipaddr('network')
+- name: "Validate interface broadcast addresses"
+  fail: msg="Interface {{ ans_network_interface }} broadcast incoherence {{ itf_netaddr1 | ipaddr('broadcast') }}/{{ itf_netaddr1 | ipaddr('prefix') }} vs {{ itf_broadcast | ipaddr('broadcast') }}/{{ itf_broadcast | ipaddr('prefix') }}"
+  when:
+    - include_dhcp_server | bool == true
+    - itf_netaddr1 | ipaddr('broadcast') != itf_broadcast | ipaddr('broadcast')
+- name: "Validate DHCP and interface addresses"
+  debug: msg="Interface {{ ans_network_interface }} and DHCP networks are incoherent {{ itf_netaddr2 | ipaddr('network') }}/{{ itf_netaddr2 | ipaddr('prefix') }} {{ dhcp_netaddr | ipaddr('network') }}/{{ dhcp_netaddr | ipaddr('prefix') }} overriding DHCP with interface settings"
+  when:
+    - include_dhcp_server | bool == true
+    - itf_netaddr2 | ipaddr('network') != dhcp_netaddr | ipaddr('network')
+- name: "Computing new DHCP informations"
+  set_fact:
+    dhcp_start_ip: "{{ dhcp_pool_start.split('.')[-1] }}"
+    dhcp_end_ip: "{{ dhcp_pool_end.split('.')[-1] }}"
+    dhcp_netaddr: "{{ itf_netaddr1 | ipaddr('network') }}"
+  when:
+    - include_dhcp_server | bool == true
+    - itf_netaddr2 | ipaddr('network') != dhcp_netaddr | ipaddr('network')
+# Note(olivierbourdon38): we could do much more complex network
+# computation to derive exact (or way closer to exact) range for
+# the new network depending on netmasks and indexes.
+- name: "Computing new DHCP range"
+  set_fact:
+     dhcp_pool_start: "{{ '.'.join(dhcp_netaddr.split('.')[0:-1]) }}.{{ dhcp_start_ip }}"
+     dhcp_pool_end: "{{ '.'.join(dhcp_netaddr.split('.')[0:-1]) }}.{{ dhcp_end_ip }}"
+  when:
+    - include_dhcp_server | bool == true
+    - itf_netaddr2 | ipaddr('network') != dhcp_netaddr | ipaddr('network')
+- name: "Deploy dnsmasq configuration file"
+  template: src=dnsmasq.conf.j2 dest=/etc/dnsmasq.conf
+  when: include_dhcp_server | bool == true
+# NOTE(Shrews) When testing, we want to use our custom dnsmasq.conf file,
+# not the one supplied by libvirt.
+- name: "Look for libvirt dnsmasq config"
+  stat: path=/etc/dnsmasq.d/libvirt-bin
+  register: test_libvirt_dnsmasq
+  when: include_dhcp_server | bool == true
+- name: "Disable libvirt dnsmasq config"
+  command: mv /etc/dnsmasq.d/libvirt-bin /etc/dnsmasq.d/libvirt-bin~
+  when: >
+     include_dhcp_server | bool == true and
+     test_libvirt_dnsmasq.stat.exists | bool == true and
+     testing | bool == true
+- name: "Deploy nginx configuration file for serving HTTP requests"
+  template: src=nginx.conf.j2 dest=/etc/nginx/nginx.conf
+- name: "Ensure inspector object storage directory exists"
+  file:
+    path: "{{ http_boot_folder }}/ironic-inspector"
+    state: directory
+    owner: "{{ nginx_user }}"
+    group: "{{ nginx_user }}"
+  when:
+    - enable_inspector | bool
+    - inspector_store_data_in_nginx | bool
+- name: "Download Ironic Python Agent kernel & image"
+  include: download_ipa_image.yml
+  when: create_ipa_image | bool == false and download_ipa | bool == true
+- name: "Download cirros to use for deployment if requested"
+  get_url:
+    url: "{{ cirros_deploy_image_upstream_url }}"
+    dest: "{{ deploy_image }}"
+  when: use_cirros | bool == true
+- name: >
+    "Explicitly permit nginx port (TCP) for file downloads from nodes to be provisioned
+     and TCP/6385 for IPA callback"
+  iptables:
+    chain: INPUT
+    action: insert
+    protocol: tcp
+    destination_port: "{{ item }}"
+    in_interface: "{{ network_interface }}"
+    jump: ACCEPT
+  with_items:
+    - "{{ file_url_port }}"
+    - 6385
+- block:
+    - name: "Explicitly allow nginx and IPA port (TCP) on selinux"
+      seport:
+        ports: "{{ file_url_port }},6385"
+        proto: tcp
+        setype: http_port_t
+        state: present
+
+    - name: "Add proper context on created data for http_boot"
+      sefcontext:
+        target: "{{ http_boot_folder }}(/.*)?"
+        setype: httpd_sys_content_t
+        state: present
+
+    - name: "Add proper context on inspector data store"
+      sefcontext:
+        target: "{{ http_boot_folder }}/ironic-inspector(/.*)?"
+        setype: httpd_sys_rw_content_t
+        state: present
+      when:
+        - enable_inspector | bool
+        - inspector_store_data_in_nginx | bool
+
+    - name: Copy ironic policy file to temporary directory
+      copy:
+        src: ironic_policy.te
+        dest: /tmp/ironic_policy.te
+
+    - name: Check ironic policy module
+      command: checkmodule -M -m -o /tmp/ironic_policy.mod /tmp/ironic_policy.te
+
+    - name: Package ironic policy module
+      command: semodule_package -m /tmp/ironic_policy.mod -o /tmp/ironic_policy.pp
+
+    - name: Include ironic policy module
+      command: semodule -i /tmp/ironic_policy.pp
+
+    - name: Enable ironic policy module
+      command: semodule -e ironic_policy
+  when: (ansible_os_family == 'RedHat' or ansible_os_family == 'Suse') and
+         ansible_selinux.status == 'enabled' and ansible_selinux.mode == "enforcing"
+- name: "Configure remote logging"
+  template: src=10-rsyslog-remote.conf.j2 dest=/etc/rsyslog.d/10-rsyslog-remote.conf
+  when: remote_syslog_server is defined and remote_syslog_server != ""

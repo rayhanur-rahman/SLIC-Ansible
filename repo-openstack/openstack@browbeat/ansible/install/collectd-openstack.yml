@@ -1,0 +1,145 @@
+---
+#
+# Playbook to install collectd on undercloud/overcloud
+#
+# Install on all undercloud/overcloud machines:
+# ansible-playbook -i hosts install/collectd-openstack.yml
+#
+# Or use tags:
+# ansible-playbook -i hosts install/collectd-openstack.yml --tag "undercloud"
+# ansible-playbook -i hosts install/collectd-openstack.yml --tag "controller"
+# ansible-playbook -i hosts install/collectd-openstack.yml --tag "networker"
+# ansible-playbook -i hosts install/collectd-openstack.yml --tag "blockstorage"
+# ansible-playbook -i hosts install/collectd-openstack.yml --tag "objectstorage"
+# ansible-playbook -i hosts install/collectd-openstack.yml --tag "cephstorage"
+# ansible-playbook -i hosts install/collectd-openstack.yml --tag "compute"
+#
+
+
+- hosts: undercloud
+  remote_user: "{{ local_remote_user }}"
+  vars:
+    config_type: undercloud
+  roles:
+    - { role: common, when: collectd_undercloud|bool }
+    - { role: epel, when: collectd_undercloud|bool and ansible_distribution_major_version == '7'}
+    - { role: repo }
+    - { role: collectd-openstack, when: collectd_undercloud|bool }
+  tasks:
+    - name: Collectd off if not collectd_undercloud
+      service: name=collectd state=stopped enabled=false
+      become: true
+      when: not collectd_undercloud
+      ignore_errors: true
+  tags: undercloud
+  environment: "{{proxy_env}}"
+
+- hosts: controller
+  remote_user: "{{ host_remote_user }}"
+  vars:
+    config_type: controller
+  roles:
+    - { role: osp_version }
+    - { role: common, when: collectd_controller|bool }
+    - { role: epel, when: collectd_controller|bool and ansible_distribution_major_version == '7'}
+    - { role: repo }
+    - { role: collectd-openstack, when: collectd_controller|bool }
+  tasks:
+    - name: Collectd off if not collectd_controller
+      service: name=collectd state=stopped enabled=false
+      become: true
+      when: not collectd_controller
+      ignore_errors: true
+  tags: controller
+  environment: "{{proxy_env}}"
+
+- hosts: networker
+  remote_user: "{{ host_remote_user }}"
+  vars:
+    config_type: networker
+  roles:
+    - { role: common, when: collectd_networker|bool }
+    - { role: epel, when: collectd_networker|bool and ansible_distribution_major_version == '7'}
+    - { role: repo }
+    - { role: collectd-openstack, when: collectd_networker|bool }
+  tasks:
+    - name: Collectd off if not collectd_networker
+      service: name=collectd state=stopped enabled=false
+      become: true
+      when: not collectd_networker
+      ignore_errors: true
+  tags: networker
+  environment: "{{proxy_env}}"
+
+- hosts: blockstorage
+  remote_user: "{{ host_remote_user }}"
+  vars:
+    config_type: blockstorage
+  roles:
+    - { role: common, when: collectd_blockstorage|bool }
+    - { role: epel, when: collectd_blockstorage|bool and ansible_distribution_major_version == '7' }
+    - { role: repo }
+    - { role: collectd-openstack, when: collectd_blockstorage|bool }
+  tasks:
+    - name: Collectd off if not collectd_blockstorage
+      service: name=collectd state=stopped enabled=false
+      become: true
+      when: not collectd_blockstorage
+      ignore_errors: true
+  tags: blockstorage
+  environment: "{{proxy_env}}"
+
+- hosts: objectstorage
+  remote_user: "{{ host_remote_user }}"
+  vars:
+    config_type: objectstorage
+  roles:
+    - { role: common, when: collectd_objectstorage|bool }
+    - { role: epel, when: collectd_objectstorage and ansible_distribution_major_version == '7' }
+    - { role: repo }
+    - { role: collectd-openstack, when: collectd_objectstorage|bool }
+  tasks:
+    - name: Collectd off if not collectd_objectstorage
+      service: name=collectd state=stopped enabled=false
+      become: true
+      when: not collectd_objectstorage
+      ignore_errors: true
+  tags: objectstorage
+  environment: "{{proxy_env}}"
+
+- hosts: cephstorage
+  remote_user: "{{ host_remote_user }}"
+  vars:
+    config_type: cephstorage
+  roles:
+    - { role: common, when: collectd_cephstorage|bool }
+    - { role: epel, when: collectd_cephstorage|bool and ansible_distribution_major_version == '7'}
+    - { role: repo }
+    - { role: collectd-openstack, when: collectd_cephstorage|bool }
+  tasks:
+    - name: Collectd off if not collectd_cephstorage
+      service: name=collectd state=stopped enabled=false
+      become: true
+      when: not collectd_cephstorage
+      ignore_errors: true
+  tags: cephstorage
+  environment: "{{proxy_env}}"
+
+- hosts: compute
+  remote_user: "{{ host_remote_user }}"
+  vars:
+    config_type: compute
+  roles:
+    - { role: osp_version }
+    - { role: common, when: collectd_compute|bool }
+    - { role: epel, when: collectd_compute|bool and ansible_distribution_major_version == '7'}
+    - { role: repo }
+    - { role: collectd-openstack, when: collectd_compute|bool }
+  tasks:
+    - name: Collectd off if not collectd_compute
+      service: name=collectd state=stopped enabled=false
+      become: true
+      when: not collectd_compute
+      ignore_errors: true
+  tags: compute
+  environment: "{{proxy_env}}"

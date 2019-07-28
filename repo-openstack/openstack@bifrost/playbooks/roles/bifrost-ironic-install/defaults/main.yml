@@ -1,0 +1,303 @@
+---
+# Cleaning turns on ironic conductor clean_nodes flag
+# which causes the nodes to be wiped after deletion.
+cleaning: false
+http_boot_folder: /httpboot
+ironic_tftp_master_path: /var/lib/ironic/master_images
+staging_drivers_include: false
+file_url_port: "8080"
+ironicclient_source_install: false
+openstacksdk_source_install: true
+shade_source_install: true
+ironicinspector_source_install: true
+ironicinspectorclient_source_install: false
+sushy_source_install: false
+staging_drivers_source_install: false
+# Setting to utilize diskimage-builder to create a bootable image.
+create_image_via_dib: true
+dib_image_type: vm
+# Setting to install diskimage-builder
+install_dib: "{{ create_image_via_dib }}"
+# Setting to prepend a partition image with a boot sector and partition table.
+transform_boot_image: false
+# If testing is true, then the environment is setup for using libvirt
+# virtual machines for the hardware instead of real hardware.
+testing: false
+ci_testing: false
+# Use Rabbit MQ as a message bus.
+use_rabbitmq: false
+
+# set to true to skip installing ironic dependencies
+skip_package_install: False
+# set to true to skip generation of configs, ironic db and rabbitmq configuration
+skip_bootstrap: False
+# set to true to skip starting ironic services and dependencies
+skip_start: False
+# set to true to skip performing online data migrations
+skip_migrations: "{{ skip_bootstrap }}"
+
+# Default network interface that bifrost will be attached to.
+# This is used in ipa_* so it must be before
+network_interface: "virbr0"
+ans_network_interface: "{{ network_interface | replace('-', '_') }}"
+
+# Normally this would setting would be http in a bifrost installation
+# without TLS. This setting allows a user to override the setting in case
+# the local webserver has been updated to support HTTPS.
+# Note: Users wishing to leverage HTTPS should reference the iPXE
+# documentation at https://ipxe.org/crypto
+ipa_file_protocol: "http"
+
+ipa_upstream_release: "master"
+
+enable_uefi_ipxe: true
+ipxe_efi_binary: ipxe.efi
+
+ipa_kernel: "{{http_boot_folder}}/ipa.vmlinuz"
+ipa_ramdisk: "{{http_boot_folder}}/ipa.initramfs"
+ipa_kernel_url: "{{ ipa_file_protocol }}://{{ hostvars[inventory_hostname]['ansible_' + ans_network_interface]['ipv4']['address'] }}:{{file_url_port}}/ipa.vmlinuz"
+ipa_kernel_upstream_url: "https://tarballs.openstack.org/ironic-python-agent/tinyipa/files/tinyipa-{{ ipa_upstream_release }}.vmlinuz"
+ipa_kernel_upstream_checksum_algo: "sha256"
+ipa_kernel_upstream_checksum_url: "{{ ipa_kernel_upstream_url }}.{{ ipa_kernel_upstream_checksum_algo }}"
+ipa_ramdisk_url: "{{ ipa_file_protocol }}://{{ hostvars[inventory_hostname]['ansible_' + ans_network_interface]['ipv4']['address'] }}:{{file_url_port}}/ipa.initramfs"
+ipa_ramdisk_upstream_url: "https://tarballs.openstack.org/ironic-python-agent/tinyipa/files/tinyipa-{{ ipa_upstream_release }}.gz"
+ipa_ramdisk_upstream_checksum_algo: "sha256"
+ipa_ramdisk_upstream_checksum_url: "{{ ipa_ramdisk_upstream_url }}.{{ ipa_ramdisk_upstream_checksum_algo }}"
+deploy_image_filename: "deployment_image.qcow2"
+deploy_image: "{{http_boot_folder}}/{{deploy_image_filename}}"
+# Use cirros instead of building an image via diskimage-builder
+use_cirros: false
+# Download IPA by default
+download_ipa: true
+cirros_deploy_image_upstream_url: https://download.cirros-cloud.net/0.3.4/cirros-0.3.4-x86_64-disk.img
+# By default bifrost will deploy dnsmasq to utilize as an integrated DHCP
+# server.  If you already have a DHCP server, you will need to disable
+# this setting, and perform manual configuration of your DHCP server.
+include_dhcp_server: true
+# *_git_url can be overridden by local clones for offline installs
+dib_git_url: https://opendev.org/openstack/diskimage-builder
+ironicclient_git_url: https://opendev.org/openstack/python-ironicclient
+openstacksdk_git_url: https://opendev.org/openstack/openstacksdk
+shade_git_url: https://opendev.org/openstack/shade
+ironic_git_url: https://opendev.org/openstack/ironic
+ironicinspector_git_url: https://opendev.org/openstack/ironic-inspector
+ironicinspectorclient_git_url: https://opendev.org/openstack/python-ironic-inspector-client
+mysql_username: "root"
+mysql_password: ""
+# NOTE(TheJulia): While we have indicated we're going to deprecate ironic_db_password,
+# we didn't properly notate it from what I can see at a glance, and we seem to have
+# an odd variable expansion issue on fedora blocking migration to fedora-27 that this
+# should fix....
+ironic_db_password: aSecretPassword473z
+disable_dnsmasq_dns: False
+ironic_git_folder: /opt/stack/ironic
+ironicclient_git_folder: /opt/stack/python-ironicclient
+openstacksdk_git_folder: /opt/stack/openstacksdk
+shade_git_folder: /opt/stack/shade
+dib_git_folder: /opt/stack/diskimage-builder
+reqs_git_folder: /opt/stack/requirements
+upper_constraints_file: "{{ lookup('env', 'UPPER_CONSTRAINTS_FILE') | default(reqs_git_folder + '/upper-constraints.txt', True) }}"
+staging_drivers_git_folder: /opt/stack/ironic-staging-drivers
+ironicinspector_git_folder: /opt/stack/ironic-inspector
+ironicinspectorclient_git_folder: /opt/stack/python-ironic-inspector-client
+sushy_git_folder: /opt/stack/sushy
+staging_drivers_git_url: https://opendev.org/x/ironic-staging-drivers
+
+enabled_hardware_types: "ipmi,redfish,ilo"
+default_deploy_interface: "direct"
+
+enabled_bios_interfaces: "redfish,ilo,no-bios"
+enabled_boot_interfaces: "ilo-virtual-media,ipxe,pxe"
+enabled_deploy_interfaces: "iscsi,direct"
+enabled_management_interfaces: "redfish,ilo,ipmitool"
+enabled_power_interfaces: "redfish,ilo,ipmitool"
+
+# Extra pip packages to install with ironic
+# This should be a list of pip-installable references.
+# default: empty list
+ironic_extra_packages: []
+
+# DHCP pool for requests -- ignored if inventory_dhcp is set to True
+# since IP allocation will be static.
+dhcp_pool_start: 192.168.1.200
+dhcp_pool_end: 192.168.1.250
+dhcp_lease_time: 12h
+dhcp_static_mask: 255.255.255.0
+# Dnsmasq default route for clients. If not defined, dnsmasq will push to clients
+# as default route the same IP of the dnsmasq server.
+# If set to false, it will disable default route creation in clients.
+# Default: undefined
+# dnsmasq_router:
+
+# Dnsmasq default dns servers for clients. If defined, dnsmasq will use the specified
+# DNS servers for name resolving.
+# dnsmasq_dns_servers: 8.8.8.8,8.8.4.4
+
+# Support for CORS configuration
+# By default CORS support is disabled.
+enable_cors: false
+# Origin to accept for CORS requests
+cors_allowed_origin: "http://localhost:8000"
+# bifrost utilizes noauth mode by default and as such
+# the setting should be set to false. This setting should
+# not need to be modified by the user.
+enable_cors_credential_support: false
+
+# The path to the directory where the deployment logs should be stored when using
+# local storage.
+ironic_agent_deploy_logs_local_path: "{{ '/'.join([ironic_log_dir, 'deploy']) }}"
+
+# Set this to true to configure dnsmasq to respond to requests from the
+# hosts in your dynamic inventory.
+inventory_dhcp: False
+
+# Set this to true to configure dnsmasq to resolv to ipv4_address from the
+# hosts in your dynamic inventory.
+inventory_dns: False
+
+# Set this to true to configure dnsmasq to populate the NTP servers
+# setting of dnsmasq.
+# Several NTP servers can be specified, seperated by commas.
+# dnsmasq_ntp_servers:
+
+# Settings to enable the use of inspector
+enable_inspector: true
+inspector_debug: true
+inspector_manage_firewall: false
+
+# Set ironic_log_dir to use a non-default log directory for ironic.
+ironic_log_dir: /var/log/ironic
+
+# Set inspector_log_dir to use a non-default log directory for inspector.
+#inspector_log_dir:
+
+# Set nginx_log_dir to use a non-default log directory for nginx.
+nginx_log_dir: /var/log/nginx
+
+inspector_data_dir: "/opt/stack/ironic-inspector/var"
+inspector_store_ramdisk_logs: true
+# Note: inspector_port_addition has three valid values: all, active, pxe
+inspector_port_addition: "pxe"
+
+# Note: inspector_keep_ports has three valid values: all, present, added
+inspector_keep_ports: "present"
+
+# String value containing extra kernel parameters for the inspector default
+# PXE configuration.
+#inspector_extra_kernel_options:
+
+# Set inspector_processing_hooks to specify a non-default comma-separated
+# list of processing hooks for inspector.
+#inspector_processing_hooks:
+
+# Whether to store introspection data using the local Nginx web server as an
+# object storage service. DEPRECATED, the data can be stored in the database.
+inspector_store_data_in_nginx: false
+
+# When inspector_store_data_in_nginx is true, this is the URL of the Nginx
+# 'Swift' API endpoint.
+inspector_store_data_url: "http://localhost:{{ file_url_port }}"
+
+# Inspector defaults
+inspector:
+  discovery:
+    enabled: "{{ enable_inspector_discovery | default(true) }}"
+    default_node_driver: "{{ inspector_default_node_driver | default('ipmi')}}"
+
+# We may not have packaged iPXE files on some distros, or may want to
+# download them on their own.
+download_ipxe: false
+
+# Settings related to installing bifrost in a virtual environment
+enable_venv: false
+bifrost_venv_dir: "{{ lookup('env', 'VENV') | default('/opt/stack/bifrost') }}"
+bifrost_venv_env:
+  VIRTUAL_ENV: "{{ bifrost_venv_dir }}"
+  PATH: "{{ bifrost_venv_dir }}/bin:{{ ansible_env.PATH }}" # include regular path via lookup env
+  pydoc: "python -m pydoc"
+
+# Authentication support
+# By default, bifrost was developed around being a toolkit
+# for noauth mode. Since we are introducing the concept of
+# authentication, we need to record the default for
+# conditional statements in the playbooks.
+noauth_mode: true
+
+# Keystone Support
+# Default parameter if keystone is enabled, or disabled.
+enable_keystone: false
+
+# Service URLs used for communication with them.
+ironic_api_url: "http://localhost:6385"
+ironic_inspector_api_url: "http://localhost:5050"
+
+# NOTE: The keystone support in this role
+# expects the keystone.bootstrap variables to
+# either be loaded OR present from keystone
+# installation. The keystone settings below
+# should only be used if the role is utilized
+# independently of the keystone installation
+# role, such as leveraging a pre-existing
+# keystone installation.
+# WARNING: Using a pre-existing keystone has
+# not been tested.
+#
+#keystone:
+#  debug: true
+#  bootstrap:
+#    enabled: true
+#    username: admin
+#    password: ChangeThisPa55w0rd
+#    project_name: admin
+#    admin_url: "http://127.0.0.1:35357/v3/"
+#    public_url: "http://127.0.0.1:5000/v3/"
+#    internal_url: "http://127.0.0.1:5000/v3/"
+#    region_name: "RegionOne"
+#  message_queue:
+#    username: keystone
+#    password: ChangeThisPa55w0rd
+#    host: 127.0.0.1
+#  database:
+#    name: keystone
+#    username: keystone
+#    password: ChangeThisPa55w0rd
+#    host: 127.0.0.1
+
+ironic:
+  service_catalog:
+    username: "ironic"
+    password: "ChangeThisPa55w0rd"
+    auth_url: "http://127.0.0.1:5000/v3"
+    project_name: "service"
+  keystone:
+    default_username: "bifrost_user"
+    default_password: "ChangeThisPa55w0rd"
+  database:
+    name: "ironic"
+    username: "ironic"
+    password: "{{ ironic_db_password }}"
+    host: "localhost"
+
+ironic_inspector:
+  service_catalog:
+    username: "ironic_inspector"
+    password: "ChangeThisPa55w0rd"
+    auth_url: "http://127.0.0.1:5000/v3"
+    project_name: "service"
+  keystone:
+    default_username: "inspector_user"
+    default_password: "ChangeThisPa55w0rd"
+  database:
+    name: "inspector"
+    username: "inspector"
+    password: "{{ ironic_db_password }}"
+    host: "localhost"
+    # DEPRECATED(TheJulia): Inheritance of ironic_db_password params
+    # should be removed in Queens.
+
+# NOTE(hwoarang): openSUSE distros may come with recent pip versions so
+# upgrade only what's necessary
+pip_opts: "{{ ((ansible_os_family | lower == 'suse') or (enable_venv | bool)) | ternary('--upgrade-strategy only-if-needed', '--force-reinstall') }}"
+
+# Timeout for gathering facts.
+fact_gather_timeout: "{{ lookup('config', 'DEFAULT_GATHER_TIMEOUT', on_missing='skip') | default(omit, true) }}"

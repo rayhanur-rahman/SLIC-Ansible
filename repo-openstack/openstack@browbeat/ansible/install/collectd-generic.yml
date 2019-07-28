@@ -1,0 +1,41 @@
+---
+#
+# Generic Playbook to install collectd on generic machine types, use tags to separate machine type:
+#
+# Examples:
+#
+# ansible-playbook -i hosts install/collectd-generic.yml --tags="baremetal"
+# ansible-playbook -i hosts install/collectd-generic.yml --tags="guest"
+# ansible-playbook -i hosts install/collectd-generic.yml --tags="graphite"
+# ansible-playbook -i hosts install/collectd-generic.yml --tags="baremetal,guest"
+#
+
+- hosts: baremetal
+  remote_user: root
+  vars:
+    config_type: baremetal
+  roles:
+    - {role: epel, when: ansible_distribution_major_version == '7'}
+    - collectd-generic
+  tags: baremetal
+  environment: "{{proxy_env}}"
+
+- hosts: guest
+  remote_user: root
+  vars:
+    config_type: guest
+  roles:
+    - {role: epel, when: ansible_distribution_major_version == '7'}
+    - collectd-generic
+  tags: guest
+  environment: "{{proxy_env}}"
+
+- hosts: graphite
+  remote_user: root
+  vars:
+    config_type: graphite
+  roles:
+    - {role: epel, when: ansible_distribution_major_version == '7'}
+    - collectd-generic
+  tags: graphite
+  environment: "{{proxy_env}}"

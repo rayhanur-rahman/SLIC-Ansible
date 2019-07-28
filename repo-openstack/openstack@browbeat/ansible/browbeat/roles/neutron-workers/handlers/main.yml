@@ -1,0 +1,38 @@
+---
+#
+# Neutron handlers for browbeat adjustment
+#
+
+- name: unmanage neutron services
+  become: true
+  command: pcs resource unmanage {{ item }}
+  with_items:
+    - neutron-server
+    - neutron-metadata-agent
+  ignore_errors: true
+  when: pacemaker_controlled
+
+- name: restart neutron services
+  become: true
+  service: name={{ item }} state=restarted
+  with_items:
+    - neutron-server
+    - neutron-metadata-agent
+
+- name: manage neutron services
+  become: true
+  command: pcs resource manage {{ item }}
+  with_items:
+    - neutron-server
+    - neutron-metadata-agent
+  ignore_errors: true
+  when: pacemaker_controlled
+
+- name: cleanup neutron services
+  become: true
+  command: pcs resource cleanup {{ item }}
+  with_items:
+    - neutron-server
+    - neutron-metadata-agent
+  ignore_errors: true
+  when: pacemaker_controlled

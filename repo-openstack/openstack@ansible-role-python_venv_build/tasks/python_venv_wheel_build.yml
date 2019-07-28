@@ -1,0 +1,176 @@
+---
+# Copyright 2018, Rackspace US, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- name: gather build target facts
+  setup:
+    gather_subset: '!all:hardware'
+  delegate_to: "{{ item }}"
+  delegate_facts: true
+  with_items: "{{ groups['repo_all'] | default([inventory_hostname]) }}"
+
+- name: Build the wheels on the build host
+  delegate_to: "{{ venv_build_host }}"
+  become: "{{ venv_build_host == 'localhost' }}"
+  when:
+    - venv_wheel_build_enable | bool
+  block:
+    - name: Install distro packages for wheel build
+      package:
+        name: "{{ venv_build_base_distro_package_list | union(venv_build_distro_package_list) }}"
+        state: "{{ venv_distro_package_state }}"
+        update_cache: "{{ (ansible_pkg_mgr in ['apt', 'zypper']) | ternary('yes', omit) }}"
+        cache_valid_time: "{{ (ansible_pkg_mgr == 'apt') | ternary(venv_distro_cache_valid_time, omit) }}"
+      when:
+        - (venv_build_distro_package_list | length > 0) or
+          (venv_install_distro_package_list | length > 0)
+      register: _install_build_distro_packages
+      until: _install_build_distro_packages is success
+      retries: 5
+      delay: 2
+
+    - name: Clean up paths and files if venv_rebuild is enabled
+      file:
+        path: "{{ item }}"
+        state: absent
+      with_items:
+        - "{{ venv_build_host_wheel_path }}"
+        - "{{ venv_build_host_requirements_path }}/{{ venv_install_destination_path | basename }}-requirements.txt"
+        - "{{ venv_build_host_requirements_path }}/{{ venv_install_destination_path | basename }}-global-constraints.txt"
+        - "{{ venv_build_host_requirements_path }}/{{ venv_install_destination_path | basename }}-source-constraints.txt"
+        - "{{ venv_build_host_requirements_path }}/{{ venv_install_destination_path | basename }}-constraints.txt"
+      when:
+        - venv_rebuild | bool
+
+    - name: Create wheel directory on the build host
+      file:
+        path: "{{ venv_build_host_wheel_path }}"
+        state: directory
+
+    - name: Create requirements/constraints file directory on the build host
+      file:
+        path: "{{ venv_build_host_requirements_path }}"
+        state: directory
+
+    # NOTE(odyssey4me):
+    # Not using --always-copy for CentOS/SuSE due to
+    # https://github.com/pypa/virtualenv/issues/565
+    - name: Create the wheel build virtualenv (if it does not exist)
+      command: >-
+        virtualenv
+        {{ _venv_create_extra_options }}
+        --python={{ venv_python_executable }}
+        {{ (ansible_pkg_mgr == 'apt') | ternary('--always-copy', '') }}
+        {{ venv_build_host_venv_path }}
+      args:
+        creates: "{{ venv_build_host_venv_path }}/bin/activate"
+
+    - name: Build requirements file for the venv
+      copy:
+        dest: "{{ venv_build_host_requirements_path }}/{{ venv_install_destination_path | basename }}-requirements.txt"
+        content: |
+          {% for item in (venv_default_pip_packages | union(venv_pip_packages)) | sort %}
+          {{ item }}
+          {% endfor %}
+      register: _requirement_file
+
+    - name: Build global constraints file for the venv
+      copy:
+        dest: "{{ venv_build_host_requirements_path }}/{{ venv_install_destination_path | basename }}-global-constraints.txt"
+        content: |
+          {% for item in venv_build_global_constraints %}
+          {{ item }}
+          {% endfor %}
+      register: _global_constraint_file
+
+    - name: Build constraints file for the venv
+      copy:
+        dest: "{{ venv_build_host_requirements_path }}/{{ venv_install_destination_path | basename }}-source-constraints.txt"
+        content: |
+          {% for item in venv_build_constraints %}
+          {{ item }}
+          {% endfor %}
+      register: _constraint_file
+
+    - name: Upgrade the wheel build virtualenv pip/setuptools/wheel to the versions we want
+      pip:
+        name:
+          - pip
+          - setuptools
+          - wheel
+        state: "{{ venv_pip_package_state }}"
+        virtualenv: "{{ venv_build_host_venv_path }}"
+        extra_args: >-
+          --constraint {{ venv_build_host_requirements_path }}/{{ venv_install_destination_path | basename }}-global-constraints.txt
+          --constraint {{ venv_build_host_requirements_path }}/{{ venv_install_destination_path | basename }}-source-constraints.txt
+          --find-links {{ venv_build_host_wheel_path }}/
+          --log /var/log/python_venv_build.log
+          {{ venv_pip_build_args }}
+      environment:
+        PIP_CONFIG_FILE: "{{ (venv_pip_upgrade_noconf | bool) | ternary('/dev/null', '') }}"
+      register: _update_virtualenv_packages
+      until: _update_virtualenv_packages is success
+      retries: 5
+      delay: 2
+
+    - name: Build wheels and constraints file
+      when: (_requirement_file is changed) or (_global_constraint_file is changed) or (_constraint_file is changed)
+      block:
+        - name: Clean up temporary wheel build path
+          file:
+            path: "/tmp/{{ venv_install_destination_path | basename }}"
+            state: absent
+
+        - name: Build wheels for the packages to be installed into the venv
+          command: >-
+            {{  venv_build_host_venv_path }}/bin/pip wheel
+            --requirement {{ venv_build_host_requirements_path }}/{{ venv_install_destination_path | basename }}-requirements.txt
+            --constraint {{ venv_build_host_requirements_path }}/{{ venv_install_destination_path | basename }}-global-constraints.txt
+            --constraint {{ venv_build_host_requirements_path }}/{{ venv_install_destination_path | basename }}-source-constraints.txt
+            --wheel-dir /tmp/{{ venv_install_destination_path | basename }}/
+            --find-links {{ venv_build_host_wheel_path }}/
+            --log /var/log/python_wheel_build.log
+            {{ venv_pip_build_args }}
+          register: _build_python_wheels
+          until: _build_python_wheels is success
+          retries: 5
+          delay: 2
+
+        - name: Index built wheels
+          find:
+            paths: "/tmp/{{ venv_install_destination_path | basename }}"
+            file_type: file
+          register: _built_wheels
+
+        - name: Move built wheels to common wheel path
+          shell: >-
+            mv /tmp/{{ venv_install_destination_path | basename }}/* {{ venv_build_host_wheel_path }}/
+          args:
+            executable: /bin/bash
+
+        - name: Build constraints file for installation purposes
+          copy:
+            content: |
+              {% for file_data in _built_wheels['files'] %}
+              {%   set file_name = file_data['path'] | basename %}
+              {{ file_name.split('-')[0] | lower }}=={{ (file_name.split('-')[1].split('_')) | join('.post') | lower }}
+              {% endfor %}
+            dest: "{{ venv_build_host_requirements_path }}/{{ venv_install_destination_path | basename }}-constraints.txt"
+
+    - name: Slurp up the constraints file for later re-deployment
+      slurp:
+        src: "{{ venv_build_host_requirements_path }}/{{ venv_install_destination_path | basename }}-constraints.txt"
+      register: _constraints_file_slurp
+      tags:
+        - install

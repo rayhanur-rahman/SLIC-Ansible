@@ -1,0 +1,14 @@
+---
+#
+# Vars for collectd-generic
+#
+
+collectd_packages:
+  baremetal:
+    - collectd
+    - collectd-turbostat
+  guest:
+    - collectd
+  graphite:
+    - collectd
+    - collectd-turbostat

@@ -1,0 +1,161 @@
+---
+# Copyright 2016, Logan Vig <logan2211@gmail.com>
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- name: Install ceph mons
+  hosts: ceph-mon
+  user: root
+  vars_files:
+    - "defaults/{{ install_method }}_install.yml"
+  pre_tasks:
+
+    - import_tasks: common-tasks/ceph-server.yml
+
+    - name: Create systemd service directory
+      file:
+        path: "/etc/systemd/system/ceph-mon@.service.d/"
+        state: directory
+        group: "root"
+        owner: "root"
+        mode: "0755"
+      when:
+        - ansible_pkg_mgr in ['yum', 'dnf']
+        - ansible_service_mgr == 'systemd'
+
+    - name: Add systemd override for PrivateDevices
+      copy:
+        dest: "/etc/systemd/system/ceph-mon@.service.d/ceph-mon-systemd-overrides.conf"
+        content: |
+          [Service]
+          PrivateDevices=false
+      when:
+        - ansible_pkg_mgr in ['yum', 'dnf']
+        - ansible_service_mgr == 'systemd'
+
+    # Set the priority of the ceph community apt repo either above or below that of UCA or distro sources
+    - name: Set apt package pins
+      include_role:
+        name: apt_package_pinning
+      vars:
+        apt_package_pinning_file_name: "ceph_community_pin.pref"
+        apt_package_pinning_priority: "{{ (ceph_repository == 'community') | ternary(1000, 100) }}"
+        apt_pinned_packages: [{ package: '*', release: 'ceph.com' }]
+      when:
+        - ansible_pkg_mgr == 'apt'
+
+  roles:
+    - role: ceph-defaults
+      tags:
+        - skip_ansible_lint
+    - role: ceph-facts
+      tags:
+        - skip_ansible_lint
+    - role: ceph-handler
+      tags:
+        - skip_ansible_lint
+    - role: ceph-common
+      tags:
+        - skip_ansible_lint
+    - role: ceph-config
+      tags:
+        - skip_ansible_lint
+    - role: ceph-mon
+      tags:
+        - skip_ansible_lint
+    - role: ceph-mgr
+      tags:
+        - skip_ansible_lint
+    - role: system_crontab_coordination
+      tags:
+        - crontab
+
+  post_tasks:
+    - include_tasks: "common-tasks/rsyslog-client.yml"
+      vars:
+        rsyslog_client_log_rotate_file: ceph_log_rotate
+        rsyslog_client_log_dir: "/var/log/ceph"
+        rsyslog_client_config_name: "99-ceph-rsyslog-client.conf"
+
+  vars:
+    ansible_python_interpreter: "/usr/bin/python"
+  environment: "{{ deployment_environment_variables | default({}) }}"
+  tags:
+    - ceph
+    - ceph-mon
+
+- name: Install ceph osds
+  hosts: ceph-osd
+  user: root
+  vars_files:
+    - "defaults/{{ install_method }}_install.yml"
+  pre_tasks:
+
+    - import_tasks: common-tasks/ceph-server.yml
+
+    - name: Gather ceph-mon facts
+      action: setup
+      delegate_to: "{{ item }}"
+      delegate_facts: yes
+      with_items: "{{ groups[mon_group_name] }}"
+      when:
+        - inventory_hostname == ansible_play_hosts[0]
+      tags:
+        - ceph-osd
+        - ceph-mon-facts
+
+    # Set the priority of the ceph community apt repo either above or below that of UCA or distro sources
+    - name: Set apt package pins
+      include_role:
+        name: apt_package_pinning
+      vars:
+        apt_package_pinning_file_name: "ceph_community_pin.pref"
+        apt_package_pinning_priority: "{{ (ceph_repository == 'community') | ternary(1000, 100) }}"
+        apt_pinned_packages: [{ package: '*', release: 'ceph.com' }]
+      when:
+        - ansible_pkg_mgr == 'apt'
+
+  roles:
+    - role: ceph-defaults
+      tags:
+        - skip_ansible_lint
+    - role: ceph-facts
+      tags:
+        - skip_ansible_lint
+    - role: ceph-handler
+      tags:
+        - skip_ansible_lint
+    - role: ceph-common
+      tags:
+        - skip_ansible_lint
+    - role: ceph-config
+      tags:
+        - skip_ansible_lint
+    - role: ceph-osd
+      tags:
+        - skip_ansible_lint
+    - role: system_crontab_coordination
+      tags:
+        - crontab
+
+  post_tasks:
+    - include_tasks: "common-tasks/rsyslog-client.yml"
+      vars:
+        rsyslog_client_log_rotate_file: ceph_log_rotate
+        rsyslog_client_log_dir: "/var/log/ceph"
+        rsyslog_client_config_name: "99-ceph-rsyslog-client.conf"
+
+  environment: "{{ deployment_environment_variables | default({}) }}"
+  tags:
+    - ceph
+    - ceph-osd

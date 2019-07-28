@@ -1,0 +1,158 @@
+# Copyright (c) 2017 Mirantis Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Create a VM and volume for it, save its MAC address
+---
+# NOTE(pas-ha) item here refers to name of the test vm
+- set_fact:
+    vm_name: "{{ item }}"
+    vm_log_file: "{{ test_vm_logdir }}/{{ item }}_console.log"
+    vm_host_group: "{{ test_vm_default_groups }}"
+
+- set_fact:
+    vm_host_group: "{{ test_vm_default_groups | union(test_vm_groups[vm_name]) }}"
+  when: test_vm_groups[vm_name] is defined
+
+- name: set prealloc arg for Debian
+  set_fact:
+    prealloc: "--prealloc-metadata"
+  when:
+    - ansible_os_family == 'Debian'
+    - test_vm_libvirt_uri == 'qemu:///system'
+
+- name: list info on pools
+  virt_pool:
+    command: facts
+    uri: "{{ test_vm_libvirt_uri }}"
+
+- name: list existing vms
+  virt:
+    command: list_vms
+  register: existing_vms
+
+# NOTE(pas-ha) wrapping in block/rescue to have diagnostic output, requires Ansible>=2
+- block:
+  # NOTE(pas-ha) Ansible still lacks modules to operate on libvirt volumes
+  # NOTE(pas-ha) adding extra 1G for disk size to accomodate for partition table / configdrive
+  - name: create volume for vm
+    command: >
+      virsh --connect {{ test_vm_libvirt_uri }}
+      vol-create-as {{ test_vm_storage_pool }} {{ vm_name }}.qcow2
+      {{ test_vm_disk_gib | int + 1 }}G
+      --format qcow2 {{ prealloc|default("") }}
+    when: (vm_name + '.qcow2') not in ansible_libvirt_pools[test_vm_storage_pool].volumes
+
+  - name: set path to the volume created
+    set_fact:
+      vm_volume_path: "{{ ansible_libvirt_pools[test_vm_storage_pool].path }}/{{ vm_name }}.qcow2"
+
+  - name: pre-touch the vm volume
+    file:
+      state: touch
+      path: "{{ vm_volume_path }}"
+    when: test_vm_libvirt_uri == 'qemu:///system'
+
+  # NOTE(TheJulia): CentOS default installs with an XFS root, and chattr
+  # fails to set +C on XFS.  This could be more elegant, however the use
+  # case is for CI testing.
+  - name: set copy-on-write for volume on non-CentOS systems
+    command: chattr +C {{ vm_volume_path }}
+    ignore_errors: yes
+    when:
+      - ansible_distribution != 'CentOS'
+      - test_vm_libvirt_uri == 'qemu:///system'
+
+  - name: create_vm
+    virt:
+      command: define
+      name: "{{ vm_name }}"
+      uri: "{{ test_vm_libvirt_uri }}"
+      xml: "{{ lookup('template', 'testvm.xml.j2') }}"
+
+  rescue:
+    - name: "Execute `dmesg` to collect debugging output should VM creation fail."
+      command: dmesg
+    - name: >
+        "Execute `virsh capabilities` to collect debugging output
+        should VM creation fail."
+      command: virsh capabilities
+    - name: "Abort due to failed VM creation"
+      fail: >
+        msg="VM creation step failed, please review dmesg
+        output for additional details"
+  when: vm_name not in existing_vms.list_vms
+
+# TODO(pas-ha) replace 'command: vbmc ...' tasks
+# with a custom Ansible module using vbmc Python API
+- name: get list of nodes from virtualbmc
+  command: vbmc list
+  register: vbmc_list
+  environment: "{{ bifrost_venv_env if enable_venv else {} }}"
+
+# NOTE(NobodyCam): Space at the end of the find clause is required for proper matching.
+- name: delete vm from virtualbmc if it is there
+  command: vbmc delete {{ vm_name }}
+  environment: "{{ bifrost_venv_env if enable_venv else {} }}"
+  when: vbmc_list.stdout.find(vm_name) != -1
+
+- set_fact:
+    virtual_ipmi_port: "{{ (test_vm_ipmi_port_start|default(623) | int ) + (testvm_json_data | length) }}"
+
+- name: plug vm into vbmc
+  command: vbmc add {{ vm_name }} --libvirt-uri {{ test_vm_libvirt_uri }} --port {{ virtual_ipmi_port }}
+  environment: "{{ bifrost_venv_env if enable_venv else {} }}"
+
+- name: start virtualbmc
+  command: vbmc start {{ vm_name }}
+  environment: "{{ bifrost_venv_env if enable_venv else {} }}"
+
+- name: get XML of the vm
+  virt:
+    name: "{{ vm_name }}"
+    command: get_xml
+  register: testvm_xml
+
+# NOTE(pas-ha) relies on our XML template for VM that defines a single NIC
+- name: get MAC from vm XML
+  set_fact:
+    vm_mac: "{{ (testvm_xml.get_xml | regex_findall(\"<mac address='.*'/>\") | first).split('=') | last | regex_replace(\"['/>]\", '') }}"
+
+# NOTE(pas-ha) using default username and password set by virtualbmc - "admin" and "password" respectively
+# see vbmc add --help
+- name: set the json entry for vm
+  set_fact:
+    testvm_data:
+      name: "{{ vm_name }}"
+      uuid: "{{ vm_name | to_uuid }}"
+      host_groups: "{{ vm_host_group }}"
+      driver: "{{ test_vm_node_driver|default('ipmi') }}"
+      driver_info:
+        power:
+          ipmi_address: "192.168.122.1"
+          ipmi_port: "{{ virtual_ipmi_port }}"
+          ipmi_username: "admin"
+          ipmi_password: "password"
+      nics:
+        - mac: "{{ vm_mac }}"
+      ansible_ssh_host: "192.168.122.{{ testvm_json_data | length + 2 }}"
+      ipv4_address: "192.168.122.{{ testvm_json_data | length + 2 }}"
+      properties:
+        cpu_arch: "{{ test_vm_arch }}"
+        ram: "{{ test_vm_memory_size }}"
+        cpus: "{{ test_vm_cpu_count }}"
+        disk_size: "{{ test_vm_disk_gib }}"
+
+- name: add created vm info
+  set_fact:
+    testvm_json_data: "{{ testvm_json_data | combine({vm_name: testvm_data}) }}"

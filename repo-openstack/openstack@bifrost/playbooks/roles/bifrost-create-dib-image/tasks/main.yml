@@ -1,0 +1,155 @@
+# Copyright (c) 2015 Hewlett-Packard Development Company, L.P.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+---
+- import_role:
+    name: venv_python_path
+- name: Ensure required packages are installed
+  package:
+    name: "{{ dib_host_required_packages }}"
+    state: present
+  environment: "{{ venv }}"
+# If attempting to utilize a base Ubuntu image, diskimage-builder
+# is the recommended, and default path.
+- name: "Test if image is present"
+  stat: path={{ dib_imagename }}
+  register: test_image_present
+- name: "Test if image is present - {{ dib_imagename }}.{{ dib_imagetype | default('qcow2') }}"
+  stat: path={{ dib_imagename }}.{{ dib_imagetype | default('qcow2') }}
+  register: test_image_dib_present
+  when: test_image_present.stat.exists == false
+  # Note(TheJulia): We need to explicitly test for initramfs in the case
+  # that the ironic-agent element is used to build the image.
+- name: "Test if image is present - {{ dib_imagename }}.initramfs"
+  stat: path={{ dib_imagename }}.initramfs
+  register: test_image_initramfs_present
+  when: test_image_present.stat.exists == false and test_image_dib_present.stat.exists == false
+- name: "Build tracing (-x) option for disk-image-create"
+  set_fact:
+    dib_trace_arg: "-x"
+  when: dib_trace == true
+- name: "Build uncompressed (-u) option for disk-image-create"
+  set_fact:
+    dib_uncompressed_arg: "-u"
+  when: dib_uncompressed == true
+- name: "Build clear environment (-c) option for disk-image-create"
+  set_fact:
+    dib_clearenv_arg: "-c"
+  when: dib_clearenv == true
+- name: "Build no tmpfs (--no-tmpfs) option for disk-image-create"
+  set_fact:
+    dib_notmpfs_arg: "--no-tmpfs"
+  when: dib_notmpfs == true
+- name: "Build offline (--offline) option for disk-image-create"
+  set_fact:
+    dib_offline_arg: "--offline"
+  when: dib_offline == true
+- name: "Build skip default base element (-n) option for disk-image-create"
+  set_fact:
+    dib_skipbase_arg: "-n"
+  when: dib_skipbase == true
+- name: "Build architecture (-a) option for disk-image-create"
+  set_fact:
+    dib_arch_arg: "-a {{dib_arch}}"
+  when: dib_arch is defined
+- name: "Build image name (-o) option for disk-image-create"
+  set_fact:
+    dib_imagename_arg: "-o {{dib_imagename}}"
+  when: dib_imagename is defined
+- name: "Build image type (-t) option for disk-image-create"
+  set_fact:
+    dib_imagetype_arg: "-t {{dib_imagetype}}"
+  when: dib_imagetype is defined
+- name: "Build image size (--image-size) option for disk-image-create"
+  set_fact:
+    dib_imagesize_arg: "--image-size {{dib_imagesize}}"
+  when: dib_imagesize is defined
+- name: "Build image cache (--image-cache) option for disk-image-create"
+  set_fact:
+    dib_imagecache_arg: "--image-cache {{dib_imagecache}}"
+  when: dib_imagecache is defined
+- name: "Build max online resize (--max-online-resize) option for disk-image-create"
+  set_fact:
+    dib_maxresize_arg: "--max-online-resize {{dib_maxresize}}"
+  when: dib_maxresize is defined
+- name: "Build minimum tmpfs size (--min-tmpfs) option for disk-image-create"
+  set_fact:
+    dib_mintmpfs_arg: "--min-tmpfs {{dib_mintmpfs}}"
+  when: dib_mintmpfs is defined
+- name: "Build mkfs options (--mkfs-options) option for disk-image-create"
+  set_fact:
+    dib_mkfsfopts_arg: "-mkfs-options {{dib_mkfsopts}}"
+  when: dib_mkfsopts is defined
+- name: "Build qemu image options (--qemu-img-options) option for disk-image-create"
+  set_fact:
+    dib_qemuopts_arg: "--qemu-img-options {{dib_qemuopts}}"
+  when: dib_qemuopts is defined
+- name: "Build root label (--root-label) option for disk-image-create"
+  set_fact:
+    dib_rootlabel_arg: "--root-label {{dib_rootlabel}}"
+  when: dib_rootlabel is defined
+- name: "Build ramdisk element (--ramdisk-element) option for disk-image-create"
+  set_fact:
+    dib_rdelement_arg: "--ramdisk-element {{dib_rdelement}}"
+  when: dib_rdelement is defined
+- name: "Build install type (--install-type) option for disk-image-create"
+  set_fact:
+    dib_installtype_arg: "-t {{dib_installtype}}"
+  when: dib_installtype is defined
+- name: "Build packages (-p) option for disk-image-create"
+  set_fact:
+    dib_packages_arg: "-p {{dib_packages}}"
+  when: dib_packages is defined and dib_packages != ""
+- name: "Set default of Debian Stretch if building debian and not explicitly set, overwride with dib_os_release setting"
+  set_fact:
+    dib_os_release: "stretch"
+  when: dib_os_element == "debian" and dib_os_release is undefined
+- name: "Initialize the DIB environment variables fact"
+  set_fact:
+    dib_env_vars_final: "{{dib_env_vars}}"
+- name: "Set the DIB_RELEASE environment variable if set"
+  set_fact:
+    dib_env_vars_final: "{{dib_env_vars_final | combine({'DIB_RELEASE':dib_os_release}) }}"
+  when: dib_os_release is defined
+- name: "Set partitioning information if set"
+  slurp:
+    src: "{{ partitioning_file }}"
+  register: partition_info
+  when: partitioning_file is defined
+- name: "Set partitioning information string if set"
+  set_fact:
+    dib_partitioning: "{{ partition_info['content'] | b64decode }}"
+  when: partition_info is defined and 'content' in partition_info
+- name: "Build argument list"
+  set_fact:
+    dib_arglist: "{{dib_trace_arg|default('')}} {{dib_uncompressed_arg|default('')}} {{dib_clearenv_arg|default('')}} {{dib_notmpfs_arg|default('')}} {{dib_offline_arg|default('')}} {{dib_skipbase_arg|default('')}} {{dib_arch_arg|default('')}} {{dib_imagename_arg|default('')}} {{dib_imagetype_arg|default('')}} {{dib_imagesize_arg|default('')}} {{dib_imagecache_arg|default('')}} {{dib_maxresize_arg|default('')}} {{dib_mintmpfs_arg|default('')}} {{dib_mkfsopts_arg|default('')}} {{dib_qemuopts_arg|default('')}} {{dib_rootlabel_arg|default('')}} {{dib_rdelement_arg|default('')}} {{dib_installtype_arg|default('')}} {{dib_packages_arg|default('')}} {{dib_os_element}} {{dib_elements|default('')}}"
+- name: "Initiate image build"
+  command: disk-image-create {{dib_arglist}}
+  environment: "{{ dib_env_vars_final | combine(bifrost_venv_env if enable_venv|bool else {}) | combine({'DIB_BLOCK_DEVICE_CONFIG': dib_partitioning} if dib_partitioning is defined and dib_partitioning|length > 0 else {}) }}"
+  when: build_ramdisk | bool == false and test_image_present.stat.exists == false and test_image_dib_present.stat.exists == false and test_image_initramfs_present.stat.exists == false
+- name: "Initiate ramdisk build"
+  command: ramdisk-image-create {{dib_arglist}}
+  environment: "{{ dib_env_vars_final | combine(bifrost_venv_env if enable_venv|bool else {}) }}"
+  when: build_ramdisk | bool == true and test_image_present.stat.exists == false and test_image_dib_present.stat.exists == false and test_image_initramfs_present.stat.exists == false
+- name: "Update permission of generated image"
+  file:
+    path: "{{ http_boot_folder }}"
+    mode: u=rwX,g=rX,o=rX
+    recurse: yes
+    state: directory
+  when: http_boot_folder is defined and http_boot_folder != ''
+- name: "Restore proper context on created data for http_boot"
+  command: restorecon -R {{ http_boot_folder }}
+  when: (ansible_os_family == 'RedHat' or ansible_os_family == 'Suse') and
+         ansible_selinux.status == 'enabled' and ansible_selinux.mode == "enforcing"

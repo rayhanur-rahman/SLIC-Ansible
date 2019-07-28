@@ -1,0 +1,23 @@
+---
+galaxy_info:
+  author: Ironic Developers
+  description: Create VM nodes for local Bifrost testing.
+  company: OpenStack
+  license: Apache
+  min_ansible_version: 1.9
+  platforms:
+  - name: EL
+    versions:
+    - 7
+  - name: Debian
+    versions:
+    - jessie
+    - stretch
+  - name: Ubuntu
+    versions:
+    - xenial
+    - bionic
+  categories:
+  - cloud
+  - cloud:openstack
+dependencies: []

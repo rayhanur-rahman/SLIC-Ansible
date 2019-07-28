@@ -1,0 +1,108 @@
+- job:
+    name: bifrost-base
+    parent: legacy-base
+    irrelevant-files:
+      - ^.*\.rst$
+      - ^bifrost/tests/.*$
+      - ^doc/.*$
+      - ^releasenotes/.*$
+      - ^setup.cfg$
+      - ^test-requirements.txt$
+      - ^tools/.*$
+      - ^tox.ini$
+    required-projects:
+      - openstack/bifrost
+      - openstack/ironic
+      - openstack/ironic-inspector
+      - openstack/openstacksdk
+      - openstack/python-ironic-inspector-client
+      - openstack/python-ironicclient
+      - openstack/requirements
+      - openstack/shade
+      - openstack/sushy
+
+- job:
+    name: bifrost-integration
+    parent: bifrost-base
+    required-projects:
+      # this is in addition to bifrost-base's required-projects
+      - openstack/diskimage-builder
+
+- job:
+    name: bifrost-integration-dhcp
+    parent: bifrost-integration
+    run: playbooks/legacy/bifrost-integration-dhcp/run.yaml
+    post-run: playbooks/legacy/bifrost-integration-dhcp/post.yaml
+    timeout: 7200
+
+- job:
+    name: bifrost-integration-dhcp-ubuntu-xenial
+    parent: bifrost-integration-dhcp
+    nodeset: ubuntu-xenial
+
+- job:
+    name: bifrost-integration-dhcp-centos-7
+    parent: bifrost-integration-dhcp
+    nodeset: centos-7
+
+- job:
+    name: bifrost-integration-dhcp-opensuse-15
+    parent: bifrost-integration-dhcp
+    nodeset: opensuse-150
+    vars:
+      use_venv: true
+
+- job:
+    name: bifrost-integration-dibipa-debian
+    parent: bifrost-integration
+    run: playbooks/legacy/bifrost-integration-dibipa-debian/run.yaml
+    post-run: playbooks/legacy/bifrost-integration-dibipa-debian/post.yaml
+    timeout: 7200
+
+- job:
+    name: bifrost-integration-dibipa-debian-ubuntu-xenial
+    parent: bifrost-integration-dibipa-debian
+    nodeset: ubuntu-xenial
+
+- job:
+    name: bifrost-integration-dibipa-debian-centos-7
+    parent: bifrost-integration-dibipa-debian
+    nodeset: centos-7
+
+- job:
+    name: bifrost-integration-dibipa-debian-opensuse-15
+    parent: bifrost-integration-dibipa-debian
+    nodeset: opensuse-150
+    vars:
+      use_venv: true
+
+- job:
+    name: bifrost-integration-tinyipa
+    parent: bifrost-base
+    run: playbooks/legacy/bifrost-integration-tinyipa/run.yaml
+    post-run: playbooks/legacy/bifrost-integration-tinyipa/post.yaml
+    timeout: 3600
+
+- job:
+    name: bifrost-integration-tinyipa-ubuntu-xenial
+    parent: bifrost-integration-tinyipa
+    nodeset: ubuntu-xenial
+
+- job:
+    name: bifrost-integration-tinyipa-keystone-ubuntu-xenial
+    parent: bifrost-integration-tinyipa
+    nodeset: ubuntu-xenial
+    vars:
+      use_keystone: true
+
+- job:
+    name: bifrost-integration-tinyipa-centos-7
+    parent: bifrost-integration-tinyipa
+    nodeset: centos-7
+
+- job:
+    name: bifrost-integration-tinyipa-opensuse-15
+    parent: bifrost-integration-tinyipa
+    nodeset: opensuse-150
+    vars:
+      use_venv: true

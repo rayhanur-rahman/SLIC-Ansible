@@ -1,0 +1,5 @@
+---
+- name: Template Browbeat configuration
+  template:
+    "src={{ browbeat_config_file }} \
+     dest={{ ansible_env.HOME }}/browbeat/browbeat-config.yaml"
