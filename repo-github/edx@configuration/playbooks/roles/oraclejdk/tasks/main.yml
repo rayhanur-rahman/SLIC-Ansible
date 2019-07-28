@@ -1,0 +1,62 @@
+---
+# oraclejdk
+#
+# Dependencies:
+#
+#   * common
+#
+# Example play:
+#
+#   roles:
+#   - common
+#   - oraclejdk
+
+- name: Install debian needed pkgs
+  apt:
+    name: "{{ item }}"
+  with_items: "{{ oraclejdk_debian_pkgs }}"
+
+- name: Download Oracle Java
+  get_url:
+    url: "{{ oraclejdk_url }}"
+    headers: 'Cookie:oraclelicense=accept-securebackup-cookie'
+    dest: "/var/tmp/{{ oraclejdk_file }}"
+
+- name: Create jvm dir
+  file:
+    path: /usr/lib/jvm
+    state: directory
+    owner: root
+    group: root
+
+- name: Untar Oracle Java
+  unarchive:
+    src: "/var/tmp/{{ oraclejdk_file }}"
+    dest: "/usr/lib/jvm"
+    copy: no
+
+- name: Create symlink expected by elasticsearch
+  file:
+    src: "/usr/lib/jvm/{{ oraclejdk_base }}"
+    dest: "{{ oraclejdk_link }}"
+    state: link
+    force: yes
+
+- name: Update alternatives java
+  alternatives:
+    name: "{{ item }}"
+    link: "/usr/bin/{{ item }}"
+    path: "/usr/lib/jvm/{{ oraclejdk_base }}/bin/{{ item }}"
+  with_items:
+    - java
+    - javac
+    - javaws
+    - jarsigner
+
+- name: Add JAVA_HOME for Oracle Java
+  template:
+    src: "java.sh.j2"
+    dest: "/etc/profile.d/java.sh"
+    owner: root
+    group: root
+    mode: "0755"

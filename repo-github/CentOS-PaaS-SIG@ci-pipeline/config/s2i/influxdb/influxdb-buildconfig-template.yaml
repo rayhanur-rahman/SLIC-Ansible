@@ -1,0 +1,217 @@
+apiVersion: v1
+kind: Template
+metadata:
+  creationTimestamp: null
+  name: influxdb
+  annotations:
+    openshift.io/display-name: influxdb
+    description: |-
+              contra influxdb template
+    iconClass: icon-jenkins
+    tags: instant-app,influxdb
+    template.openshift.io/long-description: InfluxDB container
+    template.openshift.io/provider-display-name: Red Hat, Inc.
+    template.openshift.io/documentation-url: https://docs.openshift.org/latest
+    template.openshift.io/support-url: https://access.redhat.com
+parameters:
+- name: STORAGE_SIZE
+  value: 10Gi
+  description: The size of the persistent storage for Influxdb
+- name: REPO_URL
+  value: https://github.com/CentOS-PaaS-SIG/ci-pipeline.git
+  description: The dockerfile repo url
+- name: REPO_CONTEXTDIR
+  description: The sub-directory inside the repository.
+  value: config/Dockerfiles/influxdb
+- name: REPO_REF
+  description: The git ref or tag to use for customization.
+  value: master
+- name: INFLUXDB_BINARY
+  value: influxdb-1.6.2.x86_64.rpm
+  description: The influx rpm
+- name: INFLUXDB_ADMIN_USER
+  value: contra
+  description: The influxdb admin user
+- name: INFLUXDB_ADMIN_PASSWORD
+  value: ""
+  description: The admin password. Leave empty for a random password
+- name: INFLUXDB_DB
+  value: db0
+  description: The initial db that will be created
+- name: NAMESPACE
+  value: contra-sample-project
+  description: The imageStream namespace
+objects:
+- apiVersion: v1
+  kind: ImageStream
+  metadata:
+    annotations:
+    labels:
+    name: influxdb
+  spec: {}
+- apiVersion: v1
+  kind: BuildConfig
+  metadata:
+    name: influxdb
+  spec:
+    output:
+      to:
+        kind: ImageStreamTag
+        name: influxdb:latest
+    resources: {}
+    source:
+      contextDir: ${REPO_CONTEXTDIR}
+      git:
+        ref: ${REPO_REF}
+        uri: ${REPO_URL}
+      type: Git
+    strategy:
+      dockerStrategy:
+        env:
+          - name: INFLUXDB_BINARY
+            value: ${INFLUXDB_BINARY}
+      type: Docker
+    triggers:
+    - type: ConfigChange
+- kind: PersistentVolumeClaim
+  apiVersion: v1
+  metadata:
+    name: influxdb-data
+  spec:
+    accessModes:
+      - ReadWriteOnce
+    resources:
+      requests:
+        storage: ${STORAGE_SIZE}
+- kind: Route
+  apiVersion: v1
+  metadata:
+    labels:
+      route: influxdb
+    name: influxdb
+    creationTimestamp:
+  spec:
+    port:
+      targetPort: api-http
+    to:
+      kind: Service
+      name: influxdb
+    tls:
+      termination: edge
+      insecureEdgeTerminationPolicy: Redirect
+- apiVersion: v1
+  kind: Service
+  metadata:
+    creationTimestamp: null
+    labels:
+      metrics: influxdb
+    name: influxdb
+  spec:
+    ports:
+    - name: api-http
+      port: 8086
+      protocol: TCP
+      targetPort: 8086
+    - name: api-udp
+      port: 8087
+      protocol: UDP
+      targetPort: 8087
+    - name: admin-http
+      port: 8083
+      protocol: TCP
+      targetPort: 8083
+    selector:
+      metrics: influxdb
+    sessionAffinity: None
+    type: ClusterIP
+  status:
+    loadBalancer: {}
+- apiVersion: v1
+  kind: DeploymentConfig
+  metadata:
+    creationTimestamp: null
+    labels:
+      metrics: influxdb
+    name: influxdb
+  spec:
+    strategy:
+        type: Recreate
+    triggers:
+    - type: ImageChange
+      imageChangeParams:
+        automatic: true
+        containerNames:
+        - influxdb
+        from:
+          kind: ImageStreamTag
+          name: influxdb:latest
+          namespace: ${NAMESPACE}
+          lastTriggeredImage: ''
+    - type: ConfigChange
+    replicas: 1
+    selector:
+      metrics: influxdb
+    template:
+      metadata:
+        creationTimestamp: null
+        labels:
+          metrics: influxdb
+      spec:
+        containers:
+        - env:
+          - name: INFLUXDB_UDP_ENABLED
+            value: "true"
+          - name: INFLUXDB_UDP_BIND_ADDRESS
+            value: :8087
+          - name: INFLUXDB_UDP_DATABASE
+            value: udp
+          - name: INFLUXDB_HTTP_AUTH_ENABLED
+            value: "true"
+          - name: INFLUXDB_ADMIN_USER
+            value: ${INFLUXDB_ADMIN_USER}
+          - name: INFLUXDB_ADMIN_PASSWORD
+            value: ${INFLUXDB_ADMIN_PASSWORD}
+          - name: INFLUXDB_DB
+            value: ${INFLUXDB_DB}
+          image: influxdb:stable
+          imagePullPolicy: Always
+          name: influxdb
+          livenessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /ping
+              port: 8086
+              scheme: HTTP
+            initialDelaySeconds: 2
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 1
+          readinessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /ping
+              port: 8086
+              scheme: HTTP
+            initialDelaySeconds: 2
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 1
+          ports:
+          - containerPort: 8086
+            protocol: TCP
+          - containerPort: 8087
+            protocol: UDP
+          - containerPort: 8083
+            protocol: TCP
+          volumeMounts:
+          - mountPath: /var/lib/influxdb
+            name: influxdb-data
+        dnsPolicy: ClusterFirst
+        restartPolicy: Always
+        volumes:
+        - name: influxdb-data
+          persistentVolumeClaim:
+            claimName: influxdb-data
+  status: {}
+labels:
+  template: influxdb

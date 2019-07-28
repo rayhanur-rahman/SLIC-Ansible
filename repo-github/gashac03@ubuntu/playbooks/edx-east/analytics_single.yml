@@ -1,0 +1,19 @@
+- name: Deploy all analytics services to a single node
+  hosts: all
+  sudo: True
+  gather_facts: True
+  vars:
+    migrate_db: "yes"
+    disable_edx_services: false
+    ENABLE_DATADOG: False
+    ENABLE_SPLUNKFORWARDER: False
+    ENABLE_NEWRELIC: False
+  roles:
+    - mysql
+    - edxlocal
+    - analytics_api
+    - analytics_pipeline
+    - role: nginx
+      nginx_sites:
+        - insights
+    - insights

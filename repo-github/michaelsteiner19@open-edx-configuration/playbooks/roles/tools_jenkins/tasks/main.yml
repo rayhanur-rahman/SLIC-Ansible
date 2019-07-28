@@ -1,0 +1,21 @@
+---
+# The deadsnakes PPA is required to install python3.5 on Trusty.
+# Xenial comes with python3.5 installed.
+- name: add deadsnakes repository
+  apt_repository:
+    repo: "ppa:fkrull/deadsnakes"
+  when: ansible_distribution_release == 'trusty'
+  tags:
+    - install
+    - install:system-requirements
+
+- name: install python3.5
+  apt:
+    name: "{{ item }}"
+  with_items:
+    - python3.5
+    - python3.5-dev
+  when: ansible_distribution_release == 'trusty'
+  tags:
+    - install
+    - install:system-requirements

@@ -1,0 +1,35 @@
+---
+# Implementation adopted from https://github.com/ceph/ceph-cm-ansible/blob/master/roles/common/tasks/rhel-entitlements.yml
+
+- hosts: gluster_servers
+  become: true
+  gather_facts: no
+
+  tasks:
+  - name: Register with activation key, if activation key is provided
+    redhat_subscription: state=present activationkey="{{ activationkey }}" autosubscribe="{{ attach }}"
+    when: activationkey is defined and activationkey
+
+  - name: Register to subscription-manager with username and password
+    redhat_subscription: state=present username="{{ username }}" password="{{ password }}" autosubscribe="{{ attach }}"
+    when: ((username is defined and username) and (password is defined and password))
+
+  - name: Attach to Red Hat subscription pool
+    redhat_subscription: state=present pool_ids="{{ pool }}" username="{{ username }}" password="{{ password }}"
+    when: pool is defined
+
+  - name: Disable all rhsm repos
+    command: subscription-manager repos --disable=*
+    when: disable_repos is defined and disable_repos == "yes"
+
+  - name: Enable necessary rhsm repos
+    command: subscription-manager repos --enable {{ item }}
+    with_items: "{{ rhsm_repos }}"
+    when: rhsm_repos is defined and rhsm_repos
+
+  - name: Remove old apt-mirror repository definition.
+    file:
+      path: /etc/yum.repos.d/cd.repo
+      state: absent
+
+

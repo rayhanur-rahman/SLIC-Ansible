@@ -1,0 +1,22 @@
+---
+- name: Docker Image Pre-Pull
+  hosts: nodes
+  vars:
+    ose_tag: v3.9.15
+    images:
+      - ose-ansible
+      - ose-cluster-capacity
+      - ose-deployer
+      - ose-docker-builder
+      - ose-docker-registry
+      - ose-haproxy-router
+      - ose-pod
+      - ose
+      - node
+    registry_prefix: registry.access.redhat.com/openshift3/
+  tasks:
+    - docker_image:
+        name: "{{ registry_prefix }}{{ item }}"
+        tag: "{{ ose_tag }}"
+      with_items: "{{ images }}"
+...

@@ -1,0 +1,44 @@
+---
+
+# postfix_queue: Configure a local postfix server to forward mail to an
+# external SMTP server. This way postfix acts as an outgoing mail queue, and
+# web apps can send mail instantly, while still taking advantage of an
+# external SMTP service.
+#
+# The external service is assumed to use TLS.
+#
+# You must leave the edxapp role's EDXAPP_EMAIL_foo settings at their default
+# values in order for the postfix queue to be used.
+
+POSTFIX_QUEUE_EXTERNAL_SMTP_HOST: ''
+POSTFIX_QUEUE_EXTERNAL_SMTP_PORT: 587
+POSTFIX_QUEUE_EXTERNAL_SMTP_USER: ''
+POSTFIX_QUEUE_EXTERNAL_SMTP_PASSWORD: ''
+
+# Set this to content of sender_canonical_maps postfix configuration file (optional).
+# Example:
+# POSTFIX_QUEUE_SENDER_CANONICAL_MAPS: |-
+#   @internal @external.com
+#   someuser@example.com otheruser@myschool.org
+POSTFIX_QUEUE_SENDER_CANONICAL_MAPS: ''
+
+# Set this to content of header_checks postfix configuration file (optional).
+# Example:
+# POSTFIX_QUEUE_HEADER_CHECKS: |-
+#  /^From:(.*)$/   PREPEND Reply-To:$1
+#  /^Subject:.*spam/   DISCARD
+POSTFIX_QUEUE_HEADER_CHECKS: ''
+
+# Internal vars:
+
+postfix_queue_password_file: "/etc/postfix/sasl/passwd"
+postfix_queue_sender_canonical_maps_file: "/etc/postfix/sender_canonical_maps"
+postfix_queue_header_checks_file: "/etc/postfix/header_checks"
+
+postfix_queue_smtp_sasl_auth_enable: "yes"
+postfix_queue_smtp_sasl_password_maps: "hash:{{ postfix_queue_password_file }}"
+postfix_queue_smtp_sasl_mechanism_filter: ""
+postfix_queue_smtp_sasl_security_options: ""
+postfix_queue_relayhost: "{{ POSTFIX_QUEUE_EXTERNAL_SMTP_HOST }}:{{ POSTFIX_QUEUE_EXTERNAL_SMTP_PORT }}"
+postfix_queue_smtp_tls_security_level: "encrypt"
+postfix_queue_smtp_tls_mandatory_ciphers: "high"

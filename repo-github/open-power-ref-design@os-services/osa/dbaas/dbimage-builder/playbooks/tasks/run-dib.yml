@@ -1,0 +1,102 @@
+---
+# This task is invoked during the invocation of the playbook below:
+#
+# ansible-playbook -i host_file dbimage-make.yml -u ubuntu -c ssh
+#
+# This is invoked on the dibvm as ubuntu
+
+- name: Set dbVersion
+  set_fact:
+    dbVersion: "{{ hostvars[groups['deployer'][0]].dbVersion }}"
+  when: not dbVersion
+
+- name: Set srcPkgName
+  set_fact:
+    srcPkgName: "{{ hostvars[groups['deployer'][0]].srcPkgName }}"
+  when: srcPkgName is not defined
+
+- name: Set pkgDistroName
+  set_fact:
+    pkgDistroName: "{{ hostvars[groups['deployer'][0]].pkgDistroName }}"
+
+- debug: var=enterpriseEdition
+- debug: var=communityEdition
+- debug: var=dbName
+- debug: var=dbVersion
+- debug: var=pkg
+- debug: var=pkgDistroName
+- debug: var=srcPkgName
+- debug: var=ipAddrController
+- debug: var=cloudKey
+- debug: var=dbimageMyElements
+
+- name: Invoke diskimage-builder in the dibvm
+  shell: |
+    export PATH=$HOME/bin:$PATH
+    export DISTRO_NAME="{{ distroName }}"
+    export DIB_RELEASE="{{ dibRelease }}"
+    export DIB_MYDBSRCPKG="{{ srcPkgName }}"
+    export DIB_MYDBPKG="{{ pkgDistroName }}"
+    export DIB_MYDEBUG="{{ dibDebug }}"
+    export DBIMAGE_MYELEMENTS="{{ dbimageMyElements }}"
+    ARGS="-i {{ ipAddrDib }} -d {{ dbName }}"
+    if [ -n "{{ dbVersion }}" ]; then
+        ARGS="$ARGS -v {{ dbVersion }}"
+    fi
+    if [ -n "{{ pkg }}" ]; then
+        ARGS="$ARGS -p {{ pkg }}"
+    fi
+    if [ -n "{{ cloudKey }}" ]; then
+        ARGS="$ARGS -k {{ cloudKey }}"
+    fi
+    if [ "{{ communityEdition|string|lower }}" == "true" ]; then
+        ARGS="$ARGS -c"
+    fi
+    if [ "{{ enterpriseEdition|string|lower }}" == "true" ]; then
+        ARGS="$ARGS -e"
+    fi
+    create-image-vm.sh $ARGS 2>&1
+  args:
+    executable: /bin/bash
+  register: dibrc
+  failed_when: false
+
+- debug: var=dibrc
+
+- name: Identify image
+  set_fact:
+    outputImage: "{{ item.split(': ', 1)[-1] }}"
+  with_items: "{{ dibrc['stdout_lines'] }}"
+  when:
+    - item is defined
+    - "'OUTPUT_IMAGE: ' in item"
+
+- name: Identify image log
+  set_fact:
+    outputLog: "{{ item.split(': ', 1)[-1] }}"
+  with_items: "{{ dibrc['stdout_lines'] }}"
+  when:
+    - item is defined
+    - "'OUTPUT_LOG: ' in item"
+
+- name: Fetch log from dibvm
+  fetch:
+    src: "log/{{ outputLog }}"
+    dest: "{{ baseDir }}/log/"
+    flat: yes
+    mode: 0644
+  when: outputImage is defined
+
+- name: Halt on diskimage-builder errors
+  fail:
+    msg: "DIB failure.  See log file at {{ baseDir }}/log/{{ outputLog }}"
+  when: dibrc['rc']
+
+- name: Fetch virtual disk image from dibvm
+  fetch:
+    src: "img/{{ outputImage }}"
+    dest: "{{ baseDir }}/images/"
+    flat: yes
+    mode: 0644
+  when: outputImage is defined
+

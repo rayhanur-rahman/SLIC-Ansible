@@ -1,0 +1,589 @@
+---
+
+#
+# SYNC CONFIGS
+#
+- name: Sync configuration between controller and app servers
+  include_role:
+    name: sync-configs
+
+
+#
+# ENSURE APP SERVERS CAN GIT-CLONE OVER SSH
+#
+- name: Ensure user meza-ansible .ssh dir configured
+  file:
+    path: "{{ m_home }}/meza-ansible/.ssh"
+    owner: meza-ansible
+    group: wheel
+    mode: 0700
+    state: directory
+
+- name: Copy meza-ansible keys to app servers
+  copy:
+    src: "{{ m_home }}/meza-ansible/.ssh/{{ item.name }}"
+    dest: "{{ m_home }}/meza-ansible/.ssh/{{ item.name }}"
+    owner: meza-ansible
+    group: wheel
+    mode: "{{ item.mode }}"
+  with_items:
+  - name: id_rsa
+    mode: "0600"
+  - name: id_rsa.pub
+    mode: "0644"
+
+- name: Copy meza-ansible known_hosts to app-servers
+  copy:
+    src: "{{ m_home }}/meza-ansible/.ssh/{{ item.name }}"
+    dest: "{{ m_home }}/meza-ansible/.ssh/{{ item.name }}"
+    owner: meza-ansible
+    group: wheel
+    mode: "{{ item.mode }}"
+  failed_when: False
+  with_items:
+  - name: known_hosts
+    mode: "0600"
+
+
+
+
+
+#
+# MEDIAWIKI CORE
+#
+- name: Ensure MediaWiki core ignores submodules
+  blockinfile:
+    path: "{{ m_mediawiki }}/.git/config"
+    block: |
+      [diff]
+          ignoreSubmodules = all
+  failed_when: False
+  tags:
+    - mediawiki-core
+- name: Ensure MediaWiki core owned by meza-ansible
+  file:
+    path: "{{ m_mediawiki }}"
+    mode: "{{ m_htdocs_mode }}"
+    owner: "{{ m_htdocs_owner }}"
+    group: "{{ m_htdocs_group }}"
+    state: directory
+    recurse: yes
+  tags:
+    - mediawiki-core
+- name: Ensure proper MediaWiki git version installed
+  become: yes
+  become_user: "meza-ansible"
+  # Ref #1149 for TMPDIR environment var
+  environment:
+    TMPDIR: "{{ m_tmp }}"
+  git:
+    repo: https://github.com/wikimedia/mediawiki.git
+    dest: "{{ m_mediawiki }}"
+    version: "{{ mediawiki_version }}"
+    track_submodules: no
+    recursive: no
+    umask: "0002"
+  tags:
+    - latest
+    - mediawiki-core
+- name: Ensure MediaWiki core ignores submodules
+  blockinfile:
+    path: "{{ m_mediawiki }}/.git/config"
+    block: |
+      [diff]
+          ignoreSubmodules = all
+  tags:
+    - mediawiki-core
+
+
+#
+# EXTENSIONS AND SKINS
+#
+- name: Set variable holding list of core skins
+  include_vars:
+    file: "{{ m_config_core }}/MezaCoreSkins.yml"
+    name: meza_core_skins
+  tags:
+    - skins
+
+- name: Set variable holding list of local skins
+  include_vars:
+    file: "{{ m_local_public }}/MezaLocalSkins.yml"
+    name: meza_local_skins
+  tags:
+    - skins
+
+- name: Set variable holding list of core extensions
+  include_vars:
+    file: "{{ m_config_core }}/MezaCoreExtensions.yml"
+    name: meza_core_extensions
+  tags:
+    - always
+
+- name: Ensure core meza extensions installed (non-Composer)
+  become: yes
+  become_user: "meza-ansible"
+  # Ref #1149 for TMPDIR environment var
+  environment:
+    TMPDIR: "{{ m_tmp }}"
+  git:
+    repo: "{{ item.repo }}"
+    dest: "{{ m_mediawiki }}/extensions/{{ item.name }}"
+    version: "{{ item.version }}"
+    umask: "0002"
+  with_items: "{{ meza_core_extensions.list }}"
+  when: meza_core_extensions.list[0] is defined and item.repo is defined
+  tags:
+    - git-extensions
+    - git-core-extensions
+    - latest
+
+- name: Set variable holding list of local extensions
+  include_vars:
+    file: "{{ m_local_public }}/MezaLocalExtensions.yml"
+    name: meza_local_extensions
+  tags:
+    - always
+
+- name: Ensure core meza skins installed (non-Composer)
+  # Ref #1149 for TMPDIR environment var
+  environment:
+    TMPDIR: "{{ m_tmp }}"
+  git:
+    repo: "{{ item.repo }}"
+    dest: "{{ m_mediawiki }}/skins/{{ item.name }}"
+    version: "{{ item.version }}"
+  with_items: "{{ meza_core_skins.list }}"
+  when: meza_core_skins.list[0] is defined and item.repo is defined
+  tags:
+    - skins
+    - core-skins
+
+- name: Ensure local meza extensions installed (non-Composer)
+  become: yes
+  become_user: "meza-ansible"
+  # Ref #1149 for TMPDIR environment var
+  environment:
+    TMPDIR: "{{ m_tmp }}"
+  git:
+    repo: "{{ item.repo }}"
+    dest: "{{ m_mediawiki }}/extensions/{{ item.name }}"
+    version: "{{ item.version }}"
+    umask: "0002"
+    key_file: "{{ item.key_file | default(None) }}"
+  with_items: "{{ meza_local_extensions.list }}"
+  when: meza_local_extensions.list[0] is defined and item.repo is defined
+  tags:
+    - git-extensions
+    - git-local-extensions
+    - latest
+
+- name: Ensure local meza skins installed (non-Composer)
+  # Ref #1149 for TMPDIR environment var
+  environment:
+    TMPDIR: "{{ m_tmp }}"
+  git:
+    repo: "{{ item.repo }}"
+    dest: "{{ m_mediawiki }}/skins/{{ item.name }}"
+    version: "{{ item.version }}"
+  with_items: "{{ meza_local_skins.list }}"
+  when: meza_local_skins.list[0] is defined and item.repo is defined
+  tags:
+    - skins
+    - local-skins
+
+# File holding extension loading and config for core and local extensions
+# as well as core and local skins
+- name: Ensure Extensions.php in place
+  template:
+    src: Extensions.php.j2
+    dest: "{{ m_deploy }}/Extensions.php"
+    mode: "{{ m_htdocs_mode }}"
+    owner: "{{ m_htdocs_owner }}"
+    group: "{{ m_htdocs_group }}"
+
+# Adds extensions with composer param from MezaCoreExtensions.yml,
+# MezaLocalExtensions.yml, MezaCoreSkins.yml, and MezaLocalSkins.yml
+- name: Ensure composer.local.json in place to load composer-based extensions
+  template:
+    src: composer.local.json.j2
+    dest: "{{ m_mediawiki }}/composer.local.json"
+    mode: "{{ m_htdocs_mode }}"
+    owner: "{{ m_htdocs_owner }}"
+    group: "{{ m_htdocs_group }}"
+
+- name: Run composer install on MediaWiki for dependencies
+  become: yes
+  become_user: "meza-ansible"
+  composer:
+    command: install
+    working_dir: "{{ m_mediawiki }}"
+    no_dev: yes
+  tags:
+    - composer-extensions
+    - latest
+    - skins
+
+# install doesn't appear to do extensions
+- name: Run composer update on MediaWiki for extensions
+  become: yes
+  become_user: "meza-ansible"
+  composer:
+    command: update
+    working_dir: "{{ m_mediawiki }}"
+    no_dev: yes
+  tags:
+    - composer-extensions
+    - latest
+    - skins
+
+- name: Ensure Git submodule requirements met for core meza extensions
+  become: yes
+  become_user: "meza-ansible"
+  shell: |
+    cd "{{ m_mediawiki }}/extensions/{{ item.name }}"
+    git submodule update --init
+  with_items: "{{ meza_core_extensions.list }}"
+  when: meza_core_extensions.list[0] is defined and item.git_submodules is defined and item.git_submodules == True
+  tags:
+    - git-submodules
+    - latest
+
+- name: Ensure Git submodule requirements met for local meza extensions
+  become: yes
+  become_user: "meza-ansible"
+  shell: |
+    cd "{{ m_mediawiki }}/extensions/{{ item.name }}"
+    git submodule update --init
+  with_items: "{{ meza_local_extensions.list }}"
+  when: meza_local_extensions.list[0] is defined and item.git_submodules is defined and item.git_submodules == True
+  tags:
+    - git-submodules
+    - latest
+
+# Are there skins that have submodules?
+- name: Ensure Git submodule requirements met for core meza skins
+  shell: |
+    cd "{{ m_mediawiki }}/skins/{{ item.name }}"
+    git submodule update --init
+  with_items: "{{ meza_core_skins.list }}"
+  when: meza_core_skins.list[0] is defined and item.git_submodules is defined and item.git_submodules == True
+  tags:
+    - git-submodules
+    - skins
+    - latest
+
+- name: Ensure Git submodule requirements met for local meza skins
+  shell: |
+    cd "{{ m_mediawiki }}/skins/{{ item.name }}"
+    git submodule update --init
+  with_items: "{{ meza_local_skins.list }}"
+  when: meza_local_skins.list[0] is defined and item.git_submodules is defined and item.git_submodules == True
+  tags:
+    - git-submodules
+    - skins
+    - local-skins
+    - latest
+
+#
+# LocalSettings.php
+#
+- name: Ensure LocalSettings.php in place
+  template:
+    src: LocalSettings.php.j2
+    dest: "{{ m_mediawiki }}/LocalSettings.php"
+    backup: yes
+    mode: "{{ m_htdocs_mode }}"
+    owner: "{{ m_htdocs_owner }}"
+    group: "{{ m_htdocs_group }}"
+
+- name: Ensure MediaWiki still properly owned
+  file:
+    path: "{{ m_mediawiki }}"
+    mode: "{{ m_htdocs_mode }}"
+    owner: "{{ m_htdocs_owner }}"
+    group: "{{ m_htdocs_group }}"
+    state: directory
+    recurse: yes
+  tags:
+    - mediawiki-core
+    - file-perms
+
+
+#
+# LANDING PAGE
+#
+- name: Ensure WikiBlender installed
+  # Ref #1149 for TMPDIR environment var
+  environment:
+    TMPDIR: "{{ m_tmp }}"
+  git:
+    repo: https://github.com/jamesmontalvo3/WikiBlender.git
+    dest: "{{ m_htdocs }}/WikiBlender"
+    version: "master"
+    umask: "0002"
+
+- name: Ensure BlenderSettings.php in place
+  template:
+    src: BlenderSettings.php.j2
+    dest: "{{ m_htdocs }}/WikiBlender/BlenderSettings.php"
+    mode: "{{ m_htdocs_mode }}"
+    owner: "{{ m_htdocs_owner }}"
+    group: "{{ m_htdocs_group }}"
+
+- name: Ensure WikiBlender properly owned
+  file:
+    path: "{{ m_htdocs }}/WikiBlender"
+    mode: "{{ m_htdocs_mode }}"
+    owner: "{{ m_htdocs_owner }}"
+    group: "{{ m_htdocs_group }}"
+    state: directory
+    recurse: yes
+
+
+#
+# Authentication roles
+#
+- name: Include SAML role if SAML configured
+  include_role:
+    name: saml
+  when: saml_public is defined
+
+
+#
+# Cache (at this time) for localization caching. Also can be used for caching
+# page contents, but this isn't as necessary for enterprise cases where
+# generally users are always logged in.
+#
+- name: Ensure localization cache root directory exists (each wiki with sub-directory)
+  file:
+    state: directory
+    path: "{{ m_cache_directory }}"
+    owner: "{{ m_cache_directory_owner }}"
+    group: "{{ m_cache_directory_group }}"
+    mode: "{{ m_cache_directory_mode }}"
+
+- name: "Ensure root uploads dir configured"
+  file:
+    path: "{{ m_uploads_dir }}"
+    state: directory
+    mode: "{{ m_uploads_dir_mode }}"
+    owner: "{{ m_uploads_dir_owner }}"
+    group: "{{ m_uploads_dir_group }}"
+
+
+#
+# DEMO WIKI (if needed)
+#
+# 1. Check if wikis exist
+# 2. Create Demo Wiki if they don't
+# 3. FIXME #820: create-wiki re-sync configs? Explicit re-sync not req'd?
+#
+- name: Check if any wikis exist
+  find:
+    paths: "{{ m_local_public }}/wikis"
+    file_type: directory
+  delegate_to: localhost
+  register: initial_wikis_dirs_check
+  run_once: true
+  when: docker_skip_tasks is not defined or not docker_skip_tasks
+
+- name: Add Demo Wiki to config if no wikis exist
+  include_role:
+    name: configure-wiki
+  vars:
+    wiki_id: demo
+    wiki_name: Demo Wiki
+  when:
+    - (docker_skip_tasks is not defined or not docker_skip_tasks)
+    - initial_wikis_dirs_check.files|length == 0
+
+- name: Re-sync configuration between controller and app servers if Demo just configured
+  include_role:
+    name: sync-configs
+  when:
+    - (docker_skip_tasks is not defined or not docker_skip_tasks)
+    - initial_wikis_dirs_check.files|length == 0
+
+
+
+#
+# VERIFY WIKIS
+#
+- name: Get individual wikis dirs from localhost
+  find:
+    paths: "{{ m_local_public }}/wikis/"
+    file_type: directory
+  register: wikis_dirs
+  delegate_to: localhost
+  run_once: yes
+
+- name: Set fact - list of wikis
+  set_fact:
+    list_of_wikis: "{{ wikis_dirs.files | map(attribute='path') | map('basename') | list }}"
+
+# Sort list of wikis so primary wiki is first. Need to have primary wiki's
+# `user` table in place before other wikis are imported, otherwise will get
+# errors when running update.php and such
+- name: Set fact - list of wikis ordered with primary wiki first (if primary_wiki_id set)
+  set_fact:
+    list_of_wikis: "['{{ primary_wiki_id }}'] + {{ list_of_wikis | difference([primary_wiki_id]) }}"
+  when: primary_wiki_id is defined
+
+- debug: { var: list_of_wikis }
+
+- name: Set fact - initiate empty list of wikis to rebuild smw and search data
+  set_fact:
+    wikis_to_rebuild_data: []
+
+# Check that all wikis in config are present on app and DB servers
+- name: Ensure defined wikis exist
+  include_role:
+    name: verify-wiki
+  vars:
+    wiki_id: "{{ item }}"
+  # with initial wikis list of file info objects:
+  #   filter 1: reduce list items to just the path
+  #   filter 2: then reduce to just the last part of the path
+  #   filter 3: convert map object back to an Ansible-friendly list
+  with_items: "{{ list_of_wikis }}"
+  tags:
+  - verify-wiki
+  when: docker_skip_tasks is not defined or not docker_skip_tasks
+
+- debug: { var: wikis_to_rebuild_data }
+
+- name: Ensure data rebuilding scripts in place on app servers
+  template:
+    src: "{{ item }}.j2"
+    dest: "/opt/.deploy-meza/{{ item }}"
+    owner: meza-ansible
+    group: wheel
+    mode: 0755
+  with_items:
+    - elastic-build-index.sh
+    - elastic-rebuild-all.sh
+    - smw-rebuild-all.sh
+    - refresh-links.sh
+
+- name: Ensure data rebuilding logs directories exist
+  file:
+    path: "{{ m_logs }}/{{ item }}"
+    owner: "{{ m_logs_owner }}"
+    group: "{{ m_logs_group }}"
+    mode: "{{ m_logs_mode }}"
+    state: directory
+  with_items:
+    - smw-rebuilddata
+    - search-index
+    - refresh-links
+
+# FIXME: Should search and SMW building be after update.php?
+
+# FIXME: REMOVE?
+# - name: Check if localhost has /tmp/elasticsearch_do_upgrade file
+#   stat:
+#     path: /tmp/elasticsearch_do_upgrade
+#   register: es_do_upgrade_stat
+#   delegate_to: localhost
+
+# - name: Remove /tmp/elasticsearch_do_upgrade file from localhost
+#   file:
+#     path: /tmp/elasticsearch_do_upgrade
+#     state: absent
+#   delegate_to: localhost
+
+# - name: Set es_do_upgrade to True if localhost file exists
+#   set_fact:
+#     es_do_upgrade: True
+#   when: es_do_upgrade_stat.stat.exists
+
+# - name: Set es_do_upgrade to False if localhost file does not exist
+#   set_fact:
+#     es_do_upgrade: False
+#   when: not es_do_upgrade_stat.stat.exists
+
+
+- name: Verify metastore index upgraded
+  shell: WIKI={{ list_of_wikis[0] }} php /opt/htdocs/mediawiki/extensions/CirrusSearch/maintenance/metastore.php --upgrade
+  run_once: true
+  when: docker_skip_tasks is not defined or not docker_skip_tasks
+
+# Wikis are totally built at this point, but SMW and search need rebuilding
+# FIXME #811: Will this work when controller is not an app server?
+- name: "(Re-)build search index for: {{ wikis_to_rebuild_data | join(', ') }}"
+  shell: "bash {{ m_deploy }}/elastic-rebuild-all.sh \"{{ wikis_to_rebuild_data | join(' ') }}\""
+  when: (docker_skip_tasks is not defined or not docker_skip_tasks) and (wikis_to_rebuild_data|length > 0)
+  # FIXME: REMOVE? and (not es_do_upgrade)
+  run_once: true
+  tags:
+  - search-index
+
+- name: "(Re-)build SemanticMediaWiki data for: {{ wikis_to_rebuild_data | join(', ') }}"
+  shell: "bash {{ m_deploy }}/smw-rebuild-all.sh \"{{ wikis_to_rebuild_data | join(' ') }}\"  > {{ m_logs }}/smw-rebuilddata/smw-rebuild-all.log"
+  when: (docker_skip_tasks is not defined or not docker_skip_tasks) and (wikis_to_rebuild_data|length > 0)
+  run_once: true
+  tags:
+  - smw-data
+
+
+
+# Run update.php (MediaWiki's database update script) against all wikis. This
+# only needs to be done once, since the first app server that runs it will
+# update the master database.
+- include_role:
+    name: update.php
+  vars:
+    wiki_id: "{{ item }}"
+  with_items: "{{ list_of_wikis }}"
+  run_once: true
+  tags:
+  - update.php
+  when: docker_skip_tasks is not defined or not docker_skip_tasks
+
+# Required because of opcache settings. When opcache.validate_timestamps=0, for
+# the sake of stability and speed, an httpd reload is required to detect changes
+# to PHP files.
+# Ref: https://www.scalingphpbook.com/blog/2014/02/14/best-zend-opcache-settings.html
+- name: Reload (not restart) httpd to pick up changes to opcached php files
+  service:
+    name: httpd
+    state: reloaded
+  tags:
+    - httpd-reload
+  when: docker_skip_tasks is not defined or not docker_skip_tasks
+
+
+# Extension:SyntaxHighlight requires Python 3.x present in path as `python3` for
+# MediaWiki 1.31+.
+- name: Ensure Python3 present
+  yum:
+    lock_timeout: 180 # wait up to 3 minutes for a lock ansible/ansible#57189
+    name:
+      - python35u
+      - python35u-pip
+    state: latest
+  tags:
+  - latest
+
+- name: "Ensure python3 symlink in place"
+  file:
+    # dest = symlink, src = dir linked to
+    src: "/usr/bin/python3.5"
+    dest: "/usr/bin/python3"
+    state: link
+    owner: root
+    group: root
+    mode: 0755
+  when: ansible_os_family == 'RedHat'
+
+- name: "Ensure pip3 symlink in place"
+  file:
+    # dest = symlink, src = dir linked to
+    src: "/usr/bin/pip3.5"
+    dest: "/usr/bin/pip3"
+    state: link
+    owner: root
+    group: root
+    mode: 0755
+  when: ansible_os_family == 'RedHat'

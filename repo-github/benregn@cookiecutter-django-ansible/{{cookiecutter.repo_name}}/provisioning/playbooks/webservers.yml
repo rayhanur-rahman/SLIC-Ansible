@@ -1,0 +1,13 @@
+{% raw %}---
+- hosts: webservers
+  gather_facts: yes
+  remote_user: "{{ django_user }}"
+  roles:
+    - { role: python }
+    - { role: supervisor }
+    - { role: uwsgi }
+    - { role: nginx }
+    - { role: redis }
+    - { role: rabbitmq }
+    - { role: celery }
+{% endraw %}

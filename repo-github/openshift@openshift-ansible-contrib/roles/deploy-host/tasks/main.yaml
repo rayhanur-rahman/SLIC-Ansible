@@ -1,0 +1,116 @@
+---
+- block:
+    - name: "Establish gcp pre-req packages"
+      set_fact:
+        openshift_deploy_packages_by_provider: ['qemu-img', 'curl', 'tar', 'which', 'openssl', 'python2-passlib', 'java-1.8.0-openjdk-headless', 'httpd-tools', 'python2-passlib']
+
+    - name: "Set facts for gcp EPEL packages"
+      set_fact:
+        openshift_deploy_epel_packages_by_provider: ['python2-libcloud', 'python2-jmespath']
+
+  when: "'gcp' in provider"
+
+- block:
+    - name: "Add RHV mgmt repo for rhv"
+      set_fact:
+        openshift_deploy_repos: "{{ openshift_deploy_repos }} + [ 'rhel-7-server-rhv-4-mgmt-agent-rpms' ]"
+      when: "'rhv' not in openshift_deploy_repos"
+
+    - name: "Enable oVirt repository"
+      command: 'yum -y install http://resources.ovirt.org/pub/yum-repo/ovirt-release42.rpm'
+      when: not '/etc/yum.repos.d/ovirt-4.2.repo'|exists
+
+    - name: "Establish rhv pre-req packages"
+      set_fact:
+        openshift_deploy_packages_by_provider: ['python-ovirt-engine-sdk4', 'ovirt-ansible-roles']
+
+  when: "'rhv' in provider"
+
+- block:
+    - name: "Add SCL Repo for vsphere"
+      set_fact:
+        openshift_deploy_repos: "{{ openshift_deploy_repos }} + [ 'rhel-server-rhscl-7-rpms' ]"
+      when: "'rhscl' not in openshift_deploy_repos"
+
+    - name: "Set facts for vsphere non EPEL packages"
+      set_fact:
+        openshift_deploy_packages_by_provider: ['python-click', 'python-ldap', 'python27']
+
+    - name: "Set facts for vsphere EPEL packages"
+      set_fact:
+        openshift_deploy_epel_packages_by_provider: ['python-iptools', 'python2-pyvmomi']
+  when: "'vsphere' in provider"
+
+- block:
+    - name: "Set facts for aws EPEL packages"
+      set_fact:
+        openshift_deploy_epel_packages_by_provider: ['python2-boto', 'python-netaddr', 'python2-boto3']
+  when: "'aws' in provider"
+
+- block:
+    - name: "Obtain currently enabled repos"
+      shell: 'subscription-manager repos --list-enabled | sed -ne "s/^Repo ID:[^a-zA-Z0-9]*\(.*\)/\1/p"'
+      register: enabled_repos
+
+    - name: "Enable specified repositories not already enabled"
+      command: "subscription-manager repos --enable={{ item }}"
+      with_items:
+        - "{{ openshift_deploy_repos | difference(enabled_repos.stdout_lines) }}"
+      register: subscribe_repos
+      until: subscribe_repos | succeeded
+
+    - name: "Obtain updated list of currently enabled repos"
+      shell: 'subscription-manager repos --list-enabled | sed -ne "s/^Repo ID:[^a-zA-Z0-9]*\(.*\)/\1/p"'
+      register: enabled_repos
+
+  when: ansible_distribution == "RedHat"
+
+- block:
+    - name: Enable OpenShift Origin repo for Centos
+      yum:
+        name: centos-release-openshift-origin37
+        state: installed
+  when: ansible_distribution == "CentOS"
+
+- block:
+    - name: Check if EPEL repo is already configured.
+      stat: path={{ epel_repofile_path }}
+      register: epel_repofile_result
+
+    - name: Install EPEL repo.
+      yum:
+        name: "{{ epel_repo_url }}"
+        state: installed
+      register: result
+      until: '"failed" not in result'
+      retries: 5
+      delay: 10
+      when: not epel_repofile_result.stat.exists
+
+    - name: Import EPEL GPG key.
+      rpm_key:
+        key: "{{ epel_repo_gpg_key_url }}"
+        state: present
+      when: not epel_repofile_result.stat.exists
+      ignore_errors: "{{ ansible_check_mode }}"
+
+    - name: be sure all pre-req provider EPEL packages are installed
+      yum: name={{item}} state=installed
+      with_items:
+        - "{{ openshift_deploy_epel_packages_by_provider }}"
+  when: openshift_deploy_epel_packages_by_provider is defined and openshift_deploy_epel_packages_by_provider
+
+- name: "Be sure all pre-req provider packages are installed"
+  yum:
+    name: "{{item}}"
+    state: installed
+  with_items:
+    - "{{ openshift_deploy_packages }}"
+
+- name: "Install provider specific prerequisite packages"
+  yum:
+    name: "{{item}}"
+    state: installed
+  with_items:
+    - "{{ openshift_deploy_packages_by_provider }}"
+  when: openshift_deploy_packages_by_provider is defined

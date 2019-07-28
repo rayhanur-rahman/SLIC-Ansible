@@ -1,0 +1,8 @@
+# hpc-common/meta/main.yml
+---
+
+dependencies:
+  # install a `module` command to manage "environment module" files
+  - role: modules-tool
+  # ensure MPI is available
+  - role: openmpi

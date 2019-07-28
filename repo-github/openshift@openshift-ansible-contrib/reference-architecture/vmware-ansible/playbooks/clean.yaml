@@ -1,0 +1,25 @@
+---
+- hosts: nodes
+  ignore_errors: yes
+  roles:
+    - rhsm-unregister
+
+- hosts: localhost
+  user: root
+  become: false
+  ignore_errors: yes
+  tasks:
+    - name: Delete all added VMs
+      vmware_guest:
+        hostname: "{{ openshift_cloudprovider_vsphere_host }}"
+        username: "{{ openshift_cloudprovider_vsphere_username }}"
+        password: "{{ openshift_cloudprovider_vsphere_password }}"
+        validate_certs: False
+        name: "{{ hostvars[item].inventory_hostname }}"
+        datacenter: "{{ openshift_cloudprovider_vsphere_datacenter }}"
+        folder: "{{ openshift_cloudprovider_vsphere_datacenter }}/vm/{{ openshift_cloudprovider_vsphere_folder }}"
+        state: absent
+        force: true
+      with_items:
+        - "{{ groups['nodes'] }}"
+        - "{{ groups['storage'] }}"

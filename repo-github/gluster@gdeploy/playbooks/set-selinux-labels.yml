@@ -1,0 +1,16 @@
+---
+- hosts: gluster_servers
+  become: true
+  gather_facts: no
+
+  tasks:
+  - name: Set SELinux labels on the bricks
+    shell: semanage fcontext -a -t glusterd_brick_t {{ item.path }}
+    with_items: "{{ mntpath }}"
+    when: mntpath is defined
+
+  - name: Restore the SELinux context
+    shell: restorecon -Rv {{ item.path }}
+    with_items: "{{ mntpath }}"
+    when: mntpath is defined
+

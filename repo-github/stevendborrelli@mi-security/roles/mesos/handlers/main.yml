@@ -1,0 +1,24 @@
+---
+- name: restart mesos leader
+  sudo: yes
+  shell: /bin/systemctl restart mesos-master
+
+- name: remove mesos follower metadata
+  sudo: yes
+  shell: "{{ item }}"
+  with_items:
+    - /bin/systemctl stop mesos-slave
+    - /bin/rm -rf /tmp/mesos/meta
+    - /bin/systemctl start mesos-slave
+
+- name: restart mesos follower
+  sudo: yes
+  shell: /bin/systemctl restart mesos-slave
+
+- name: reload consul
+  sudo: yes
+  shell: "{{ consul_bin }} reload"
+
+- name: restart nginx-mesos-leader
+  sudo: yes
+  shell: systemctl restart nginx-mesos-leader

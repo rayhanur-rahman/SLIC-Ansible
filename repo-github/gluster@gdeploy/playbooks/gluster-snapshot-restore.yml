@@ -1,0 +1,9 @@
+---
+- hosts: master
+  become: true
+  gather_facts: no
+
+  tasks:
+  - name: Restores a snapshot
+    snapshot:action=restore
+             snapname={{ snapname }}

@@ -1,0 +1,37 @@
+---
+#
+# edX Configuration
+#
+# github:     https://github.com/edx/configuration
+# wiki:       https://openedx.atlassian.net/wiki/display/OpenOPS
+# code style: https://openedx.atlassian.net/wiki/display/OpenOPS/Ansible+Code+Conventions
+# license:    https://github.com/edx/configuration/blob/master/LICENSE.TXT
+#
+##
+# Defaults for role security
+# 
+
+#
+# vars are namespace with the module name.
+#
+security_role_name: security
+# set to true to enable unattended upgrades nightly
+SECURITY_UNATTENDED_UPGRADES: false
+# set to true to upgrade all packages nightly.  false will only upgrade from security repo.
+SECURITY_UPDATE_ALL_PACKAGES: false
+# set to true to run aptitute safe-upgrade whenever ansible is run
+SAFE_UPGRADE_ON_ANSIBLE: false
+# set to true to run unattended-upgrade during ansible runs.  This is expected to only install security udpates.
+SECURITY_UPGRADE_ON_ANSIBLE: false
+
+
+#
+# OS packages
+#
+
+security_debian_pkgs: 
+  - aptitude
+  - unattended-upgrades
+  - gcc
+
+security_redhat_pkgs: []

@@ -1,0 +1,25 @@
+---
+six_hours: 21600
+project_name: {{cookiecutter.repo_name}}
+git_repo: git@github.com:username/{{cookiecutter.repo_name}}.git
+git_name: {{cookiecutter.author_name}}
+git_email: {{cookiecutter.email}}
+
+private_ssh_key_path: {{cookiecutter.private_ssh_key_path}}
+public_ssh_key_path: {{cookiecutter.public_ssh_key_path}}
+
+django_user: django
+# crypted password, generated on a Linux box using: echo 'import crypt,getpass; print crypt.crypt(getpass.getpass(), "$6$AC3bdCF7!$")' | python -
+# default pass: django
+django_pass: $6$AC3bdCF7!$fDkCcrTpiS6M/PMxR38L5vdZn9HjcsFI.Gk12nA5ABus0yvK0SZSIFFidTwTpBPyWHtVZ6v6XpCj4TdlQSinz0
+
+{% raw %}
+code_root_dir: /var/www/django
+django_root_dir: "{{ code_root_dir }}/{{ project_name }}"
+virtualenv_dir: /home/{{django_user}}/.virtualenvs/{{project_name}}
+# relative to code_root_dir
+reqs_dir: "{{ code_root_dir }}/requirements"
+{% endraw %}
+# dotted path to your wsgi.py, relative to code_root_dir
+wsgi_path: config.wsgi
+settings_module: config.settings

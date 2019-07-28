@@ -1,0 +1,20 @@
+---
+- name: Create VMs from inventory file
+  hosts: localhost
+  roles:
+    - create-vm-prod-ose
+
+- name: Prepare VMs for  OSE3 install
+  hosts: nodes
+  roles:
+    - rhsm
+    - vmware-guest-setup
+    - cloud-provider-setup
+    - docker-storage-setup
+    - openshift-volume-quota
+  ignore_errors: yes
+
+- hosts: masters
+  roles:
+    - master-prerequisites
+    - etcd-storage

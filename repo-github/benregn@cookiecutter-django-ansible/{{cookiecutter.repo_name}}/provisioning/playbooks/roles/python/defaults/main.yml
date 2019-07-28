@@ -1,0 +1,17 @@
+---
+python_dependencies:
+    - python-dev
+    - python-setuptools
+    ### Pillow prereqs
+    - libtiff4-dev
+    - libjpeg-dev
+    - zlib1g-dev
+    - libfreetype6-dev
+    - liblcms1-dev
+    - libwebp-dev
+    - tcl8.5-dev
+    - tk8.5-dev
+    ###
+python_pip_global_packages:
+    - { name: virtualenv, version: 1.11.6 }
+    - { name: virtualenvwrapper, version: 4.3 }

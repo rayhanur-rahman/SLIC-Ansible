@@ -1,0 +1,1075 @@
+heat_template_version: 2016-10-14
+
+description: >
+  Deploy Atomic/OpenShift 3 on OpenStack.
+
+parameters:
+
+  # What version of OpenShift Container Platform to install
+  # This value is used to select the RPM repo for the OCP release to install
+  ocp_version:
+    type: string
+    default: "3.4"
+    description: >
+      The version of OpenShift Container Platform to deploy
+
+  # What version of OpenStack Platform to install
+  # This value is used to select the RPM repo for the OSP release to install
+  osp_version:
+    type: string
+    default: "10"
+    description: >
+      The version of OpenStack Platform to use to collect data
+
+  # Allow the caller to specify the version of ansible
+  ansible_version:
+    type: string
+    default: ""
+    description: >
+      Set the RPM version of Ansible that will run on the bastion
+      If empty, use the current version
+
+  # Access to the VMs
+  ssh_user:
+    type: string
+    description: >
+      The SSH user available on all nodes.
+
+  ssh_key_name:
+    type: string
+    description: Name of the SSH keypair registered with Nova
+    constraints:
+    - custom_constraint: nova.keypair
+
+  # VM characteristics
+  bastion_image:
+    type: string
+    description: Name or ID of the bastion image registered with Glance
+    constraints:
+    - custom_constraint: glance.image
+
+  master_image:
+    type: string
+    description: Name or ID of the host image registered with Glance
+    constraints:
+    - custom_constraint: glance.image
+
+  infra_image:
+    type: string
+    description: Name or ID of the host image registered with Glance
+    constraints:
+    - custom_constraint: glance.image
+
+  node_image:
+    type: string
+    description: Name or ID of the openshift node image registered with Glance
+    constraints:
+    - custom_constraint: glance.image
+
+  # once openshift-ansible supports containerized loadbalancer node setup
+  # this can be deleted
+  loadbalancer_image:
+    description: >
+      Select a base image to use for the loadbalancer nodes, this is required
+      only if 'dedicated' loadbalancer_type is used.
+    type: string
+    default: ''
+
+  bastion_flavor:
+    type: string
+    description: The Nova flavor to use for the bastion node
+    default: m1.medium
+    constraints:
+    - custom_constraint: nova.flavor
+
+  loadbalancer_flavor:
+    type: string
+    description: The Nova flavor to use for the dedicated load balancer
+    default: m1.medium
+    constraints:
+    - custom_constraint: nova.flavor
+
+  infra_flavor:
+    type: string
+    description: The Nova flavor to use for the OpenShift infra nodes
+    default: m1.medium
+    constraints:
+    - custom_constraint: nova.flavor
+
+  master_flavor:
+    type: string
+    description: The Nova flavor to use for the OpenShift masters
+    default: m1.medium
+    constraints:
+    - custom_constraint: nova.flavor
+
+  node_flavor:
+    type: string
+    description: The Nova flavor to use for the OpenShift nodes
+    default: m1.medium
+    constraints:
+    - custom_constraint: nova.flavor
+
+  # Networks to connect to or create
+  external_network:
+    type: string
+    description: >
+      The external network that provides floating IP addresses for the nodes
+    constraints:
+    - custom_constraint: neutron.network
+
+  internal_subnet:
+    type: string
+    description: >
+      The subnet used for openshift node-node and node-master communication
+    default: 192.168.0.0/24
+
+  container_subnet:
+    type: string
+    description: >
+      The subnet used for openshift node-node communication
+    default: 10.0.0.0/24
+
+  dns_nameserver:
+    type: comma_delimited_list
+    description: >
+      A comma separated list of DNS nameserver IP addresses in your environment
+      These will be configured into the OpenStack networks. They are the
+      namservers that new OpenShift instances will use.
+
+  dns_update_key:
+    type: string
+    description: >
+      A key for updating the DNS servers.
+
+      If specified, each node will update the `dns_nameserver` with
+      the A record of their hostname and internal IP address.
+
+      If left empty, no DNS updates will be performed. Note that the
+      OpenShift installation will fail if the nodes cannot resolve each
+      other. As such, this means you will have to update your DNS
+      servers manually.
+    hidden: true
+    default: ""
+
+  system_update:
+    type: boolean
+    description: Run "yum update" on each node on first boot.
+    default: true
+
+  loadbalancer_type:
+    type: string
+    default: neutron
+    description: >
+      Loadbalancer type used for loadbalancing console/API/router requests.
+      See 'Select Loadbalancer Type' section in README for more details.
+    constraints:
+      - allowed_values:
+        - neutron
+        - dedicated
+        - external
+        - none
+
+  master_count:
+    type: number
+    description: >
+      Number of master nodes to create.
+    default: 1
+
+  master_server_group_policies:
+    type: comma_delimited_list
+    description: >
+      List of policies applied on master nodes ServerGroup. By default
+      'anti-affinity' policy is used to make sure that each master node
+      is deployed on a different host. If you use a small/all-in-one openstack
+      environment, you may need to disable this e.g. by passing
+      '-P master_server_group_policies=affinity'.
+    default: ['anti-affinity']
+
+  infra_count:
+    type: number
+    description: >
+      Number of non-master nodes to create.
+    default: 1
+
+  infra_server_group_policies:
+    type: comma_delimited_list
+    description: >
+      List of policies applied on infra nodes ServerGroup. By default
+      'anti-affinity' policy is used to make sure that each infra node
+      is deployed on a different host. If you use a small/all-in-one openstack
+      environment, you may need to disable this e.g. by passing
+      '-P infra_server_group_policies=affinity'.
+    default: ['anti-affinity']
+
+  node_count:
+    type: number
+    description: >
+      Number of non-master nodes to create.
+    default: 1
+
+  # VM Host naming: root domain and host names
+  domain_name:
+    type: string
+    description: >
+      The domain name that is going to be used as the base for all hostnames.
+
+  app_subdomain:
+    type: string
+    description: >
+      Default subdomain to use for exposed routes.
+    default: ''
+
+  lb_hostname:
+    type: string
+    description: >
+      The hostname that is going to be set for the loadbalancer server.
+    default: 'lb'
+
+  bastion_hostname:
+    type: string
+    description: >
+      The hostname that is going to be set for the dedicated bastion node.
+    default: 'bastion'
+
+  master_hostname:
+    type: string
+    description: >
+      The hostname that is going to be set for master nodes.
+    default: "master"
+
+  infra_hostname:
+    type: string
+    description: >
+      The hostname that is going to be set for infra nodes.
+    default: "infra"
+
+  node_hostname:
+    type: string
+    description: >
+      The hostname that is going to be set for nodes.
+    default: "node"
+
+  master_docker_volume_size_gb:
+    type: number
+    description: >
+      size of a cinder volume in GB to allocate to docker for container/image
+      storage
+    default: 25
+
+  infra_docker_volume_size_gb:
+    type: number
+    description: >
+      size of a cinder volume in GB to allocate to docker for container/image
+      storage
+    default: 25
+
+  node_docker_volume_size_gb:
+    type: number
+    description: >
+      size of a cinder volume in GB to allocate to docker for container/image
+      storage
+    default: 25
+
+  # Node scaling parameters
+  autoscaling:
+    type: boolean
+    description: >
+      Automatically scale up/down openshift nodes.
+    default: false
+
+  openshift_nodes_min:
+    type: number
+    description: >
+      Minimum number of openshift nodes if autoscaling is enabled.
+    default: 1
+
+  openshift_nodes_max:
+    type: number
+    description: >
+      Maximum number of openshift nodes if autoscaling is enabled.
+    default: 5
+
+  # Internal and Auxiliary Services
+  openshift_sdn:
+    type: string
+    description: Software to get an overlay network up and running for Openshift
+    constraints:
+      - allowed_values:
+        - openshift-sdn
+        - flannel
+        - none
+    default: openshift-sdn
+
+  deploy_registry:
+    type: boolean
+    description: >
+      Specify if a Docker registry should be deployed. If set to true, make
+      sure Openstack parameters (os_*) are set too.
+    default: false
+
+  registry_volume_size:
+    description: >
+      Size of the Openshift registry persistent volume. Used only if
+      deploy_registry=true.
+    type: number
+    default: 10
+
+  registry_volume_fs:
+    description: >
+      Filesystem to use for Openshift registry persistent volume. Used only if
+      deploy_registry=true.
+    type: string
+    default: xfs
+
+  registry_volume_id:
+    description: >
+      An existing cinder volume to use for Openshift registry persistent volume.
+      See 'Using Persistent Cinder Volume for Docker Registry' section in
+      README for more details.
+    type: string
+    default: ''
+
+  deploy_router:
+    type: boolean
+    description: >
+      Specify if an OpenShift router should be deployed.
+    default: false
+
+  # OpenShift configuration: ansible controls
+  # These are for debugging.
+  #   Setting prepare_ansible=false will stop the stack before creating
+  #   installation config files
+  prepare_ansible:
+    type: boolean
+    description: >
+      Create ansible configuration files for openshift-ansible playbooks
+    default: true
+
+  #   Setting execute_ansible=false will stop the stack before running
+  #   the ansible playbooks to install openshift, but *after* the configuration
+  #   files are generated
+  execute_ansible:
+    type: boolean
+    description: >
+      Run the ansible playbooks to install openshift
+    default: true
+
+  openshift_ansible_git_url:
+    type: string
+    description: >
+      The URL to the git repository with the openshift-ansible templates to
+      clone.
+    default: ""
+
+  openshift_ansible_git_rev:
+    type: string
+    description: >
+      The git revision of the openshift-ansible repository to check out to.
+    default: ""
+
+  deployment_type:
+    type: string
+    description: >
+      The type of Openshift deployment.  origin and openshift-enterprise
+      are valid.
+    default: "origin"
+    constraints:
+      - allowed_values:
+        - origin
+        - openshift-enterprise
+
+  # Red Hat subscription parameters
+  rhn_username:
+    type: string
+    description: >
+      The username for registering the hosts with RHN. If empty, they will not
+      be registered.
+    default: ''
+
+  rhn_password:
+    type: string
+    description: >
+      The password for registering the hosts with RHN. If empty, they will not
+      be registered.
+    hidden: true
+    default: ''
+
+  # Red Hat satellite subscription parameters
+  sat6_hostname:
+    type: string
+    description: >
+      The hostname of the Satellite 6 server which will provide software updates
+    default: ''
+
+  sat6_organization:
+    type: string
+    description: >
+      An organization string provided by Sat6 to group subscriptions
+    default: ''
+
+  sat6_activationkey:
+    type: string
+    description: >
+      An activation key string provided by Sat6 to enable subscriptions
+    default: ''
+
+  rhn_pool:
+    type: string
+    description: >
+      The pool to attach. Will use `subscription-manager attach --auto` if left
+      blank.
+    hidden: true
+    default: ''
+
+  extra_rhn_pools:
+    type: comma_delimited_list
+    description: >
+      The extra pools to attach.
+    default: ''
+
+  os_auth_url:
+    type: string
+    description: >
+      The Openstack authentication URL to be used by Openshift
+    default: ''
+
+  os_username:
+    type: string
+    description: >
+      The Openstack username to be used by Openshift
+    default: ''
+
+  os_password:
+    type: string
+    description: >
+      The Openstack password to be used by Openshift
+    hidden: true
+    default: ''
+
+  os_tenant_name:
+    type: string
+    description: >
+      The Openstack tenant to by used by Openshift
+    default: ''
+
+  os_domain_name:
+    description: >
+      The name of the OpenStack domain for OpenShift to use. Leave it
+      empty for v2 authentication.
+    type: string
+    default: ''
+
+  os_region_name:
+    type: string
+    description: >
+      The Openstack region name to by used by Openshift
+    default: ''
+
+  extra_repository_urls:
+    type: comma_delimited_list
+    description: A list of repository URLs which will be installed on each node.
+    default: ''
+
+  extra_docker_repository_urls:
+    type: comma_delimited_list
+    description: >
+      A list of docker repository URLs which will be installed on each node,
+      if a repo is insecure use '#insecure' suffix.
+    default: ''
+
+  prepare_registry:
+    type: boolean
+    description: >
+      If the registry volume should be formatted during deployment. Used
+      only if deploy_registry=true.
+    default: false
+
+  volume_quota:
+    type: number
+    description: Quota for emptyDir volumes in GB
+    default: 0
+
+  container_quota:
+    type: number
+    description: Quota for container in GB
+    default: 0
+
+  extra_openshift_ansible_params:
+    type: string
+    description: Extra parameters for openshift-ansible as a JSON string
+    default: ""
+
+  ca_cert:
+    type: string
+    description: Certificate Authority Certificate to be added to trust chain
+    default: ''
+
+resources:
+
+  # Network Components
+  fixed_network:
+    type: OS::Neutron::Net
+
+  fixed_subnet:
+    type: OS::Neutron::Subnet
+    properties:
+      cidr: {get_param: internal_subnet}
+      network: {get_resource: fixed_network}
+      dns_nameservers: {get_param: dns_nameserver}
+
+  external_router:
+    type: OS::Neutron::Router
+    properties:
+      external_gateway_info:
+        network: {get_param: external_network}
+
+  external_router_interface:
+    type: OS::Neutron::RouterInterface
+    properties:
+      router_id: {get_resource: external_router}
+      subnet: {get_resource: fixed_subnet}
+
+  cluster_network:
+    type: OS::Neutron::Net
+
+  cluster_subnet:
+    type: OS::Neutron::Subnet
+    properties:
+      cidr: {get_param: container_subnet}
+      network: {get_resource: cluster_network}
+      gateway_ip: ""
+
+  # Create space for Openshift registry
+  registry_volume:
+    type: OOShift::RegistryVolume
+    properties:
+      volume_size: {get_param: registry_volume_size}
+      volume_id: {get_param: registry_volume_id}
+
+  ipfailover:
+    depends_on: external_router_interface
+    type: OOShift::IPFailover
+    properties:
+      fixed_network: {get_resource: fixed_network}
+      fixed_subnet: {get_resource: fixed_subnet}
+      external_network: {get_param: external_network}
+      loadbalancer_ip: {get_attr: [lb_floating_ip, floating_ip_address]}
+
+  # VM Host definitions
+  bastion_host:
+    depends_on: [external_router_interface, fixed_network, fixed_subnet, registry_volume]
+    type: bastion.yaml
+    properties:
+      node_count: {get_param: node_count}
+      ocp_version: {get_param: ocp_version}
+      osp_version: {get_param: osp_version}
+      ansible_version: {get_param: ansible_version}
+      image: {get_param: bastion_image}
+      flavor: {get_param: bastion_flavor}
+      key_name: {get_param: ssh_key_name}
+      ssh_user: {get_param: ssh_user}
+      rhn_username: {get_param: rhn_username}
+      rhn_password: {get_param: rhn_password}
+      sat6_hostname: {get_param: sat6_hostname}
+      sat6_organization: {get_param: sat6_organization}
+      sat6_activationkey: {get_param: sat6_activationkey}
+      rhn_pool: {get_param: rhn_pool}
+      extra_rhn_pools: {get_param: extra_rhn_pools}
+      hostname:
+        str_replace:
+          template: "%stackname%-%hostname%"
+          params:
+            '%stackname%': {get_param: 'OS::stack_name'}
+            '%hostname%': {get_param: bastion_hostname}
+      domain_name: {get_param: domain_name}
+      fixed_network: {get_resource: fixed_network}
+      fixed_subnet: {get_resource: fixed_subnet}
+      ansible_public_key: {get_attr: [ansible_keys, public_key]}
+      ansible_private_key: {get_attr: [ansible_keys, private_key]}
+      floating_ip: {get_attr: [bastion_floating_ip, floating_ip_address]}
+      port: {get_resource: bastion_port}
+      docker_volume_size: {get_param: master_docker_volume_size_gb}
+      openshift_ansible_git_url: {get_param: openshift_ansible_git_url}
+      openshift_ansible_git_rev: {get_param: openshift_ansible_git_rev}
+      system_update: {get_param: system_update}
+      extra_repository_urls: {get_param: extra_repository_urls}
+      extra_docker_repository_urls: {get_param: extra_docker_repository_urls}
+      ca_cert: {get_param: ca_cert}
+
+  openshift_masters:
+    depends_on: [external_router_interface, fixed_network, fixed_subnet]
+    type: OS::Heat::ResourceGroup
+    properties:
+      count: {get_param: master_count}
+      resource_def:
+        type: master.yaml
+        properties:
+          ocp_version: {get_param: ocp_version}
+          image: {get_param: master_image}
+          flavor: {get_param: master_flavor}
+          key_name: {get_param: ssh_key_name}
+          ssh_user: {get_param: ssh_user}
+          rhn_username: {get_param: rhn_username}
+          rhn_password: {get_param: rhn_password}
+          sat6_hostname: {get_param: sat6_hostname}
+          sat6_organization: {get_param: sat6_organization}
+          sat6_activationkey: {get_param: sat6_activationkey}
+          rhn_pool: {get_param: rhn_pool}
+          extra_rhn_pools: {get_param: extra_rhn_pools}
+          docker_volume_size: {get_param: master_docker_volume_size_gb}
+          hostname:
+            str_replace:
+              template: "%stackname%-%hostname%-%index%"
+              params:
+                '%stackname%': {get_param: 'OS::stack_name'}
+                '%hostname%': {get_param: master_hostname}
+          domain_name: {get_param: domain_name}
+          ansible_public_key: {get_attr: [ansible_keys, public_key]}
+          bastion_node: {get_attr: [bastion_host, resource.host]}
+          fixed_network: {get_resource: fixed_network}
+          fixed_subnet: {get_resource: fixed_subnet}
+          internal_network: {get_resource: cluster_network}
+          internal_subnet: {get_resource: cluster_subnet}
+          external_network: {get_param: external_network}
+          master_server_group: {get_resource: master_server_group}
+          master_security_group: {get_resource: master_security_group}
+          system_update: {get_param: system_update}
+          extra_repository_urls: {get_param: extra_repository_urls}
+          extra_docker_repository_urls: {get_param: extra_docker_repository_urls}
+          dns_servers: {get_param: dns_nameserver}
+          dns_update_key: {get_param: dns_update_key}
+          ca_cert: {get_param: ca_cert}
+
+  openshift_infra_nodes:
+    depends_on: [external_router_interface, fixed_network, fixed_subnet]
+    type: OS::Heat::ResourceGroup
+    properties:
+      count: {get_param: infra_count}
+      resource_def:
+        type: infra.yaml
+        properties:
+          ocp_version: {get_param: ocp_version}
+          image: {get_param: infra_image}
+          flavor: {get_param: infra_flavor}
+          key_name: {get_param: ssh_key_name}
+          ssh_user: {get_param: ssh_user}
+          rhn_username: {get_param: rhn_username}
+          rhn_password: {get_param: rhn_password}
+          sat6_hostname: {get_param: sat6_hostname}
+          sat6_organization: {get_param: sat6_organization}
+          sat6_activationkey: {get_param: sat6_activationkey}
+          rhn_pool: {get_param: rhn_pool}
+          extra_rhn_pools: {get_param: extra_rhn_pools}
+          docker_volume_size: {get_param: infra_docker_volume_size_gb}
+          hostname:
+            str_replace:
+              template: "%stackname%-%hostname%-%index%"
+              params:
+                '%stackname%': {get_param: 'OS::stack_name'}
+                '%hostname%': {get_param: infra_hostname}
+          domain_name: {get_param: domain_name}
+          ansible_public_key: {get_attr: [ansible_keys, public_key]}
+          bastion_node: {get_attr: [bastion_host, resource.host]}
+          fixed_network: {get_resource: fixed_network}
+          fixed_subnet: {get_resource: fixed_subnet}
+          internal_network: {get_resource: cluster_network}
+          internal_subnet: {get_resource: cluster_subnet}
+          external_network: {get_param: external_network}
+          allowed_address_pairs: {get_attr: [ipfailover, allowed_address_pairs]}
+          infra_server_group: {get_resource: infra_server_group}
+          infra_security_group: {get_resource: infra_security_group}
+          system_update: {get_param: system_update}
+          extra_repository_urls: {get_param: extra_repository_urls}
+          extra_docker_repository_urls: {get_param: extra_docker_repository_urls}
+          dns_servers: {get_param: dns_nameserver}
+          dns_update_key: {get_param: dns_update_key}
+          ca_cert: {get_param: ca_cert}
+
+  openshift_nodes:
+    depends_on: [external_router_interface, fixed_network, fixed_subnet]
+    type: OS::Heat::AutoScalingGroup
+    properties:
+      desired_capacity: {get_param: node_count}
+      min_size: {get_param: openshift_nodes_min}
+      max_size: {get_param: openshift_nodes_max}
+      resource:
+        type: node.yaml
+        properties:
+          autoscaling: {get_param: autoscaling}
+          metadata: {"metering.server_group": {get_param: "OS::stack_id"}}
+          ocp_version: {get_param: ocp_version}
+          image: {get_param: node_image}
+          flavor: {get_param: node_flavor}
+          key_name: {get_param: ssh_key_name}
+          ssh_user: {get_param: ssh_user}
+          fixed_network: {get_resource: fixed_network}
+          fixed_subnet: {get_resource: fixed_subnet}
+          internal_network: {get_resource: cluster_network}
+          internal_subnet: {get_resource: cluster_subnet}
+          security_group: {get_resource: node_security_group}
+          docker_volume_size: {get_param: node_docker_volume_size_gb}
+          rhn_username: {get_param: rhn_username}
+          rhn_password: {get_param: rhn_password}
+          sat6_hostname: {get_param: sat6_hostname}
+          sat6_organization: {get_param: sat6_organization}
+          sat6_activationkey: {get_param: sat6_activationkey}
+          rhn_pool: {get_param: rhn_pool}
+          extra_rhn_pools: {get_param: extra_rhn_pools}
+          hostname:
+            str_replace:
+              template: "%stackname%-%hostname%"
+              params:
+                '%stackname%': {get_param: 'OS::stack_name'}
+                '%hostname%': {get_param: node_hostname}
+          domain_name: {get_param: domain_name}
+          app_subdomain: {get_param: app_subdomain}
+          ansible_public_key: {get_attr: [ansible_keys, public_key]}
+          bastion_node: {get_attr: [bastion_host, resource.host]}
+          system_update: {get_param: system_update}
+          extra_repository_urls: {get_param: extra_repository_urls}
+          extra_docker_repository_urls: {get_param: extra_docker_repository_urls}
+          all_master_nodes:
+            list_join:
+              - " "
+              - {get_attr: [openshift_masters, hostname]}
+          all_infra_nodes:
+            list_join:
+              - " "
+              - {get_attr: [openshift_infra_nodes, hostname]}
+          container_quota: {get_param: container_quota}
+          volume_quota: {get_param: volume_quota}
+          deployment_type: {get_param: deployment_type}
+          openshift_sdn: {get_param: openshift_sdn}
+          deploy_registry: {get_param: deploy_registry}
+          registry_volume_id: {get_attr: [registry_volume, volume_id]}
+          registry_volume_fs: {get_param: registry_volume_fs}
+          registry_volume_size: {get_param: registry_volume_size}
+          prepare_registry: {get_param: prepare_registry}
+          deploy_router: {get_param: deploy_router}
+          os_auth_url: {get_param: os_auth_url}
+          os_username: {get_param: os_username}
+          os_password: {get_param: os_password}
+          os_tenant_name: {get_param: os_tenant_name}
+          os_domain_name: {get_param: os_domain_name}
+          os_region_name: {get_param: os_region_name}
+          loadbalancer_type: {get_param: loadbalancer_type}
+          dns_servers: {get_param: dns_nameserver}
+          dns_update_key: {get_param: dns_update_key}
+          lb_ip: {get_attr: [lb_floating_ip, floating_ip_address]}
+          master_ip: {get_attr: [openshift_masters, resource.0.ip_address]}
+          lb_hostname: {get_attr: [loadbalancer, hostname]}
+          router_vip: {get_attr: [ipfailover, router_vip]}
+          prepare_ansible: {get_param: prepare_ansible}
+          execute_ansible: {get_param: execute_ansible}
+          extra_openshift_ansible_params: {get_param: extra_openshift_ansible_params}
+          ca_cert: {get_param: ca_cert}
+
+  # Define the network access policy for openshift nodes
+  node_security_group:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      rules:
+      - protocol: icmp
+      - direction: ingress
+        protocol: tcp
+        port_range_min: 22
+        port_range_max: 22
+      - direction: ingress
+        protocol: tcp
+        port_range_min: 10250
+        port_range_max: 10250
+      - direction: ingress
+        protocol: udp
+        port_range_min: 4789
+        port_range_max: 4789
+
+  # Scaling and Operational Controls
+  scale_up_policy:
+    type: OS::Heat::ScalingPolicy
+    properties:
+      adjustment_type: change_in_capacity
+      auto_scaling_group_id: {get_resource: openshift_nodes}
+      cooldown: 60
+      scaling_adjustment: 1
+
+  scale_down_policy:
+    type: OS::Heat::ScalingPolicy
+    properties:
+      adjustment_type: change_in_capacity
+      auto_scaling_group_id: {get_resource: openshift_nodes}
+      cooldown: 60
+      scaling_adjustment: '-1'
+
+  cpu_alarm_high:
+    type: OS::Aodh::GnocchiAggregationByResourcesAlarm
+    properties:
+      metric: cpu_util
+      threshold: 50
+      comparison_operator: gt
+      resource_type: instance
+      aggregation_method: mean
+      granularity: 300
+      evaluation_periods: 1
+      enabled: {get_param: autoscaling}
+      alarm_actions:
+        - {get_attr: [scale_up_policy, alarm_url]}
+      query:
+        str_replace:
+          template: '{"=": {"server_group": "stack_id"}}'
+          params:
+            stack_id: {get_param: "OS::stack_id"}
+
+  cpu_alarm_low:
+    type: OS::Aodh::GnocchiAggregationByResourcesAlarm
+    properties:
+      metric: cpu_util
+      threshold: 15
+      comparison_operator: lt
+      resource_type: instance
+      aggregation_method: mean
+      granularity: 300
+      evaluation_periods: 1
+      enabled: {get_param: autoscaling}
+      alarm_actions:
+        - {get_attr: [scale_down_policy, alarm_url]}
+      query:
+        str_replace:
+          template: '{"=": {"server_group": "stack_id"}}'
+          params:
+            stack_id: {get_param: "OS::stack_id"}
+        
+  bastion_port:
+    type: OS::Neutron::Port
+    properties:
+      security_groups:
+      - {get_resource: bastion_security_group}
+      network: {get_resource: fixed_network}
+      fixed_ips:
+      - subnet: {get_resource: fixed_subnet}
+      replacement_policy: AUTO
+
+  bastion_security_group:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      rules:
+      - protocol: icmp
+      - protocol: tcp
+        port_range_min: 22
+        port_range_max: 22
+      - protocol: tcp
+        port_range_min: 53
+        port_range_max: 53
+      - protocol: udp
+        port_range_min: 53
+        port_range_max: 53
+
+  bastion_floating_ip:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network: {get_param: external_network}
+      port_id: {get_resource: bastion_port}
+
+  ansible_keys:
+    type: OS::Nova::KeyPair
+    properties:
+      name:
+        str_replace:
+          template: "ansible_keys_STACK"
+          params:
+            STACK: {get_param: "OS::stack_id"}
+      save_private_key: True
+
+  # OpenShift web and REST API network controls
+  master_server_group:
+    type: OS::Nova::ServerGroup
+    properties:
+      name: master_server_group
+      policies: {get_param: master_server_group_policies}
+
+  master_security_group:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      rules:
+      - protocol: icmp
+      - direction: ingress
+        protocol: tcp
+        port_range_min: 22
+        port_range_max: 22
+      - direction: ingress
+        protocol: tcp
+        port_range_min: 4001
+        port_range_max: 4001
+      - direction: ingress
+        protocol: tcp
+        port_range_min: 8443
+        port_range_max: 8443
+      - direction: ingress
+        protocol: tcp
+        port_range_min: 53
+        port_range_max: 53
+      - direction: ingress
+        protocol: udp
+        port_range_min: 53
+        port_range_max: 53
+      - direction: ingress
+        protocol: udp
+        port_range_min: 4789
+        port_range_max: 4789
+      - direction: ingress
+        protocol: tcp
+        port_range_min: 8053
+        port_range_max: 8053
+      - direction: ingress
+        protocol: udp
+        port_range_min: 8053
+        port_range_max: 8053
+      - direction: ingress
+        protocol: tcp
+        port_range_min: 10250
+        port_range_max: 10250
+      - direction: ingress
+        protocol: tcp
+        port_range_min: 24224
+        port_range_max: 24224
+      - direction: ingress
+        protocol: udp
+        port_range_min: 24224
+        port_range_max: 24224
+      # etcd services
+      - direction: ingress
+        protocol: tcp
+        port_range_min: 2379
+        port_range_max: 2379
+      - direction: ingress
+        protocol: tcp
+        port_range_min: 2380
+        port_range_max: 2380
+        remote_mode: remote_group_id
+
+  infra_server_group:
+    type: OS::Nova::ServerGroup
+    properties:
+      name: infra_server_group
+      policies: {get_param: infra_server_group_policies}
+
+  infra_security_group:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      rules:
+      - protocol: icmp
+      - direction: ingress
+        protocol: tcp
+        port_range_min: 22
+        port_range_max: 22
+      # bastion node services
+      - direction: ingress
+        protocol: tcp
+        port_range_min: 80
+        port_range_max: 80
+      - direction: ingress
+        protocol: tcp
+        port_range_min: 443
+        port_range_max: 443
+      - direction: ingress
+        protocol: tcp
+        port_range_min: 10250
+        port_range_max: 10250
+      - direction: ingress
+        protocol: udp
+        port_range_min: 4789
+        port_range_max: 4789
+      - direction: ingress
+        protocol: tcp
+        port_range_min: 5000
+        port_range_max: 5000
+      # VRRP
+      - protocol: 112
+
+  lb_floating_ip:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network: {get_param: external_network}
+
+  loadbalancer:
+    type:  OOShift::LoadBalancer
+    properties:
+      ocp_version: {get_param: ocp_version}
+      image: {get_param: loadbalancer_image}
+      flavor: {get_param: loadbalancer_flavor}
+      key_name: {get_param: ssh_key_name}
+      ssh_user: {get_param: ssh_user}
+      rhn_username: {get_param: rhn_username}
+      rhn_password: {get_param: rhn_password}
+      sat6_hostname: {get_param: sat6_hostname}
+      sat6_organization: {get_param: sat6_organization}
+      sat6_activationkey: {get_param: sat6_activationkey}
+      rhn_pool: {get_param: rhn_pool}
+      extra_rhn_pools: {get_param: extra_rhn_pools}
+      hostname: {get_param: lb_hostname}
+      domain_name: {get_param: domain_name}
+      app_subdomain: {get_param: app_subdomain}
+      stack_name: {get_param: 'OS::stack_name'}
+      ansible_public_key: {get_attr: [ansible_keys, public_key]}
+      fixed_subnet: {get_resource: fixed_subnet}
+      members: {get_attr: [openshift_masters, host]}
+      master_hostname: {get_attr: [openshift_masters, resource.0.hostname]}
+      floatingip_id: {get_resource: lb_floating_ip}
+      floatingip: {get_attr: [lb_floating_ip, floating_ip_address]}
+      fixed_network: {get_resource: fixed_network}
+      fixed_subnet: {get_resource: fixed_subnet}
+      extra_repository_urls: {get_param: extra_repository_urls}
+      extra_docker_repository_urls: {get_param: extra_docker_repository_urls}
+      stack_name: {get_param: 'OS::stack_name'}
+      bastion_node: {get_attr: [bastion_host, resource.host]}
+      dns_servers: {get_param: dns_nameserver}
+      dns_update_key: {get_param: dns_update_key}
+      ca_cert: {get_param: ca_cert}
+
+outputs:
+
+  loadbalancer_ip:
+    description: External IP address of the loadbalancer for master nodes.
+    value: {get_attr: [lb_floating_ip, floating_ip_address]}
+
+  router_ip:
+    description: External IP address of the OpenShift router.
+    value: {get_attr: [ipfailover, router_ip]}
+
+  console_url:
+    description: URL of the OpenShift web console
+    value: {get_attr: [loadbalancer, console_url]}
+
+  api_url:
+    description: URL entrypoint to the OpenShift API
+    value: {get_attr: [loadbalancer, api_url]}
+
+  host_ips:
+    description: IP addresses of the OpenShift nodes
+    value: {get_attr: [openshift_nodes, outputs_list, ip_address]}
+
+  scale_up_url:
+    description: >
+      This URL is the webhook to scale up the autoscaling group.  You
+      can invoke the scale-up operation by doing an HTTP POST to this
+      URL; no body nor extra headers are needed.
+    value: {get_attr: [scale_up_policy, alarm_url]}
+
+  scale_dn_url:
+    description: >
+      This URL is the webhook to scale down the autoscaling group.
+      You can invoke the scale-down operation by doing an HTTP POST to
+      this URL; no body nor extra headers are needed.
+    value: {get_attr: [scale_down_policy, alarm_url]}
+
+  ca_cert:
+    description: Openshift CA certificate.
+    value: {get_attr: [openshift_nodes, ca_cert]}
+
+  ca_key:
+    description: Openshift CA certificate key.
+    value: {get_attr: [openshift_nodes, ca_key]}
+
+  master_ips:
+    description: List of openshift master node IPs
+    value: {get_attr: [openshift_masters, ip_address]}

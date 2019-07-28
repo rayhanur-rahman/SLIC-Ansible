@@ -1,0 +1,17 @@
+---
+- hosts: localhost
+  become: False
+  vars_files:
+    - vars/main.yaml
+  tasks:
+    - import_tasks: roles/aws/tasks/getcreds.yaml
+    - import_tasks: roles/aws/tasks/getazs.yaml
+    - import_tasks: roles/aws/tasks/getec2ami.yaml
+    - import_tasks: roles/aws/tasks/vpcdhcpopts.yaml
+    - import_tasks: roles/aws/tasks/vpc.yaml
+    - import_tasks: roles/aws/tasks/subnet.yaml
+    - import_tasks: roles/aws/tasks/securitygroup_cns.yaml
+    - import_tasks: roles/aws/tasks/securitygrouprule_cns.yaml
+    - import_tasks: roles/aws/tasks/ec2_cns.yaml
+    - import_tasks: roles/aws/tasks/configfiles_cns.yaml
+    - import_tasks: roles/aws/tasks/configfilesdata_cns.yaml

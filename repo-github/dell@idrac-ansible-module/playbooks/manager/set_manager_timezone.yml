@@ -1,0 +1,21 @@
+---
+- hosts: myhosts
+  connection: local
+  name: Set Mananger timezone
+  gather_facts: False
+
+  vars:
+    - timezone: "US/Central" 
+
+  tasks:
+
+  - name: Set Manager Timezone to {{ timezone }}
+    idrac_redfish_config:
+      category: Manager
+      command: SetManagerAttributes
+      manager_attribute_name: Time.1.Timezone
+      manager_attribute_value: "{{ timezone }}"
+      baseuri: "{{ baseuri }}"
+      username: "{{ username }}"
+      password: "{{ password }}"
+      timeout: 30 

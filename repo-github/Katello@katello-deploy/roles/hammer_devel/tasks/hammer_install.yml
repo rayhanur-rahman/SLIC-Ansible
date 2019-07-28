@@ -1,0 +1,54 @@
+---
+- name: 'Clone the hammer repositories'
+  git:
+    repo: https://github.com/{{ item }}.git
+    dest: ~/{{ item.split('/')[1] }}
+    update: no
+    remote: upstream
+  with_items: "{{ hammer_devel_repositories }}"
+
+- name: 'Check if the local fork remotes exist'
+  shell: "git remote | grep ^{{ hammer_devel_github_fork_remote_name }}$"
+  args:
+    chdir: ~/{{ item.split('/')[1] }}
+  ignore_errors: yes
+  changed_when: False
+  with_items: "{{ hammer_devel_repositories }}"
+  register: local_fork_remotes_exist
+
+- name: 'Check the GitHub fork repos exist for missing local fork remotes'
+  shell: "git ls-remote --exit-code -h https://:@github.com/{{ hammer_devel_github_username }}/{{ item.item.split('/')[1] }}"
+  args:
+    chdir: ~/{{ item.item.split('/')[1] }}
+  ignore_errors: yes
+  changed_when: False
+  with_items: "{{ local_fork_remotes_exist.results }}"
+  when: item.rc != 0
+  register: github_forks_exist
+
+- name: 'Add local fork remotes to cloned repositories'
+  command: "git remote add {{ hammer_devel_github_fork_remote_name }} git@github.com:{{ hammer_devel_github_username }}/{{ item.item.item.split('/')[1] }}.git"
+  when:
+    - ('skipped' not in item)
+    - item.rc == 0
+  args:
+    chdir: ~/{{ item.item.item.split('/')[1] }}
+  ignore_errors: yes
+  with_items: "{{ github_forks_exist.results }}"
+
+- name: 'Add local gems to Gemfile.local'
+  blockinfile:
+    dest: ~/hammer-cli-foreman/Gemfile.local
+    create: yes
+    block: |
+      gem 'pry'
+      path '../' do
+        {{ hammer_devel_local_gems }}
+      end
+
+- name: 'Install gem native dependencies'
+  become: true
+  yum: name=gcc-c++ state=present
+
+- name: 'Install gems'
+  bundler: chdir=~/hammer-cli-foreman state=present

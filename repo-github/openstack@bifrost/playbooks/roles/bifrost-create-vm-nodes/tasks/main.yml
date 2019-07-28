@@ -1,0 +1,133 @@
+# Copyright (c) 2015 Hewlett-Packard Development Company, L.P.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+---
+- name: produce warning when csv file is defined
+  debug:
+    msg: >
+      "WARNING - Variable 'baremetal_csv_file' is deprecated.
+      For backward compatibility, its value will be used as path for
+      file to write data for created 'virtual' baremetal nodes,
+      but the file will be JSON formatted."
+  when: baremetal_csv_file is defined
+
+- name: override baremetal_json_file with csv file path
+  set_fact:
+    baremetal_json_file: "{{ baremetal_csv_file }}"
+  when: baremetal_csv_file is defined
+
+# NOTE(cinerama) openSUSE Tumbleweed & Leap have different distribution
+# IDs which are not currently accounted for in Ansible, so adjust facts
+# so we can have shared defaults for the whole SuSE family.
+# This change can be removed when the pull request at
+# https://github.com/ansible/ansible/pull/17575 lands in a new version.
+- name: Ensure openSUSE Tumbleweed has the correct family
+  set_fact:
+    ansible_os_family: "Suse"
+  when: ansible_os_family | search("openSUSE Tumbleweed")
+
+- name: Ensure openSUSE Leap has the correct family
+  set_fact:
+    ansible_os_family: "Suse"
+  when: (ansible_os_family | search("SUSE LINUX")) or
+        (ansible_os_family | search("openSUSE Leap"))
+
+# NOTE(hwoarang) The 'apt' module needs python-apt installed in the virtualenv
+# but it's not possible to do that. See https://github.com/ansible/ansible/issues/14468
+# python-apt only works if it's installed on the local system so we need to switch the
+# Ansible python interpreter.
+- name: "Update apt cache if Ubuntu/Debian"
+  apt:
+    update_cache: yes
+  vars:
+    ansible_python_interpreter: '/usr/bin/python'
+  when: ansible_os_family == "Debian"
+
+- name: "Load distribution defaults"
+  include_vars: "{{ item }}"
+  with_first_found:
+    - "../defaults/required_defaults_{{ ansible_distribution }}.yml"
+    - "../defaults/required_defaults_{{ ansible_os_family }}.yml"
+
+- name: "Include OS version-specific defaults"
+  include_vars: "{{ item }}"
+  with_first_found:
+    - "../defaults/required_defaults_{{ ansible_distribution }}_{{ ansible_distribution_release }}.yml"
+    - "../defaults/dummy-defaults.yml"
+# NOTE(cinerama): On Fedora 22, ansible 1.9, ansible_pkg_mgr
+# defaults to yum, which may not be installed. This can be safely
+# removed when we start using an ansible release which prefers dnf.
+
+- name: "Check for dnf"
+  stat:
+    path: "/usr/bin/dnf"
+  register: test_dnf
+
+- name: "Adjust ansible_pkg_mgr if dnf exists"
+  set_fact:
+    ansible_pkg_mgr: "dnf"
+  when: ansible_distribution == 'Fedora' and test_dnf.stat.exists|bool
+
+# NOTE(hwoarang) The 'apt' module needs python-apt installed in the virtualenv
+# but it's not possible to do that. See https://github.com/ansible/ansible/issues/14468
+# python-apt only works if it's installed on the local system so we need to switch the
+# Ansible python interpreter.
+- name: "Install required packages"
+  action: "{{ ansible_pkg_mgr }} name={{ item }} state=present"
+  with_items: "{{ required_packages }}"
+  vars:
+    ansible_python_interpreter: '/usr/bin/python'
+
+- include: prepare_libvirt.yml
+
+- name: truncate explicit list of vm names
+  set_fact:
+    test_vm_node_names: "{{ test_vm_node_names[:(test_vm_num_nodes|int)] }}"
+
+- name: generate test vm names
+  set_fact:
+    generated_test_vm_node_names: "{{ generated_test_vm_node_names|default([]) + [item] }}"
+  with_sequence: count={{ test_vm_num_nodes | int }} format={{ test_vm_node_name_base }}%i
+  when: test_vm_node_names | length == 0
+
+- name: set test vm names
+  set_fact:
+    test_vm_node_names: "{{ generated_test_vm_node_names }}"
+  when: test_vm_node_names | length == 0
+
+- name: create placeholder var for vm entries in JSON format
+  set_fact:
+    testvm_json_data: {}
+
+- include: create_vm.yml
+  with_items: "{{ test_vm_node_names }}"
+
+- name: remove previous baremetal data file
+  file:
+    state: absent
+    path: "{{ baremetal_json_file }}"
+
+- name: write to baremetal json file
+  copy:
+    dest: "{{ baremetal_json_file }}"
+    content: "{{ testvm_json_data | to_nice_json }}"
+
+- name: >
+    "Set file permissions such that the baremetal data file
+    can be read by the user executing Ansible"
+  file:
+    path: "{{ baremetal_json_file }}"
+    owner: "{{ ansible_env.SUDO_USER }}"
+  when: >
+    ansible_env.SUDO_USER is defined and
+    baremetal_json_file != ""

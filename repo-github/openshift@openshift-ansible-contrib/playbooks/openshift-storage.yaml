@@ -1,0 +1,7 @@
+---
+- hosts: schedulable_nodes
+  gather_facts: no
+  become: yes
+  roles:
+  - docker-storage-setup
+  - openshift-volume-quota

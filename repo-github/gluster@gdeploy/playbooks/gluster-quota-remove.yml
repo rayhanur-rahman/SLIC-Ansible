@@ -1,0 +1,11 @@
+---
+- hosts: master
+  become: true
+  gather_facts: no
+
+  tasks:
+  - name: Gluster volume quota remove operation
+    quota:  action="{{ action }}"
+            volume="{{ volname }}"
+            path={{ item }}
+    with_items: "{{ path }}"

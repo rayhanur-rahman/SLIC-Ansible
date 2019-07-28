@@ -1,0 +1,62 @@
+---
+# example:
+#   ansible-playbook -i host_file dbimage-make.yml -u ubuntu -c ssh
+#
+
+- name: Initialize deployer
+  hosts: deployer
+  environment: "{{ deployment_environment | default({}) }}"
+  become: yes
+  vars_files:
+    - vars/dbimage-args.yml
+  tasks:
+    - include: tasks/init-deployer.yml
+    - include: tasks/validate-version.yml
+    - include: tasks/get-external-image-data.yml
+
+- name: Initialize controller
+  hosts: controller
+  environment: "{{ deployment_environment | default({}) }}"
+  become: yes
+  vars_files:
+    - vars/dbimage-args.yml
+  tasks:
+    - include: tasks/init-controller.yml
+      when: not isJujuCharm
+    - include: tasks/charm-init-controller.yml
+      when: isJujuCharm
+
+- name: Install and run diskimage-builder in DIB
+  hosts: dib
+  environment: "{{ deployment_environment | default({}) }}"
+  vars_files:
+    - vars/dbimage-args.yml
+  tasks:
+    - include: tasks/pre-install-dib.yml
+    - include: tasks/install-dib.yml
+    - include: tasks/run-dib.yml
+
+- name: Post process image
+  hosts: deployer
+  environment: "{{ deployment_environment | default({}) }}"
+  vars_files:
+    - vars/dbimage-args.yml
+  tasks:
+    - include: tasks/convert-image.yml
+      when: uploadImage == true
+
+- name: Upload image to controller
+  hosts: controller
+  environment: "{{ deployment_environment | default({}) }}"
+  become: yes
+  vars_files:
+    - vars/dbimage-args.yml
+  tasks:
+    - include: tasks/upload-image.yml
+      when:
+        - uploadImage == true
+        - not isJujuCharm
+    - include: tasks/charm-upload-image.yml
+      when:
+        - uploadImage == true
+        - isJujuCharm

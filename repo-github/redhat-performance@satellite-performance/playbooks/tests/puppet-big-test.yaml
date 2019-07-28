@@ -1,0 +1,80 @@
+---
+- hosts: docker-hosts
+  remote_user: root
+  gather_facts: no
+  vars_files:
+    - ../../conf/satperf.yaml
+    - ../../conf/satperf.local.yaml
+  vars:
+    size: 1   # should be provided via external parameter
+    forks: "{{ size }}"   # in how many forks should playbooks run?
+    use_only_fresh: true   # should we use only containers which were not registered yet?
+    update_used: true   # once we use containers, should we update /root/containers-used-count?
+  tasks:
+    - name: "Deploy docker host side of big puppet test"
+      template:
+        src: puppet-big-client.yaml.j2
+        dest: /root/puppet-big-client.yaml
+        validate: python -c 'import yaml; print yaml.safe_load(open("%s", "r"))'
+      tags: always
+
+    - name: "Ansible on docker host configured to ignore host keys"
+      lineinfile:
+        regexp: '^\s*host_key_checking\s*='
+        line: 'host_key_checking = False'
+        path: /etc/ansible/ansible.cfg
+      tags: always
+
+    - import_tasks: includes/prepare_clients_ini.yaml
+      vars:
+        size: "{{ size }}"
+      tags: always
+
+    - name: "Determine marker variable"
+      set_fact:
+        marker: "{{ lookup('pipe', 'date --utc --iso-8601=seconds') }}"
+      run_once: yes
+      tags: always
+
+
+    - name: "Set variables for single module job"
+      set_fact:
+        nickname: single
+        content_puppet_cv: SatPerfContentViewPuppetFakeModule
+        content_puppet_module_name: satperftest
+      tags: SINGLE
+
+    - name: "Set variables for job with bunch of modules"
+      set_fact:
+        nickname: bunch
+        content_puppet_cv: SatPerfContentViewPuppetRealModules
+        content_puppet_module_name: acl,apache,archive,firewalld,gcc,haproxy,java,limits,motd,nsswitch,ntp,pam,rsyslog,ssh,sysstat,tomcat
+      tags: BUNCH
+
+    - name: "Determine Puppet environment name for {{ content_puppet_cv }}"
+      shell:
+        hammer --output csv -u "{{ sat_user }}" -p "{{ sat_pass }}" environment list | grep "{{ content_puppet_cv }}" | cut -d ',' -f 2
+      delegate_to: "{{ groups['satellite6']|first }}"
+      run_once: yes
+      register: hammer_envs_grepped
+      tags: always
+    - name: "Set Puppet environment label variable"
+      set_fact:
+        content_puppet_env: "{{ hammer_envs_grepped.stdout_lines[0] }}"
+      tags: always
+
+
+    # Puppet registration
+    - import_tasks: includes/puppet-big-test-register.yaml
+      tags: always
+
+    # Puppet deploy
+    - import_tasks: includes/puppet-big-test-deploy.yaml
+      tags: always
+
+
+    - import_tasks: includes/update_used_containers.yaml
+      vars:
+        used_count: "{{ containers_used_count|int + size|int }}"
+      tags: always
+...

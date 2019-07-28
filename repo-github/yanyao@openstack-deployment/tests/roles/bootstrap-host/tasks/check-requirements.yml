@@ -1,0 +1,89 @@
+---
+# Copyright 2015, Rackspace US, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- name: Check for a supported Operating System
+  assert:
+    that: ansible_distribution | lower == 'ubuntu'
+  tags:
+    - check-operating-system
+
+- name: Identify the space available in /
+  shell: |
+    df -BK / | awk '/^[^Filesystem]/ {print $4}' | sed 's/K//'
+  when:
+    - bootstrap_host_data_disk_device is not defined
+  changed_when: false
+  register: root_space_available
+  tags:
+    - check-disk-size
+
+# Convert root_space_available to bytes.
+- name: Set root disk facts
+  set_fact:
+    host_root_space_available_bytes: "{{ ( root_space_available.stdout | int) * 1024 | int }}"
+  when:
+    - bootstrap_host_data_disk_device is not defined
+  tags:
+    - check-disk-size
+
+- name: Set data disk facts
+  set_fact:
+    host_data_disk_sectors: "{{ (ansible_devices[bootstrap_host_data_disk_device]['sectors'] | int) }}"
+    host_data_disk_sectorsize: "{{ (ansible_devices[bootstrap_host_data_disk_device]['sectorsize'] | int) }}"
+  when:
+    - bootstrap_host_data_disk_device is defined
+  tags:
+    - check-disk-size
+
+# Calculate the size of the bootstrap_host_data_disk_device by muliplying sectors with sectorsize.
+- name: Calculate data disk size
+  set_fact:
+    host_data_disk_size_bytes: "{{ ((host_data_disk_sectors | int) * (host_data_disk_sectorsize | int)) | int }}"
+  when:
+    - bootstrap_host_data_disk_device is defined
+  tags:
+    - check-disk-size
+
+# Convert bootstrap_host_data_disk_min_size to bytes.
+- name: Set min size fact
+  set_fact:
+    host_data_disk_min_size_bytes: "{{ ((bootstrap_host_data_disk_min_size | int) * 1024**3) | int }}"
+  tags:
+    - check-disk-size
+
+- name: Fail if there is not enough space available in /
+  assert:
+    that: |
+      (host_root_space_available_bytes | int) >= (host_data_disk_min_size_bytes | int)
+  when:
+    - bootstrap_host_data_disk_device is not defined
+  tags:
+    - check-disk-size
+
+- name: Fail if there is not enough disk space available (disk specified)
+  assert:
+    that: |
+      (host_data_disk_size_bytes | int) >= (host_data_disk_min_size_bytes | int)
+  when:
+    - bootstrap_host_data_disk_device is defined
+  tags:
+    - check-disk-size
+
+- name: Ensure that the kernel has VXLAN support
+  modprobe:
+    name: vxlan
+    state: present
+  tags:
+    - check-vxlan

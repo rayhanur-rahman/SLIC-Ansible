@@ -1,0 +1,23 @@
+---
+# This task is invoked during the invocation of the playbook below:
+#
+# ansible-playbook -i host_file dbflavor-upload.yml -u ubuntu -c ssh
+#
+# This is invoked on a controller node as ubuntu and then
+# becomes root before any of these tasks are run
+
+- name: Get flavors
+  set_fact:
+    dbFlavors: "{{ hostvars[groups['deployer'][0]].dbFlavors }}"
+
+- name: Upload flavors for {{ dbName }}
+  shell: >-
+    /bin/bash -c '
+    source /home/ubuntu/openrc;
+    nova flavor-create --is-public True {{ dbName }}-{{ item.config }} auto
+    {{ item.mem }} {{ item.vdisk1 }} {{ item.vcpus }}'
+  register: flavorrc
+  with_items: "{{ dbFlavors | default({}) }}"
+  retries: 3
+  delay: 15
+

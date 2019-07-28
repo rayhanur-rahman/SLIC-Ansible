@@ -1,0 +1,129 @@
+---
+
+- name: Install packages
+  yum:
+    name:
+      - lighttpd
+      - python2-xkcdpass
+    state: present
+
+- name: Install ROCK lighttpd configuration
+  template:
+    src: templates/{{ item }}.j2
+    dest: /etc/lighttpd/vhosts.d/{{ item }}
+    mode: 0644
+    owner: root
+    group: root
+  when: "'kibana' in installed_services"
+  loop:
+    - 10-rock-auth.conf
+    - 10-tls.conf
+    - 20-rock-vars.conf
+    - 50-rockproxy.conf
+  notify: Enable and restart lighttpd
+
+- name: Enable lighttpd vhosts
+  lineinfile:
+    path: /etc/lighttpd/lighttpd.conf
+    regexp: '^#?\s*include.*vhosts\.d/.*$'
+    line: include "/etc/lighttpd/vhosts.d/*.conf"
+  notify: Enable and restart lighttpd
+
+- name: Disable lighttpd ipv6
+  lineinfile:
+    path: /etc/lighttpd/lighttpd.conf
+    regexp: '^server.use-ipv6.*$'
+    line: server.use-ipv6 = "disable"
+  notify: Enable and restart lighttpd
+
+- name: Enable lighttpd to perform proxy connect
+  seboolean:
+    name: httpd_can_network_connect
+    state: true
+    persistent: true
+  when: "'kibana' in installed_services"
+
+- name: Generate sensor private key
+  openssl_privatekey:
+    path: "{{ http_tls_key }}"
+  when: "'kibana' in installed_services"
+  notify: Enable and restart lighttpd
+
+- name: Generate sensor public key
+  openssl_publickey:
+    path: "{{ http_tls_pub }}"
+    privatekey_path: "{{ http_tls_key }}"
+  when: "'kibana' in installed_services"
+  notify: Enable and restart lighttpd
+
+- name: Generate sensor CSR
+  openssl_csr:
+    path: "{{ http_tls_pub }}.csr"
+    privatekey_path: "{{ http_tls_key }}"
+    country_name: US
+    state_or_province_name: MO
+    locality_name: St. Louis
+    organization_name: RockNSM
+    organizational_unit_name: NSM Ninjas
+    email_address: info@rocknsm.io
+    common_name: "{{ ansible_hostname }}"
+  when: "'kibana' in installed_services"
+  notify: Enable and restart lighttpd
+
+- name: Generate sensor certificate
+  openssl_certificate:
+    path: "{{ http_tls_crt }}"
+    privatekey_path: "{{ http_tls_key }}"
+    csr_path: "{{ http_tls_pub }}.csr"
+    provider: selfsigned
+  when: "'kibana' in installed_services"
+  notify: Enable and restart lighttpd
+
+- name: Combine sensor cert and key
+  shell: >
+    cat {{ http_tls_key }} {{ http_tls_crt }} > {{ http_tls_combined }}
+  args:
+    creates: "{{ http_tls_combined }}"
+  notify: Enable and restart lighttpd
+
+- name: Generate DH parameters
+  command: >
+    openssl dhparam -out {{ http_tls_dhparams }} 2048
+  args:
+    creates: "{{ http_tls_dhparams }}"
+  when: "'kibana' in installed_services"
+  notify: Enable and restart lighttpd
+
+- name: Configure firewall ports
+  firewalld:
+    port: "{{ item }}/tcp"
+    permanent: true
+    state: enabled
+    immediate: true
+  loop:
+    - 443
+
+- name: Check if initial user has already been created
+  stat:
+    path: /etc/lighttpd/rock-htpasswd.user
+  register: rocknsm_initial_user_created
+
+- block:
+    - name: Determine initial username
+      shell: "getent passwd 1000 | awk -F: '{print $1}'"
+      register: rocknsm_initial_username
+
+    - name: Determine initial password
+      command: "xkcdpass -a rock"
+      register: rocknsm_initial_password
+
+    - name: Set initial credentials
+      include_tasks: add-user.yml
+      vars:
+        lighttpd_user: "{{ rocknsm_initial_username.stdout }}"
+        lighttpd_password: "{{ rocknsm_initial_password.stdout }}"
+
+    - name: Output initial credentials
+      shell: "echo -e \"U: {{ rocknsm_initial_username.stdout }}\nP: {{ rocknsm_initial_password.stdout }}\"
+              > /home/{{ rocknsm_initial_username.stdout }}/KIBANA_CREDS.README"
+  when: rocknsm_initial_user_created.stat.exists | bool

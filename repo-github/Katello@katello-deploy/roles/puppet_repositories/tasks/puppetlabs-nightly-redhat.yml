@@ -1,0 +1,7 @@
+---
+- name: 'Setup Puppet 6 Nightly Repository'
+  yum:
+    name: https://yum.puppet.com/puppet6-nightly-release-el-{{ ansible_distribution_major_version }}.noarch.rpm
+    state: present
+  tags:
+    - packages

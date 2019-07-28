@@ -1,0 +1,138 @@
+---
+# Copyright 2017, Rackspace US, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Nova config overrides
+nova_console_type: novnc
+
+# Set RabbitMQ message replication count to 2
+# The desired setting would be {{ (groups.rabbitmq|length /2 +1)|round(0,'floor') |int }}
+# but can't be used due to https://github.com/ansible/ansible/issues/9362
+rabbitmq_policies:
+  - name: "HA"
+    pattern: '^(?!amq\.).*'
+    tags:
+      ha-mode: exactly
+      ha-params: 2
+      ha-sync-mode: automatic
+
+# Memcached overrides
+# https://github.com/rcbops/rpc-openstack/issues/1048
+# memcached_memory is calculated via https://github.com/openstack/openstack-ansible-memcached_server/blob/master/defaults/main.yml#L33
+# based on container memory but this determination it not necessarily correct,
+# since memory utilization is primarily driven by the objects placed in memcached.
+memcached_connections: 16384
+
+# Galera overrides
+galera_cluster_name: rpc_galera_cluster
+
+## Enable Neutron l2_population
+# We are overriding the default value for neutron_l2_population. Please see
+# https://github.com/rcbops/rpc-openstack/issues/973 for further details.
+neutron_l2_population: True
+
+# Based on https://github.com/rcbops/rpc-openstack/issues/1149
+# L3HA has to be disabled until all major issues are fixed.
+neutron_neutron_conf_overrides:
+  DEFAULT:
+    l3_ha: False
+
+#Set the default for Neutron-HA-tool to true
+neutron_legacy_ha_tool_enabled: true
+
+# Increase interval between checks after container start.
+# Reduces the "Wait for container ssh" error.
+ssh_delay: 60
+
+# Use the correct secrets file
+osa_secrets_file_name: "user_osa_secrets.yml"
+
+# Disable glance image cache, default is keystone+cachemanagement
+glance_flavor: keystone
+
+# Octavia tuning
+# Keep this while there is no Barbican or Vault
+octavia_tls_listener_enabled: False
+
+# Octavia HA settings
+octavia_loadbalancer_topology: ACTIVE_STANDBY
+octavia_spare_amphora_pool_size: 0
+octavia_enable_anti_affinity: "{{ lookup('env', 'DEPLOY_AIO') != 'yes' }}"
+# RPC disables connection logging, so setting this back to 2GB
+octavia_amp_disk: 2
+# RPC doesn't use images from an artefact storage - so disable download
+octavia_download_artefact: False
+
+octavia_octavia_conf_overrides:
+  # Production clouds should be able to boot VMs in ten minutes
+  haproxy_amphora:
+    connection_max_retries: 120
+    build_active_retries: 120
+    # RPC is disabling connection logging in the amphroa as they are not
+    # accessible anyway.
+    connection_logging: False
+  keepalived_vrrp:
+    vrrp_check_interval: 2
+  # Wait for up to half an hour for nova to actually delete an instance and
+  # release the port
+  networking:
+    port_detach_timeout: 1800
+  task_flow:
+    engine: parallel
+
+# Elasticsearch global variables
+elasticsearch_http_port: 9200
+elasticsearch_tcp_port: 9300
+
+# Adding elastic search and kibana to haproxy_extra_services
+haproxy_extra_services:
+  - service:
+      haproxy_service_name: elasticsearch
+      haproxy_backend_nodes: "{{ groups['elasticsearch'] | default([]) }}"
+      haproxy_ssl: True
+      haproxy_port: 9201
+      haproxy_backend_port: 9200
+      haproxy_balance_type: http
+      haproxy_backend_options:
+        - "httpchk"
+      haproxy_enabled: "{{ groups['elasticsearch'] is defined and groups['elasticsearch'] | length > 0 }}"
+  - service:
+      haproxy_service_name: kibana_ssl
+      haproxy_backend_nodes: "{{ groups['kibana'] | default([]) }}"
+      haproxy_ssl: True
+      haproxy_port: 8443
+      haproxy_backend_port: 81
+      haproxy_balance_type: http
+      haproxy_backend_options:
+        - "httpchk"
+      haproxy_enabled: "{{ groups['kibana'] is defined and groups['kibana'] | length > 0 }}"
+  - service:
+      haproxy_service_name: kolide-fleet
+      haproxy_ssl: False
+      haproxy_backend_nodes: "{{ groups['fleet_all'] | default([]) }}"
+      haproxy_port: 6443
+      haproxy_check_port: 443
+      haproxy_backend_port: 443
+      haproxy_balance_type: tcp
+      haproxy_enabled: "{{ groups['fleet_all'] is defined and groups['fleet_all'] | length > 0 }}"
+# Force TLS-1.2 for haproxy
+haproxy_ssl_bind_options: "force-tlsv12"
+
+# Define the distro version globally
+repo_build_os_distro_version: "{{ (ansible_distribution | lower) | replace(' ', '_') }}-{{ ansible_distribution_version.split('.')[:2] | join('.') }}-{{ ansible_architecture | lower }}"
+
+# NOTE(cloudnull): Ensure that the ceph client is always present and not "latest".
+#                  This is being done to ensure that the VMs created using RBD
+#                  are not terminated on client upgrades.
+ceph_client_package_state: "present"

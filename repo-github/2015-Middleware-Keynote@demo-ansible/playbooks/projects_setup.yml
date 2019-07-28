@@ -1,0 +1,26 @@
+# vim: set ft=ansible:
+---
+# to get the storage volume info and set up groups in case this playbook is run by itself
+- include: cloudformation_setup.yml
+- include: group_setup.yml
+
+# Smoke projects
+# need to create the users on all of the masters since we are using "local" auth
+- name: Smoke users
+  vars_files:
+  - vars.yml
+  hosts: masters
+  tasks:
+  - name: Create the users
+    command: "htpasswd -b /etc/origin/master/htpasswd {{ item }} {{ default_password }}"
+    with_sequence: start=0 end={{ num_smoke_test_users }} format=user%02d
+    when: run_smoke_tests | bool or run_only_smoke_tests | bool
+
+# run the actual commands only on one of the masters
+- name: Smoke projects and apps
+  vars_files:
+  - vars.yml
+  hosts: project_master
+  tasks:
+  - include: tasks/smoke_projects.yml
+    when: run_smoke_tests | bool or run_only_smoke_tests | bool

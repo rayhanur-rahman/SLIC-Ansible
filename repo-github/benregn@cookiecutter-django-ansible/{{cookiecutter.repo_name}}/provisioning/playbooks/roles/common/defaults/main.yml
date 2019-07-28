@@ -1,0 +1,16 @@
+---
+common_ubuntu_release: trusty
+common_pkg:
+  - python-software-properties
+  - build-essential
+  - git-core
+  - unattended-upgrades
+  - fail2ban
+  - htop
+  - mercurial
+  - vim
+other_provisioners:
+  - chef
+  - chef-zero
+  - puppet
+  - puppet-common

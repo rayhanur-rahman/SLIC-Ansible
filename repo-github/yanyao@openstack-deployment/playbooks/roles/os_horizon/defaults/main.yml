@@ -1,0 +1,138 @@
+---
+# Copyright 2014, Rackspace US, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Defines that the role will be deployed on a host machine
+is_metal: true
+
+## Verbosity Options
+debug: False
+verbose: True
+
+## System info
+horizon_system_user_name: horizon
+horizon_system_group_name: www-data
+horizon_system_shell: /bin/false
+horizon_system_comment: horizon system user
+horizon_system_user_home: "/var/lib/{{ horizon_system_user_name }}"
+
+## Service Type and Data
+horizon_service_region: RegionOne
+horizon_service_name: horizon
+
+## DB info
+horizon_galera_database: dash
+horizon_galera_user: dash
+
+## Session configuration
+# Specifies the timespan in seconds inactivity, until a user is considered as
+# logged out
+horizon_session_timeout: 1800
+
+## Horizon Help URL Path
+horizon_help_url: http://docs.openstack.org
+
+## Installation directories
+horizon_lib_dir: /usr/local/lib/python2.7/dist-packages
+
+horizon_endpoint_type: internalURL
+
+horizon_server_name: "horizon"
+horizon_apache_servertokens: "Prod"
+horizon_apache_serversignature: "Off"
+horizon_log_level: info
+horizon_dropdown_max_items: 30
+horizon_time_zone: UTC
+horizon_enforce_password_check: False
+horizon_disable_password_reveal: False
+horizon_enable_password_retrieve: False
+# If nova_libvirt_inject_password is set to True, then this can also be enabled:
+horizon_can_set_password: False
+horizon_enable_cinder_backup: False
+
+# If the following variables are unset in user_variables, the value set will be half the number of available VCPUs
+# horizon_wsgi_processes: 4
+# horizon_wsgi_threads: 4
+
+## Horizon SSL
+horizon_ssl_cert: /etc/ssl/certs/horizon.pem
+horizon_ssl_key: /etc/ssl/private/horizon.key
+horizon_ssl_ca_cert: /etc/ssl/certs/horizon-ca.pem
+horizon_ssl_protocol: "{{ ssl_protocol }}"
+horizon_ssl_cipher_suite: "{{ ssl_cipher_suite }}"
+# if using a self-signed certificate, set this to true to regenerate it
+horizon_ssl_self_signed_regen: false
+horizon_ssl_self_signed_subject: "/C=US/ST=Texas/L=San Antonio/O=IT/CN={{ horizon_server_name }}/subjectAltName=IP.1={{ external_lb_vip_address }}"
+# Set these in user_variables to deploy custom certificates
+#horizon_user_ssl_cert: <path to cert on ansible deployment host>
+#horizon_user_ssl_key: <path to cert on ansible deployment host>
+#horizon_user_ssl_ca_cert: <path to cert on ansible deployment host>
+
+# For multiple regions uncomment this configuration, and
+# add the extra endpoints below the first list item.
+# horizon_available_regions:
+#   - { url: "{{ keystone_service_internalurl }}", name: "{{ keystone_service_region }}" }
+#   - { url: "http://cluster1.example.com:5000/v2.0", name: "RegionTwo" }
+
+## Horizon's keystone endpoint settings
+
+horizon_keystone_host: "{{ internal_lb_vip_address }}"
+horizon_keystone_endpoint: "{{ keystone_service_internalurl }}"
+
+## Horizon Multi-Domain Support
+# these variables should only be changed if horizon_keystone_endpoint is a Keystone v3 API endpoint
+horizon_keystone_multidomain_support: False
+horizon_keystone_default_domain: Default
+
+### Set the cacert pem for Keystone if you'd like Horizon to verify it.
+# horizon_cacert_pem: /path/to/cacert.pem
+
+## alternatively, you can set horizon to turn off ssl verification for Keystone
+horizon_ssl_no_verify: "{{ (keystone_service_adminuri_insecure | bool or keystone_service_internaluri_insecure | bool) | default(false) }}"
+
+## The role which Horizon should use as a default for users
+horizon_default_role_name: _member_
+
+## Launch instance
+horizon_launch_instance_legacy: True
+horizon_launch_instance_ng: False
+
+## Swift
+horizon_swift_file_transfer_chunk_size: 524288
+
+horizon_webroot: /
+
+horizon_listen_ports:
+  - "80"
+  - "443"
+
+horizon_apt_packages:
+  - apache2
+  - apache2-utils
+  - libapache2-mod-wsgi
+  - libssl-dev
+  - libxslt1.1
+  - openssl
+
+horizon_pip_packages:
+  - django-appconf
+  - greenlet
+  - horizon
+  - keystonemiddleware
+  - MySQL-python
+  - oslo.config
+  - ply
+  - pycrypto
+  - python-memcached
+  - python-keystoneclient

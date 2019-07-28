@@ -1,0 +1,36 @@
+---
+
+- name: Manage OpenLDAP service
+  hosts: [ 'debops_service_slapd', 'debops_slapd' ]
+  become: True
+
+  environment: '{{ inventory__environment | d({})
+                   | combine(inventory__group_environment | d({}))
+                   | combine(inventory__host_environment  | d({})) }}'
+
+  roles:
+
+    - role: debops.ferm
+      tags: [ 'role::ferm', 'skip::ferm' ]
+      ferm__dependent_rules:
+        - '{{ slapd__ferm__dependent_rules }}'
+
+    - role: debops.tcpwrappers
+      tags: [ 'role::tcpwrappers', 'skip::tcpwrappers' ]
+      tcpwrappers__dependent_allow:
+        - '{{ slapd__tcpwrappers__dependent_allow }}'
+
+    - role: debops.logrotate
+      tags: [ 'role::logrotate', 'skip::logrotate' ]
+      logrotate__dependent_config:
+        - '{{ slapd__logrotate__dependent_config }}'
+
+    - role: debops.python
+      tags: [ 'role::python', 'skip::python', 'role::slapd' ]
+      python__dependent_packages3:
+        - '{{ slapd__python__dependent_packages3 }}'
+      python__dependent_packages2:
+        - '{{ slapd__python__dependent_packages2 }}'
+
+    - role: debops.slapd
+      tags: [ 'role::slapd', 'skip::slapd' ]

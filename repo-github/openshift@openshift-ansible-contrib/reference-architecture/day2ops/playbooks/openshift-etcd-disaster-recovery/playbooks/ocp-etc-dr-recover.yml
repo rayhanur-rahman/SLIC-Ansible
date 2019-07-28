@@ -1,0 +1,48 @@
+---
+- name: Ensure that we have a rw etcd
+  hosts: etcd-sec[0]
+  tasks:
+    - name: Get the status of the etcd cluster
+      shell: 'etcdctl -C https://{{ ansible_default_ipv4.address }}:2379 --cert-file /etc/etcd/peer.crt --key-file /etc/etcd/peer.key --ca-file /etc/etcd/ca.crt cluster-health | grep "^cluster is healthy$" | wc -l'
+      become: True
+      register: etcd_healthy_nodes
+
+    - name: Ensure we have the configuration folder
+      file:
+        name: '/var/lib/etcd/'
+        state: directory
+      become: True
+      when: etcd_healthy_nodes.stdout == '0'
+
+    - name: If we don't have the quorum put the cluster in surviving mode
+      lineinfile:
+        dest: /etc/etcd/etcd.conf
+        regexp: ^ETCD_FORCE_NEW_CLUSTER=
+        line: ETCD_FORCE_NEW_CLUSTER=true
+      become: True
+      when: etcd_healthy_nodes.stdout == '0'
+
+    - name: Restart the etcd service in survive mode
+      systemd:
+        name: 'etcd'
+        state: restarted
+        daemon_reload: True
+      become: True
+      when: etcd_healthy_nodes.stdout == '0'
+
+    - name: Remove the surviving mode
+      lineinfile:
+        dest: /etc/etcd/etcd.conf
+        regexp: ^ETCD_FORCE_NEW_CLUSTER=
+        state: absent
+      become: True
+      when: etcd_healthy_nodes.stdout == '0'
+      register: change_file_result
+
+    - name: Reload systemd daemons
+      systemd:
+        name: 'etcd'
+        state: started
+        daemon_reload: True
+      become: True
+      when: change_file_result | changed

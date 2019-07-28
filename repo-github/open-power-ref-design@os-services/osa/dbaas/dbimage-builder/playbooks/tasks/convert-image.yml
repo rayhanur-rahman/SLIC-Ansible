@@ -1,0 +1,21 @@
+---
+
+# This task is invoked during the invocation of the playbook below:
+#
+# ansible-playbook -i host_file dbimage-make.yml -u ubuntu -c ssh
+#
+# It is invoked on the deployer node under the ubuntu account
+
+- name: Get image name produced by dib
+  set_fact:
+    imageName: "{{ hostvars[groups['dib'][0]].outputImage }}"
+  when: not imageName
+
+- name: Set base name of image
+  set_fact:
+    imageName: "{{ imageName.split('.')[0] }}"
+
+- name: Convert qcow2 image to raw format
+  shell: qemu-img convert -f qcow2 -O raw "{{ item }}.qcow2" "{{ item }}.img"
+  register: qemurc
+  with_items: "{{ baseDir }}/images/{{ imageName }}"

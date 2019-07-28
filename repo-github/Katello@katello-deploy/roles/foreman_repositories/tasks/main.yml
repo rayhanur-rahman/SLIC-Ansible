@@ -1,0 +1,19 @@
+---
+- include_tasks: "{{ ansible_os_family|lower }}_{{ foreman_repositories_environment }}_repos.yml"
+
+- name: 'Install foreman-release-scl'
+  yum:
+    name: foreman-release-scl
+    state: latest
+    update_cache: yes
+  tags:
+    - packages
+  when: ansible_os_family == 'RedHat'
+
+- name: 'Clean yum'
+  command: 'yum clean all'
+  args:
+    warn: false
+  tags:
+    - packages
+  when: ansible_os_family == 'RedHat'

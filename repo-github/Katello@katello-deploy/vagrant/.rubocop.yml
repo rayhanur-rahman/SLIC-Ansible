@@ -1,0 +1,48 @@
+AllCops:
+  Include:
+    - '**/Rakefile'
+    - 'lib/**/*.rb'
+    - 'test/**/*.rb'
+  Exclude:
+    - !ruby/regexp /katello-installer/
+    - !ruby/regexp /.spec/
+
+Metrics/LineLength:
+  Max: 120
+
+Metrics/ClassLength:
+  Max: 300
+
+Documentation:
+  Enabled: false # don't require documentation
+
+MethodLength:
+  Description: 'Avoid methods longer than 30 lines of code.'
+  Max: 30
+
+HashSyntax:
+  Enabled: false # don't force 1.9 hash syntax
+
+Metrics/AbcSize:
+  Max: 20
+
+Layout/EmptyLinesAroundClassBody:
+  EnforcedStyle: empty_lines
+
+Metrics/AbcSize:
+  Max: 20
+
+Metrics/AbcSize:
+  Max: 60
+
+Metrics/PerceivedComplexity:
+  Max: 11
+
+Metrics/CyclomaticComplexity:
+  Max: 11
+
+Security/YAMLLoad:
+  Enabled: false
+
+Style/IfUnlessModifier:
+  Enabled: false

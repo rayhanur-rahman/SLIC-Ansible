@@ -1,0 +1,10 @@
+---
+galaxy_info:
+  author: OpenShift
+  description: apply monitoring container(s).
+  company: Red Hat, Inc
+  license: ASL 2.0
+  min_ansible_version: 1.2
+dependencies:
+- "aos_{{ g_play_openshift_version }}_roles/lib_openshift"
+- "aos_{{ g_play_openshift_version }}_roles/lib_utils"

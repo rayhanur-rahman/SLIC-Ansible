@@ -1,0 +1,113 @@
+---
+- name: "Check if {{ m_simplesamlphp_path }} exists"
+  stat:
+    path: "{{ m_simplesamlphp_path }}"
+  register: simplesamlphp_exists
+
+- name: "Check if {{ m_simplesamlphp_path }} exists"
+  stat:
+    path: "{{ m_mediawiki }}/extensions/SimpleSamlAuth"
+  register: simplesamlextension_exists
+
+- name: Ensure good permissions on simplesamlphp directory and subs (if dir exists)
+  file:
+    path: "{{ m_simplesamlphp_path }}"
+    owner: "{{ m_simplesamlphp_owner }}"
+    group: "{{ m_simplesamlphp_group }}"
+    mode: "{{ m_simplesamlphp_mode }}"
+    recurse: yes
+  when: simplesamlphp_exists.stat.exists and simplesamlphp_exists.stat.isdir
+
+- name: Ensure good permissions on Extension:SimpleSamlAuth directory and subs (if dir exists)
+  file:
+    path: "{{ m_mediawiki }}/extensions/SimpleSamlAuth"
+    mode: "{{ m_htdocs_mode }}"
+    owner: "{{ m_htdocs_owner }}"
+    group: "{{ m_htdocs_group }}"
+    recurse: yes
+  when: simplesamlphp_exists.stat.exists and simplesamlphp_exists.stat.isdir
+
+- name: Ensure SimpleSamlPhp (PHP SAML library) installed
+  become: yes
+  become_user: "meza-ansible"
+  # Ref #1149 for TMPDIR environment var
+  environment:
+    TMPDIR: "{{ m_tmp }}"
+  git:
+    repo: https://github.com/simplesamlphp/simplesamlphp.git
+    dest: "{{ m_simplesamlphp_path }}"
+    version: "tags/v1.16.1"
+    umask: "0002"
+  tags:
+    - latest
+
+- name: Ensure SimpleSamlAuth (MediaWiki extension) installed
+  become: yes
+  become_user: "meza-ansible"
+  # Ref #1149 for TMPDIR environment var
+  environment:
+    TMPDIR: "{{ m_tmp }}"
+  git:
+    # Main version of this extension, jornane/mwSimpleSamlAuth, is slow to
+    # update. Use this fork instead, which should stay current with jornane
+    # until meza switches to Cicalese's Extension:SimpleSamlPhp.
+    repo: https://github.com/jamesmontalvo3/mwSimpleSamlAuth.git
+    dest: "{{ m_mediawiki }}/extensions/SimpleSamlAuth"
+    version: master
+    umask: "0002"
+  tags:
+    - latest
+
+- name: Ensure simplesamlphp dependencies in place
+  become: yes
+  become_user: "meza-ansible"
+  composer:
+    command: install
+    working_dir: "{{ m_simplesamlphp_path }}"
+
+- name: Ensure config files in place
+  template:
+    src: "{{ item.filename }}.j2"
+    dest: "{{ item.dest_path }}/{{ item.filename }}"
+  with_items:
+
+    # Config files for SimpleSamlPhp (PHP SAML library)
+    - filename: "config.php"
+      dest_path: "{{ m_simplesamlphp_path }}/config"
+    - filename: "saml20-idp-remote.php"
+      dest_path: "{{ m_simplesamlphp_path }}/metadata"
+    - filename: "authsources.php"
+      dest_path: "{{ m_simplesamlphp_path }}/config"
+
+    # Config files for SimpleSamlAuth (MediaWiki extension)
+    - filename: "samlLocalSettings.php"
+      dest_path: "{{ m_deploy }}"
+
+    # Config file used by MW extension + any other PHP app needing auth
+    # (landing page, admin functions, etc)
+    - filename: "SAMLConfig.php"
+      dest_path: "{{ m_deploy }}"
+
+- name: Ensure _still_ good permissions on simplesamlphp directory and subs
+  file:
+    path: "{{ m_simplesamlphp_path }}"
+    owner: "{{ m_simplesamlphp_owner }}"
+    group: "{{ m_simplesamlphp_group }}"
+    mode: "{{ m_simplesamlphp_mode }}"
+    recurse: yes
+
+- name: Ensure _still_ good permissions on Extension:SimpleSamlAuth directory and subs
+  file:
+    path: "{{ m_mediawiki }}/extensions/SimpleSamlAuth"
+    mode: "{{ m_htdocs_mode }}"
+    owner: "{{ m_htdocs_owner }}"
+    group: "{{ m_htdocs_group }}"
+    recurse: yes
+
+- name: Ensure NonMediaWikiSimpleSamlAuth.php in place
+  copy:
+    src: files/NonMediaWikiSimpleSamlAuth.php
+    dest: "{{ m_htdocs }}/NonMediaWikiSimpleSamlAuth.php"
+    owner: meza-ansible
+    group: apache
+    mode: 0755

@@ -1,0 +1,11 @@
+---
+
+- name: Apply disk reorder patch
+  patch:
+    src: "files/trove-diskreorder.patch"
+    basedir: "/openstack/venvs/trove-{{ trove_venv_tag }}"
+    strip: 4
+  notify:
+    - Restart trove taskmanager service
+  tags:
+    - apply_trove_patch

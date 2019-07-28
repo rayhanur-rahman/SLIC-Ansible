@@ -1,0 +1,4 @@
+---
+- include_tasks: install_freeipa_server.yml
+  become: true
+- include_tasks: install_freeipa_client.yml

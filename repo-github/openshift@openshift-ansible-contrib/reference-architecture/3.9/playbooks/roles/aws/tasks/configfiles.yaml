@@ -1,0 +1,21 @@
+---
+- name: "{{ 'Create' if (state is undefined or 'absent' not in state) else 'Terminate' }} config files"
+  file:
+    path: "{{ item }}"
+    state: "{{ 'touch' if (state is undefined or 'absent' not in state) else 'absent' }}"
+  register: touchfiles
+  with_items:
+    - "~/.ssh/config-{{ clusterid }}.{{ dns_domain }}-domaindelegation"
+    - "~/.ssh/config-{{ clusterid }}.{{ dns_domain }}-cpk"
+    - "~/.ssh/config-{{ clusterid }}.{{ dns_domain }}-s3"
+    - "~/.ssh/config-{{ clusterid }}.{{ dns_domain }}-urls"
+    - "~/.ssh/config-{{ clusterid }}.{{ dns_domain }}-hosts"
+    - "~/.ssh/config-{{ clusterid }}.{{ dns_domain }}"
+  changed_when: "\
+  touchfiles.diff is defined \
+  and \
+  ( \
+    ( touchfiles.diff.before.state == 'absent' and touchfiles.diff.after.state == 'touch' ) \
+    or \
+    ( touchfiles.diff.before.state == 'file' and touchfiles.diff.after.state == 'absent' ) \
+  )"

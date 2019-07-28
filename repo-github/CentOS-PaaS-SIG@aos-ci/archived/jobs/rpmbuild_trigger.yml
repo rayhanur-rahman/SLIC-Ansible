@@ -1,0 +1,119 @@
+- job-template:
+    name: ci-pipeline-rpmbuild-trigger
+    concurrent: true
+    defaults: ci-pipeline-defaults
+    triggers:
+      - jms-messaging:
+          selector: topic = 'org.fedoraproject.prod.git.receive'
+          provider-name: fedora-fedmsg
+    parameters:
+        - string:
+            name: CI_MESSAGE
+            description: |
+              fedmsg msg
+    builders:
+        - shell: |
+            #!/bin/bash
+            set -xuo pipefail
+
+            # Write script to parse fields (can likely be improved)
+            cat << EOF > ${{WORKSPACE}}/parse_fedmsg.py
+            #!/bin/env python
+            import json
+            import sys
+
+            reload(sys)
+            sys.setdefaultencoding('utf-8')
+            message = json.load(sys.stdin)
+            if 'commit' in message:
+                msg = message['commit']
+            
+                for key in msg:
+                    print "fed_%s=%s" % (key, msg[key])
+            EOF
+            chmod +x ${{WORKSPACE}}/parse_fedmsg.py
+
+            # Write fedmsg fields to a file to inject them
+            if [ -n "$CI_MESSAGE" ]; then
+                echo $CI_MESSAGE | ${{WORKSPACE}}/parse_fedmsg.py > fedmsg_fields.txt
+            fi
+
+        - inject:
+            properties-file: ${{WORKSPACE}}/fedmsg_fields.txt
+#        - system-groovy:
+#           command: build.description = build.getEnvironment().get('fed_repo')
+        - shell: |
+            set +e
+            branch=$fed_branch
+            if [ "$branch" = "master" ]; then
+                branch="rawhide"
+            fi
+            echo "branch=$branch" >> ${{WORKSPACE}}/job.properties
+            # Verify this is a development branch
+            if [[ ! "$fed_branch" =~ {targets} ]]; then
+                echo "$fed_branch is not in the list"
+                echo "topic=org.centos.prod.ci.pipeline.package.ignore" >> ${{WORKSPACE}}/job.properties
+                exit
+            fi
+            #curl -f -s http://dl.fedoraproject.org/pub/fedora/linux/development/$branch/Everything > /dev/null
+            #if [ $? -ne 0 ] && [[ $branch != {{target}} ]]; then echo "Not a development branch and not the target branch"; exit; fi
+            # Verify this is a package we are interested in
+            valid=0
+            for package in $(cat {repo-name}/config/package_list); do
+                if [ "$package" = "$fed_repo" ]; then
+                    valid=1
+                    break
+                fi
+            done
+            if [ $valid -eq 0 ]; then
+                echo "Not a package we are interested in"
+                echo "topic=org.centos.prod.ci.pipeline.package.ignore" >> ${{WORKSPACE}}/job.properties
+                exit
+            fi
+
+            echo "topic=org.centos.prod.ci.pipeline.package.queued" >> ${{WORKSPACE}}/job.properties
+            echo "CI_MESSAGE=${{CI_MESSAGE}}" >> ${{WORKSPACE}}/CI_MESSAGE.properties
+            touch ${{WORKSPACE}}/trigger.downstream
+
+    publishers:
+      - archive:
+          artifacts: '*.*'
+          allow-empty: 'true'
+      - postbuildscript:
+          script-only-if-succeeded: false
+          builders:
+              - inject:
+                 properties-file: ${{WORKSPACE}}/job.properties
+      - jms-messaging:
+          override-topic: ${{topic}}
+          provider-name: fedora-fedmsg
+          msg-type: Custom
+          msg-props: |
+            topic=${{topic}}
+            username=fedora-atomic
+            build_url=${{BUILD_URL}}
+            build_id=${{BUILD_ID}}
+            branch=${{branch}}
+            ref=fedora/${{branch}}/x86_64/atomic-host
+            rev=${{fed_rev}}
+            namespace=rpms
+            repo=${{fed_repo}}
+            status=success
+            test_guidance=
+      - conditional-publisher:
+          - condition-kind: file-exists
+            condition-filename: trigger.downstream
+            action:
+              - trigger-parameterized-builds:
+                - project: '{repo-name}-rpmbuild'
+                  property-file: fedmsg_fields.txt
+                  current-parameters: true
+                  fail-on-missing: true
+
+## Describes the project
+- project:
+    name: ci-pipeline-rpmbuild-trigger-jobs
+    repo-name: ci-pipeline
+    targets: '^(f25|f26|master)$'
+    jobs:
+      - ci-pipeline-rpmbuild-trigger

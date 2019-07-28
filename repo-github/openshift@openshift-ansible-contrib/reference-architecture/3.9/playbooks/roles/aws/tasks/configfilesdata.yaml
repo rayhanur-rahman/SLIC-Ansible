@@ -1,0 +1,73 @@
+---
+- name: Gather Route53 zone facts
+  route53_facts:
+    dns_name: "{{ clusterid }} + '.' + {{ dns_domain }}"
+    query: hosted_zone
+  register: r53_zones
+
+- name: Filter Route53 zones
+  set_fact:
+    r53_zones: ['{% for zone in r53_zones.HostedZones -%}
+        {%- if zone.Config.PrivateZone == false -%}
+          {%- if clusterid ~ "." ~ dns_domain ~ "." in zone.Name -%}
+            { "Id": "{{ zone.Id | safe }}", "Name": "{{ zone.Name | safe }}" }
+          {%- endif -%}
+        {%- endif -%}
+      {% endfor -%}']
+  register: r53_zones
+  when: "r53_zones.HostedZones | length > 0"
+
+- name: Fetch SOA records Route53 public zone
+  set_fact:
+    ns: "{{ lookup('route53_namservers', args).split(',') }}"
+  vars:
+    - args: ['{ "id": "{{ r53_zones[0].Id }}" } ']
+  when: "r53_zones | length == 1"
+
+- debug:
+    msg:
+      - 'Error in env; AWS Route53 public zone for {{ clusterid }} is not available.  Please rerun this play!'
+  when: "( vpc_subnet_azs | length | int ) < 3"
+  failed_when: "r53_zones.HostedZones | length != 1"
+
+- name: "Land file content (clusterid domain delegation)"
+  blockinfile:
+    path: "~/.ssh/config-{{ clusterid }}.{{ dns_domain }}-domaindelegation"
+    marker: "#<!-- {mark} OUTPUT -->"
+    content: |
+      {{ lookup('template', ( playbook_dir + '/roles/aws/templates/outputdomaindeleg.j2') ) }}
+
+- name: "Land openshift-ansible installer cloudprovider_kind and credentials"
+  blockinfile:
+    path: "~/.ssh/config-{{ clusterid }}.{{ dns_domain }}-cpk"
+    marker: "#<!-- {mark} OUTPUT -->"
+    content: |
+      {{ lookup('template', ( playbook_dir + '/roles/aws/templates/outputcpk.j2') ) }}
+
+- name: "Land openshift-ansible installer registry storage kind and credentials"
+  blockinfile:
+    path: "~/.ssh/config-{{ clusterid }}.{{ dns_domain }}-s3"
+    marker: "#<!-- {mark} OUTPUT -->"
+    content: |
+      {{ lookup('template', ( playbook_dir + '/roles/aws/templates/outputs3.j2') ) }}
+
+- name: "Land openshift-ansible installer urls"
+  blockinfile:
+    path: "~/.ssh/config-{{ clusterid }}.{{ dns_domain }}-urls"
+    marker: "#<!-- {mark} OUTPUT -->"
+    content: |
+      {{ lookup('template', ( playbook_dir + '/roles/aws/templates/outputurls.j2') ) }}
+
+- name: "Land openshift-ansible installer host inventory"
+  template:
+    dest: "~/.ssh/config-{{ clusterid }}.{{ dns_domain }}-hosts"
+    trim_blocks: no
+    src: "{{ playbook_dir }}/roles/aws/templates/outputhosts.j2"
+
+- name: "Land SSH config"
+  blockinfile:
+    path: "~/.ssh/config-{{ clusterid }}.{{ dns_domain }}"
+    create: yes
+    marker: "#<!-- {mark} OUTPUT -->"
+    content: |
+      {{ lookup('template', ( playbook_dir + '/roles/aws/templates/ssh_config.j2') ) }}

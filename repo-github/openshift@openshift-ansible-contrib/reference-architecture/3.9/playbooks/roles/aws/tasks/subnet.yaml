@@ -1,0 +1,38 @@
+---
+- name: "{{ 'Create' if (state is undefined or 'absent' not in state) else 'Terminate' }} Subnet ( public )"
+  ec2_vpc_subnet:
+    az: "{{ item.az }}"
+    cidr: "{{ item.cidr }}"
+    region: "{{ aws_region }}"
+    state: "{{ state | default('present') }}"
+    vpc_id: "{{ vpc.vpc.id if (state is undefined or 'absent' not in state) else vpc.vpcs[0].vpc_id }}"
+  with_items:
+    - cidr: "{{ subnets_public_cidr.0 }}"
+      az: "{{ vpc_subnet_azs.0 }}"
+    - cidr: "{{ subnets_public_cidr.1 }}"
+      az: "{{ vpc_subnet_azs.1 }}"
+    - cidr: "{{ subnets_public_cidr.2 }}"
+      az: "{{ vpc_subnet_azs.2 }}"
+  retries: 99
+  delay: 99
+  register: subnet_public
+  when: ( vpc.vpc is defined ) or ( vpc.vpcs[0] is defined )
+
+- name: "{{ 'Create' if (state is undefined or 'absent' not in state) else 'Terminate' }} Subnet ( private )"
+  ec2_vpc_subnet:
+    az: "{{ item.az }}"
+    cidr: "{{ item.cidr }}"
+    region: "{{ aws_region }}"
+    state: "{{ state | default('present') }}"
+    vpc_id: "{{ vpc.vpc.id if (state is undefined or 'absent' not in state) else vpc.vpcs[0].vpc_id }}"
+  with_items:
+    - cidr: "{{ subnets_private_cidr.0 }}"
+      az: "{{ vpc_subnet_azs.0 }}"
+    - cidr: "{{ subnets_private_cidr.1 }}"
+      az: "{{ vpc_subnet_azs.1 }}"
+    - cidr: "{{ subnets_private_cidr.2 }}"
+      az: "{{ vpc_subnet_azs.2 }}"
+  retries: 99
+  delay: 99
+  register: subnet_private
+  when: ( vpc.vpc is defined ) or ( vpc.vpcs[0] is defined )

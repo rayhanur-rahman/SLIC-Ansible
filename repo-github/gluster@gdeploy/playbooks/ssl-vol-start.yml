@@ -1,0 +1,10 @@
+---
+- hosts: master
+  become: true
+  gather_facts: no
+
+  tasks:
+  - name: Start the volume
+    volume: action=start
+            volume="{{ volname }}"
+            force=yes

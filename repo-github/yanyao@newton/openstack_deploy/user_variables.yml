@@ -1,0 +1,181 @@
+---
+# Copyright 2014, Rackspace US, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+## General options
+debug: False
+
+## Tempest settings
+tempest_public_subnet_cidr: 172.29.248.0/22
+tempest_public_subnet_allocation_pools: "172.29.249.110-172.29.249.200"
+
+## Galera settings
+galera_innodb_buffer_pool_size: 512M
+galera_innodb_log_buffer_size: 32M
+galera_wsrep_provider_options:
+ - { option: "gcache.size", value: "32M" }
+
+## Neutron settings
+neutron_metadata_checksum_fix: True
+
+## Set workers for all services to optimise memory usage
+ceilometer_api_workers: 2
+ceilometer_collector_workers: 2
+ceilometer_notification_workers: 2
+cinder_osapi_volume_workers: 2
+glance_api_workers: 2
+glance_registry_workers: 2
+heat_api_workers: 2
+heat_engine_workers: 2
+horizon_wsgi_processes: 2
+horizon_wsgi_threads: 2
+keystone_wsgi_processes: 2
+neutron_api_workers: 2
+neutron_metadata_workers: 1
+neutron_rpc_workers: 1
+nova_conductor_workers: 2
+nova_metadata_workers: 2
+nova_osapi_compute_workers: 2
+swift_account_server_workers: 2
+swift_container_server_workers: 2
+swift_object_server_workers: 2
+swift_proxy_server_workers: 2
+
+# NOTE: hpcloud-b4's eth0 uses 10.0.3.0/24, which overlaps with the
+#       lxc_net_address default
+# TODO: We'll need to implement a mechanism to determine valid lxc_net_address
+#       value which will not overlap with an IP already assigned to the host.
+lxc_net_address: 10.255.255.1
+lxc_net_netmask: 255.255.255.0
+lxc_net_dhcp_range: 10.255.255.2,10.255.255.253
+
+
+
+## Package cache timeout
+cache_timeout: 600
+
+
+# The container backing store is set to 'overlayfs' to speed up the
+# AIO build time.
+lxc_container_backing_store: overlayfs
+
+## Enable LBaaSv2 in the AIO
+neutron_plugin_base:
+  - router
+  - metering
+  - neutron_lbaas.services.loadbalancer.plugin.LoadBalancerPluginv2
+openstack_repo_url: http://repo:8181
+pip_upstream_url: http://repo:8181/downloads/get-pip.py
+pip_links:
+   - name: "openstack_release"
+     link: "{{ openstack_repo_url }}/os-releases/{{ openstack_release }}/"
+pip_lock_to_internal_repo: true
+haproxy_ssl: false
+haproxy_hatop_download_url: "http://repo:8181/downloads/hatop-0.7.7.tar.gz"
+repo_pkg_cache_enabled: false
+lxc_cache_install_debconf: '-o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" --force-yes --allow-unauthenticated '
+percona_arch_url:
+  x86_64: "http://repo:8181/downloads/percona-xtrabackup-22_2.2.13-1.vivid_amd64.deb"
+  ppc64le: "http://repo:8181/downloads/percona-xtrabackup-22_2.2.13-1_ppc64el.deb"
+qpress_arch_url:
+  x86_64: "http://repo:8181/downloads/qpress_11-1.xenial_amd64.deb"
+  ppc64le: "http://repo:8181/downloads/qpress_11-1_ppc64el.deb"
+#_rabbitmq_package_url: "http://repo:8181/downloads/rabbitmq-server_3.6.5-1_all.deb"
+_rabbitmq_package_url: "http://repo:8181/downloads/rabbitmq-server_3.6.6-1_all.deb"
+nova_uca_enable: false
+uca_enable: false
+neutron_uca_enable: false
+nova_console_type: novnc
+nova_novncproxy_git_repo: "git://repo:9418/novnc"
+lxc_container_caches:
+  - url: "http://repo:8181/downloads/lxc-xenial-amd64-rootfs.tgz"
+    sha256sum: "6aa2fed29a914684233fa85cd7bea3f6d7af7107c15548ec508f83efcecdbf30"
+    name: "xenial.tgz"
+
+
+#ceph
+
+#ceph
+ceph_mons: >
+  {% set _var = [] -%}
+  {% if 'mons' in groups -%}
+  {% for mon in groups.mons -%}
+  {% if _var.append(hostvars[mon]['ansible_ssh_host']) -%}{% endif -%}
+  {% endfor -%}
+  {% endif -%}
+  {{ _var }}
+
+# Ceph options
+# fsid is the unique identifier for your object store.
+fsid: '{{ fsid_uuid }}'
+# Since we assign our own fsid, we do not need ceph-ansible to auto-generate
+# an fsid for us.
+generate_fsid: false
+# directory for backing up ceph keys.
+fetch_directory: /etc/openstack_deploy/ceph_fetch
+# Use stable version of ceph
+ceph_stable: true
+# Specify ceph release name
+ceph_stable_release: jewel
+# Enable OpenStack support inside the ceph-ansible playbooks
+openstack_config: true
+# Use raw journal devices
+raw_multi_journal: false
+# Set the journal size to: "Size of journal device / number of devices for which it is a journal"
+# E.g. Given a 400G journal disk with 5 disks using it as their journal device, the journal size should be 80G each or 80000
+journal_size: 8000
+# Default number of replicas for a pool
+pool_default_size: 1
+# Default min number of replicas for ceph to consider the state to be not degraded.
+pool_default_min_size: 1
+# The % of disk used before an osd is considered full - Ceph will be marked critical and stop functioning if an OSD reaches this %
+mon_osd_full_ratio: .90
+# The % of disk used before an osd is considered nearfull - Ceph will still work but will return a HEALTH_WARN.
+mon_osd_nearfull_ratio: .80
+# Determines whether we use secure cluster flags.
+secure_cluster: true
+# List of secure flags to set on for a pool (options for the list are nodelete, nopgchange, nosizechange - prevents deletion, pg from changing and size from changing respectively).
+secure_cluster_flags:
+  - nodelete
+monitor_interface: eth1
+public_network: 172.29.236.0/22
+osd_directory: false
+osd_directories:
+  - /var/lib/ceph/osd/mydir1
+journal_collocation: true
+
+#ceph related client
+nova_libvirt_images_rbd_pool: vms
+glance_default_store: rbd
+
+eph_stable_uca: true
+
+
+#libvirt for live-migration
+nova_libvirtd_listen_tls: 0
+nova_libvirtd_listen_tcp: 1
+nova_libvirtd_auth_tcp: "none"
+nova_force_config_drive: False
+nova_nova_conf_overrides:
+  libvirt:
+      live_migration_uri: qemu+ssh://nova@%s/system?keyfile=/var/lib/nova/.ssh/id_rsa&no_verify=1
+
+#neutron_agents
+horizon_enable_neutron_lbaas: True
+#tempest
+tempest_img_url: "http://repo:8181/images/cirros-{{ cirros_version }}-x86_64-disk.img"
+
+tempest_git_repo: "git://repo:9418/tempest"
+tempest_venv_enabled: false
+openstack_service_publicuri_proto: http

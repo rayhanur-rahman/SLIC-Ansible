@@ -1,0 +1,10 @@
+---
+
+- name: import create heketi-server
+  import_tasks: heketi-server.yml
+
+- name: import create gluster-daemonset
+  import_tasks: gluster-daemonset.yml
+
+- name: import create gluster storage
+  import_tasks: storage-creation.yml

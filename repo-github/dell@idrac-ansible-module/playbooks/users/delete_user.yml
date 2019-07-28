@@ -1,0 +1,16 @@
+---
+- hosts: myhosts
+  connection: local
+  name: Delete User
+  gather_facts: False
+
+  tasks:
+
+  - name: Delete user
+    redfish_command:
+      category: Accounts
+      command: DeleteUser
+      baseuri: "{{ baseuri }}"
+      username: "{{ username }}"
+      password: "{{ password }}"
+      id: "{{ id }}"

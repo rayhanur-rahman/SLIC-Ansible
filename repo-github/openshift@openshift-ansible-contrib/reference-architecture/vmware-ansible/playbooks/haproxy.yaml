@@ -1,0 +1,26 @@
+---
+- hosts: localhost
+  roles:
+    - create-vm-haproxy
+
+- name: Deploy ha proxy server
+  hosts: lb
+  roles:
+    - rhsm
+    - vmware-guest-setup
+  ignore_errors: yes
+
+- name: Configure ha proxy server
+  hosts: lb
+  roles:
+    - haproxy-server
+
+- name: Configure ha proxy server files
+  hosts: lb, masters, infras
+  roles:
+    - haproxy-server-config
+
+- name: Configure ha proxy server files
+  hosts: lb
+  roles:
+    - keepalived_haproxy

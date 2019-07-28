@@ -1,0 +1,13 @@
+# This file describes this Open edX repo, as described in OEP-2:
+# http://open-edx-proposals.readthedocs.io/en/latest/oeps/oep-0002.html#specification
+
+nick: conf
+openedx-release: {ref: master}
+owner: bderusha
+
+supporting_teams:
+    - edx/devops
+
+track-pulls: true
+oeps:
+    oep-2: true

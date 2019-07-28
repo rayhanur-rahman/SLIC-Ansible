@@ -1,0 +1,63 @@
+# Copyright (c) 2015 Hewlett-Packard Development Company, L.P.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# TODO: Consider converting to ansible virt module.
+---
+- name: "Update apt cache if Ubuntu/Debian"
+  apt:
+    update_cache: yes
+  when: ansible_os_family == "Debian"
+- name: "Load distribution defaults"
+  include_vars: "{{ item }}"
+  with_first_found:
+    - "../defaults/required_defaults_{{ ansible_distribution }}.yml"
+    - "../defaults/required_defaults_{{ ansible_os_family }}.yml"
+# NOTE(cinerama): On Fedora 22, ansible 1.9, ansible_pkg_mgr
+# defaults to yum, which may not be installed. This can be safely
+# removed when we start using an ansible release which prefers dnf.
+- name: "Check for dnf"
+  stat:
+    path: "/usr/bin/dnf"
+  register: test_dnf
+- name: "Adjust ansible_pkg_mgr if dnf exists"
+  set_fact:
+    ansible_pkg_mgr: "dnf"
+  when: ansible_distribution == 'Fedora' and "{{ test_dnf.stat.exists|bool }}"
+- name: "Install required packages"
+  action: "{{ ansible_pkg_mgr }} name={{ item }} state=present"
+  with_items: required_packages
+- name: "Restart libvirt service"
+  service: name="{{libvirt_service_name}}" state=restarted
+- name: "Create virtual machines"
+  script: create_vm_nodes-for-role.sh
+  environment:
+    NODEOUTPUT: "{{baremetal_csv_file}}"
+    VM_RAM: "{{ test_vm_memory_size }}"
+  register: task_create_vm_nodes
+  ignore_errors: yes
+  delegate_to: localhost
+- name: "Execute `dmesg` to collect debugging output should VM creation fail."
+  command: dmesg
+  when: task_create_vm_nodes.rc != 0
+- name: "Execute `virsh capabilities` to collect debugging output should VM creation fail."
+  command: virsh capabilities
+  when: task_create_vm_nodes.rc != 0
+- name: "Abort due to failed VM creation"
+  fail: msg="VM creation step failed, please review dmesg output for additional details"
+  when: task_create_vm_nodes.rc != 0
+- name: "Set file permissions such that the baremetal csv file at /tmp/baremetal.csv can be read by the user executing Ansible"
+  file:
+    path: "{{baremetal_csv_file}}"
+    owner: "{{ansible_env.SUDO_USER}}"
+  when: ansible_env.SUDO_USER is defined and baremetal_csv_file is defined and baremetal_csv_file != ""

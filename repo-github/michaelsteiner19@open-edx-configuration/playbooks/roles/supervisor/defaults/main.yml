@@ -1,0 +1,77 @@
+#
+# edX Configuration
+#
+# github:     https://github.com/edx/configuration
+# wiki:       https://openedx.atlassian.net/wiki/display/OpenOPS
+# code style: https://openedx.atlassian.net/wiki/display/OpenOPS/Ansible+Code+Conventions
+# license:    https://github.com/edx/configuration/blob/master/LICENSE.TXT
+#
+#
+#
+# Defaults for role supervisor
+#
+---
+SUPERVISOR_HTTP_BIND_IP: '127.0.0.1'
+
+# Used by the pre-supervisor script if you want to
+# notify a hipchat room with the output.
+SUPERVISOR_HIPCHAT_API_KEY: !!null
+SUPERVISOR_HIPCHAT_ROOM: default
+
+# do not override the bind_port since
+# all supervisors will then try to listen
+# on the same one
+supervisor_http_bind_port: '9001'
+supervisor_app_dir: "{{ COMMON_APP_DIR }}/supervisor"
+supervisor_cfg_dir: "{{ supervisor_app_dir }}/conf.d"
+supervisor_available_dir: "{{ supervisor_app_dir }}/conf.available.d"
+supervisor_data_dir: "{{ COMMON_DATA_DIR }}/supervisor"
+supervisor_venvs_dir: "{{ supervisor_app_dir }}/venvs"
+supervisor_venv_dir: "{{ supervisor_venvs_dir }}/supervisor"
+supervisor_venv_bin: "{{ supervisor_venv_dir }}/bin"
+supervisor_ctl: "{{ supervisor_venv_bin }}/supervisorctl"
+
+# by default supervisor runs as the web user
+# which by default is set to www-data in
+# the common role
+supervisor_user: supervisor
+supervisor_log_dir: "{{ COMMON_LOG_DIR }}/supervisor"
+supervisor_cfg: "{{ supervisor_app_dir }}/supervisord.conf"
+# upstart service name and user
+supervisor_service: supervisor
+supervisor_service_user: "{{ common_web_user }}"
+
+supervisor_version: 3.2.3
+
+supervisor_pip_pkgs:
+  - boto=="{{ common_boto_version }}"
+  - python-simple-hipchat
+
+supervisor_spec:
+  - service: edxapp
+    python: python.edxapp
+    code: "{{ edxapp_code_dir | default(None) }}"
+    env: "{{ edxapp_app_dir | default(None) }}/edxapp_env"
+  - service: xqueue
+    python: python.xqueue
+    code: "{{ xqueue_code_dir | default(None) }}"
+  - service: ecommerce
+    python: python.ecommerce
+    code: "{{ ecommerce_code_dir | default(None) }}"
+    env: "{{ ecommerce_home | default(None) }}/ecommerce_env"
+  - service: insights
+    python: python.insights
+    code: "{{ insights_code_dir | default(None) }}"
+    env: "{{ insights_home | default(None) }}/insights_env"
+  - service: analytics_api
+    python: python.analytics_api
+    code: "{{ analytics_api_code_dir | default(None) }}"
+    env: "{{ analytics_api_home | default(None) }}/analytics_api_env"
+  - service: credentials
+    python: python.credentials
+    code: "{{ credentials_code_dir | default(None) }}"
+    env: "{{ credentials_home | default(None) }}/credentials_env"
+  - service: discovery
+    python: python.discovery
+    code: "{{ discovery_code_dir | default(None) }}"
+    env: "{{ discovery_home | default(None) }}/discovery_env"

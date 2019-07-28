@@ -1,0 +1,85 @@
+---
+debug_level: 3
+node_debug_level: 2
+master_debug_level: 2
+
+identity_providers:
+- name: htpasswd_auth
+  login: true
+  challenge: true
+  kind: HTPasswdPasswordIdentityProvider
+  filename: /etc/origin/master/htpasswd
+
+preload_images:
+- openshift3/nodejs-010-rhel7:latest
+- openshift3/ose-pod:latest
+- openshift3/ose-sti-builder:latest
+- openshift3/ose-docker-builder:latest
+- openshift3/ose-deployer:latest
+- rhscl/mongodb-26-rhel7:latest
+- jboss-eap-6/eap64-openshift:1.1
+- kubernetes/guestbook:latest
+
+users:
+- user: demo
+  project: demo
+- user: admin
+  project: empty
+
+hexboard:
+  namespace: demo
+  watch_namespace: demo
+  name: hexboard
+  src_url: https://github.com/2015-Middleware-Keynote/hexboard
+  img: openshift3/nodejs-010-rhel7:latest
+
+os_defaults:
+  masters:
+    count: "{{ num_masters }}"
+    instance_type: "{{ ec2_master_instance_type }}"
+    vol_sizes:
+      root: 15
+      docker: 25
+      etcd: 25
+  infra_nodes:
+    count: "{{ num_infra_nodes }}"
+    instance_type: "{{ ec2_infra_instance_type }}"
+    vol_sizes:
+      root: 30
+      docker: 25
+  app_nodes:
+    count: "{{ num_app_nodes }}"
+    instance_type: "{{ ec2_node_instance_type }}"
+    vol_sizes:
+      root: 30
+      docker: 25
+  hosted:
+    vol_sizes:
+      registry: 30
+      logging: 30
+      metrics: 30
+
+provider_defaults:
+  ec2:
+    tags:
+      env: "{{ cluster_id }}"
+    groups: ["tag_env_{{ cluster_id }}"]
+    master:
+      groups:
+      - "tag_openshift-master_{{ cluster_id }}"
+      - "tag_openshift-node_{{ cluster_id }}"
+      - tag_node-region_master
+      security_groups:
+      - "{{ cluster_id }}-master"
+      - "{{ cluster_id }}-node"
+      tags:
+        openshift-master: "{{ cluster_id }}"
+        openshift-node: "{{ cluster_id }}"
+        node-region: master
+    node:
+      groups:
+      - "tag_openshift-node_{{ cluster_id }}"
+      security_groups:
+      - "{{ cluster_id }}-node"
+      tags:
+        openshift-node: "{{ cluster_id }}"

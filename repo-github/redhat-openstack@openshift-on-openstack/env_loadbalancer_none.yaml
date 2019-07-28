@@ -1,0 +1,6 @@
+parameters:
+    loadbalancer_type: 'none'
+
+resource_registry:
+    OOShift::LoadBalancer: loadbalancer_none.yaml
+    OOShift::IPFailover: ipfailover_keepalived.yaml

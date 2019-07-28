@@ -1,0 +1,64 @@
+---
+- name: Set installation directory variable
+  set_fact:
+    install_dir: "/opt/anaconda3"
+
+- name: Get enterprise license filename from software-vars.yml
+  set_fact:
+    file: "{{ content_files['wmla-license'].split('/', 3)[-1] }}"
+
+- name: Get route to client
+  command: >
+    {{ python_executable_local }}
+    {{ scripts_path_local }}/python/ip_route_get_to.py
+    {{ inventory_hostname }}
+  delegate_to: localhost
+  register: host_ip
+
+- name: Download license
+  get_url:
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: 0744
+    url: "http://{{ host_ip.stdout }}/{{ file }}"
+    dest: "{{ ansible_remote_dir }}"
+    timeout: 300
+  become: yes
+
+- name: Get enterprise license filename from software-vars.yml
+  set_fact:
+    filename: "{{ content_files['wmla-license'].split('/')[-1] }}"
+
+- name: Get enterprise license filename from software-vars.yml
+  set_fact:
+    filename: "{{ content_files['wmla-license'] | basename }}"
+  when: public
+
+- name: Create directory
+  file:
+    path: "{{ remote_spectrum_computing_install_dir  }}"
+    state: directory
+  become: yes
+
+# wmla license acceptance script installs to /opt/anaconda3/bin/
+# (accept-ibm-wmla-license.sh) Interactive license acceptance across the
+# cluster is orchestrated by the software install python module
+# - name: Install wmla license
+#   shell: >
+#     {{ install_dir }}/bin/conda install --yes --offline
+#     {{ ansible_remote_dir }}/{{ filename }}
+#   become: yes
+
+- name: Copy wmla license
+  copy:
+    src: "{{ content_files['wmla-license'] }}"
+    dest: "{{ install_dir }}"
+  become: yes
+
+- name: Extract wmla license
+  shell: >
+    tar zxvf {{ install_dir }}/{{ filename }} -C $EGO_TOP --no-same-owner
+  become: yes
+  environment:
+    EGO_TOP: "{{ remote_spectrum_computing_install_dir }}"
+

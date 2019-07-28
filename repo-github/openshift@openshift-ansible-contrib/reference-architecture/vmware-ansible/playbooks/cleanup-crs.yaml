@@ -1,0 +1,47 @@
+---
+- hosts: localhost
+  user: root
+  become: false
+  ignore_errors: yes
+  vars_files:
+    - vars/main.yaml
+  roles:
+    - instance-groups
+
+- hosts: crs
+  user: root
+  become: false
+  ignore_errors: yes
+  vars_files:
+    - vars/main.yaml
+  roles:
+    - rhsm-unregister
+
+- hosts: single_master
+  user: root
+  become: false
+  ignore_errors: yes
+  vars_files:
+    - vars/main.yaml
+  roles:
+    - heketi-ocp-clean
+
+- hosts: localhost
+  user: root
+  become: false
+  ignore_errors: yes
+  vars_files:
+    - vars/main.yaml
+  tasks:
+    - name: Delete crs VMs
+      vmware_guest:
+        hostname: "{{ openshift_cloudprovider_vsphere_host }}"
+        username: "{{ openshift_cloudprovider_vsphere_username }}"
+        password: "{{ openshift_cloudprovider_vsphere_password }}"
+        datacenter: "{{ openshift_cloudprovider_vsphere_datacenter }}"
+        folder: "/{{ openshift_cloudprovider_vsphere_folder }}"
+        name: "{{ item.value.guestname }}"
+        state: absent
+        force: true
+      with_dict: "{{host_inventory}}"
+      when: "'crs' in item.value.guestname"

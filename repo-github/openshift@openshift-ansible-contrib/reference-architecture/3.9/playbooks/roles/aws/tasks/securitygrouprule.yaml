@@ -1,0 +1,145 @@
+---
+- name: "{{ 'Create' if (state is undefined or 'absent' not in state) else 'Terminate' }} SecurityGroup rules"
+  ec2_group:
+    name: "{{ item.name }}"
+    description: "{{ item.name }}"
+    purge_rules: "{{ false if (state is undefined or 'absent' not in state) else true }}"
+    purge_rules_egress: "{{ false if (state is undefined or 'absent' not in state) else true }}"
+    region: "{{ aws_region }}"
+    state: "{{ state | default('present') }}"
+    vpc_id: "{{ vpc.vpc.id if (state is undefined or 'absent' not in state) else vpc.vpcs[0].vpc_id }}"
+    rules: "{{ item.rules }}"
+  when: ( vpc.vpc is defined ) or ( vpc.vpcs[0] is defined )
+  with_items:
+    - name: master
+      rules: "{{ [
+        {
+        'proto': 'tcp',
+        'from_port': '443',
+        'to_port': '443',
+        'cidr_ip': '0.0.0.0/0'
+        },
+        {
+        'proto': 'tcp',
+        'from_port': '2379',
+        'to_port': '2380',
+        'group_name': 'master'
+        },
+        {
+        'proto': 'tcp',
+        'from_port': '2379',
+        'to_port': '2380',
+        'group_name': 'node'
+        },
+        {
+        'proto': 'tcp',
+        'from_port': '24224',
+        'to_port': '24224',
+        'group_name': 'master'
+        },
+        {
+        'proto': 'udp',
+        'from_port': '24224',
+        'to_port': '24224',
+        'group_name': 'master'
+        }
+      ] if (state is undefined or 'absent' not in state) else '' }}"
+    - name: node
+      rules: "{{ [
+        {
+        'proto': 'icmp',
+        'from_port': '8',
+        'to_port': '-1',
+        'cidr_ip': '0.0.0.0/0'
+        },
+        {
+        'proto': 'tcp',
+        'from_port': '22',
+        'to_port': '22',
+        'group_name': 'bastion'
+        },
+        {
+        'proto': 'tcp',
+        'from_port': '53',
+        'to_port': '53',
+        'group_name': 'node'
+        },
+        {
+        'proto': 'tcp',
+        'from_port': '2049',
+        'to_port': '2049',
+        'group_name': 'node'
+        },
+        {
+        'proto': 'tcp',
+        'from_port': '8053',
+        'to_port': '8053',
+        'group_name': 'node'
+        },
+        {
+        'proto': 'tcp',
+        'from_port': '10250',
+        'to_port': '10250',
+        'group_name': 'node'
+        },
+        {
+        'proto': 'udp',
+        'from_port': '53',
+        'to_port': '53',
+        'group_name': 'node'
+        },
+        {
+        'proto': 'udp',
+        'from_port': '4789',
+        'to_port': '4789',
+        'group_name': 'node'
+        },
+        {
+        'proto': 'udp',
+        'from_port': '8053',
+        'to_port': '8053',
+        'group_name': 'node'
+        }
+      ] if (state is undefined or 'absent' not in state) else '' }}"
+    - name: infra
+      rules: "{{ [
+        {
+        'proto': 'tcp',
+        'from_port': '80',
+        'to_port': '80',
+        'cidr_ip': '0.0.0.0/0'
+        },
+        {
+        'proto': 'tcp',
+        'from_port': '443',
+        'to_port': '443',
+        'cidr_ip': '0.0.0.0/0'
+        },
+        {
+        'proto': 'tcp',
+        'from_port': '9200',
+        'to_port': '9200',
+        'cidr_ip': '0.0.0.0/0'
+        },
+        {
+        'proto': 'tcp',
+        'from_port': '9300',
+        'to_port': '9300',
+        'cidr_ip': '0.0.0.0/0'
+        }
+      ] if (state is undefined or 'absent' not in state) else '' }}"
+    - name: bastion
+      rules: "{{ [
+        {
+        'proto': 'icmp',
+        'from_port': '8',
+        'to_port': '-1',
+        'cidr_ip': '0.0.0.0/0'
+        },
+        {
+        'proto': 'tcp',
+        'from_port': '22',
+        'to_port': '22',
+        'cidr_ip': '0.0.0.0/0'
+        }
+      ] if (state is undefined or 'absent' not in state) else '' }}"

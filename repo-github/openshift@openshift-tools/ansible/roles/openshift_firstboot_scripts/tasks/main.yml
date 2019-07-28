@@ -1,0 +1,50 @@
+---
+- name: create the firstboot dir to store the scripts
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: 0700
+  with_items:
+  - "{{ osfbs_dir }}"
+  - "{{ osfbs_dir }}/tools_roles"
+
+- name: Copy scripts into firstboot dir
+  copy:
+    src: "{{ item }}"
+    dest: "{{ osfbs_dir }}"
+    owner: root
+    group: root
+    mode: '0700'
+  with_items:
+  - infra-elasticsearch-sysctl.sh
+  - rhsm-unregister.sh
+  - insights-register.sh
+  - disable-hyperthreading.sh
+  - enable-tcp-logs-and-udp-limits.yml
+  - setup-etcd-volume.sh
+
+- name: Copy templates into the firstboot dir
+  template:
+    src: "{{ item }}"
+    dest: "{{ osfbs_dir }}/{{ item[:-3] }}"
+    owner: root
+    group: root
+    mode: '0700'
+  with_items:
+  - rhsm-register.sh.j2
+  - expose-router-healthcheck-port.yml.j2
+
+- name: Copy ansible roles into firstboot/roles dir
+  copy:
+    src: "{{ item }}"
+    dest: "{{ osfbs_dir }}/tools_roles"
+    owner: root
+    group: root
+    mode: '0700'
+  with_items:
+  - tools_roles/openshift_udp_limits
+  - tools_roles/openshift_outbound_tcp_logging
+  - tools_roles/lib_ops_utils
+  - tools_roles/lib_openshift
+  - tools_roles/lib_aos_modules
+  - tools_roles/ops_os_firewall

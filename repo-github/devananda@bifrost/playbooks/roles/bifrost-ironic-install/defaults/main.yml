@@ -1,0 +1,75 @@
+---
+# Cleaning turns on ironic conductor clean_nodes flag
+# which causes the nodes to be wiped after deletion.
+cleaning: false
+http_boot_folder: /httpboot
+nginx_port: 8080
+ironicclient_source_install: false
+shade_source_install: true
+# Setting to utilize diskimage-builder to create a bootable image.
+create_image_via_dib: true
+# Setting to prepend a partition image with a boot sector and partition table.
+transform_boot_image: false
+# If testing is true, then the environment is setup for using libvirt
+# virtual machines for the hardware instead of real hardware.
+testing: false
+ci_testing: false
+
+# Default network interface that bifrost will be attached to.
+# This is used in ipa_* so it must be before
+network_interface: "virbr0"
+ans_network_interface: "{{ network_interface | replace('-', '_') }}"
+
+ipa_kernel: "{{http_boot_folder}}/ipa.vmlinuz"
+ipa_ramdisk: "{{http_boot_folder}}/ipa.initramfs"
+ipa_kernel_url: "http://{{ hostvars[inventory_hostname]['ansible_' + ans_network_interface]['ipv4']['address'] }}:{{nginx_port}}/ipa.vmlinuz"
+ipa_kernel_upstream_url: http://tarballs.openstack.org/ironic-python-agent/coreos/files/coreos_production_pxe.vmlinuz
+ipa_ramdisk_url: "http://{{ hostvars[inventory_hostname]['ansible_' + ans_network_interface]['ipv4']['address'] }}:{{nginx_port}}/ipa.initramfs"
+ipa_ramdisk_upstream_url: http://tarballs.openstack.org/ironic-python-agent/coreos/files/coreos_production_pxe_image-oem.cpio.gz
+deploy_image_filename: "deployment_image.qcow2"
+deploy_image: "{{http_boot_folder}}/{{deploy_image_filename}}"
+# Use cirros instead of building an image via diskimage-builder
+use_cirros: false
+# Download IPA by default
+download_ipa: true
+cirros_deploy_image_upstream_url: http://download.cirros-cloud.net/0.3.4/cirros-0.3.4-x86_64-disk.img
+# By default bifrost will deploy dnsmasq to utilize as an integrated DHCP
+# server.  If you already have a DHCP server, you will need to disable
+# this setting, and perform manual configuration of your DHCP server.
+include_dhcp_server: true
+# *_git_url can be overridden by local clones for offline installs
+dib_git_url: https://git.openstack.org/openstack/diskimage-builder
+ironicclient_git_url: https://git.openstack.org/openstack/python-ironicclient
+shade_git_url: https://git.openstack.org/openstack-infra/shade
+ironic_git_url: https://git.openstack.org/openstack/ironic
+mysql_username: "root"
+mysql_password: ""
+disable_dnsmasq_dns: False
+ironic_git_folder: /opt/stack/ironic
+ironicclient_git_folder: /opt/stack/python-ironicclient
+shade_git_folder: /opt/stack/shade
+dib_git_folder: /opt/stack/diskimage-builder
+# Comma-separated list, in the format of a string, of drivers that are enabled.
+enabled_drivers: "agent_ipmitool,pxe_amt,agent_ilo,agent_ucs"
+# DHCP pool for requests -- ignored if inventory_dhcp is set to True
+# since IP allocation will be static.
+dhcp_pool_start: 192.168.1.200
+dhcp_pool_end: 192.168.1.250
+# Dnsmasq default route for clients. If not defined, dnsmasq will push to clients
+# as default route the same IP of the dnsmasq server.
+# Default: undefined
+# dnsmasq_router:
+
+# Support for CORS configuration
+# By default CORS support is disabled.
+enable_cors: false
+# Origin to accept for CORS requests
+cors_allowed_origin: "http://localhost:8000"
+# bifrost utilizes noauth mode by default and as such
+# the setting should be set to false. This setting should
+# not need to be modified by the user.
+enable_cors_credential_support: false
+
+# Set this to true to configure dnsmasq to respond to requests from the
+# hosts in your dynamic inventory.
+inventory_dhcp: False

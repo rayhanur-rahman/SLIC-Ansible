@@ -1,0 +1,183 @@
+---
+
+# INSTALL JAVA 1.8
+#
+- name: Ensure Java 1.7.0 OpenJDK is absent
+  yum:
+    lock_timeout: 180 # wait up to 3 minutes for a lock ansible/ansible#57189
+    name: java-1.7.0-openjdk
+    state: absent
+- name: Ensure Java 1.8.0 OpenJDK is installed
+  yum:
+    lock_timeout: 180 # wait up to 3 minutes for a lock ansible/ansible#57189
+    name: java-1.8.0-openjdk
+    state: installed
+
+
+# Environment setup.
+- name: Set JAVA_HOME if configured.
+  template:
+    src: java_home.sh.j2
+    dest: /etc/profile.d/java_home.sh
+    mode: 0644
+
+# INSTALL ELASTICSEARCH
+- name: Add Elasticsearch GPG key.
+  rpm_key:
+    key: https://packages.elastic.co/GPG-KEY-elasticsearch
+    state: present
+- name: Add Elasticsearch repository.
+  template:
+    src: elasticsearch5.repo.j2
+    dest: /etc/yum.repos.d/elasticsearch.repo
+    mode: 0644
+- name: Install Elasticsearch.
+  yum:
+    lock_timeout: 180 # wait up to 3 minutes for a lock ansible/ansible#57189
+    name: elasticsearch
+    state: installed
+
+# Need to perform this check so `lineinfile` doesn't run in Docker. /etc/hosts
+# is special in Docker.
+# ref: https://docs.docker.com/engine/userguide/networking/default_network/dockerlinks/#updating-the-etchosts-file
+# ref: http://stackoverflow.com/questions/28327458/how-to-add-my-containers-hostname-to-etc-hosts
+- name: Check whether /etc/hosts contains "127.0.0.1"
+  command: awk /127.0.0.1/ /etc/hosts
+  register: checkhostsfile
+  changed_when: False
+
+# Add host name per https://github.com/elastic/elasticsearch/issues/6611
+- name: Add localhost to /etc/hosts if needed
+  lineinfile:
+    dest: /etc/hosts
+    regexp: '^127\.0\.0\.1'
+    line: '127.0.0.1 localhost meza'
+    owner: root
+    group: root
+    mode: 0644
+  when: '"127.0.0.1" not in checkhostsfile.stdout'
+
+# ref: http://elasticsearch-users.115913.n3.nabble.com/Elasticsearch-Not-Working-td4059398.html
+- name: Ensure dirs from elasticsearch.yml exist and set ownership
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: 0755
+    owner: elasticsearch
+    recurse: yes
+  with_items:
+    - "{{ m_meza_data }}/elasticsearch/data"
+    - "{{ m_meza_data }}/elasticsearch/scripts"
+    - "{{ m_meza_data }}/elasticsearch/log"
+
+
+# CONFIGURE AND START ELASTICSEARCH
+# https://www.elastic.co/guide/en/elasticsearch/reference/current/setup-configuration.html
+- name: Configure Elasticsearch.
+  template:
+    src: elasticsearch.yml.j2
+    dest: /etc/elasticsearch/elasticsearch.yml
+    owner: root
+    group: elasticsearch
+    mode: 0750
+  notify: restart elasticsearch
+
+- name: Start Elasticsearch.
+  service:
+    name: elasticsearch
+    state: started
+    enabled: yes
+  register: response
+  when: docker_skip_tasks is not defined or not docker_skip_tasks
+
+- name: Make sure Elasticsearch is running before proceeding.
+  wait_for:
+    host: "{{ elasticsearch_network_host }}"
+    port: "{{ elasticsearch_http_port }}"
+    delay: 3
+    timeout: 300
+  when: docker_skip_tasks is not defined or not docker_skip_tasks
+
+
+# Previously, elasticsearch plugins Head and Kopf (and at one time Bigdesk and
+# Inquisitor) were installed here.
+
+
+#
+# Perform checks on Elasticsearch version
+#
+- name: Check current Elasticsearch version
+  uri:
+    url: "http://localhost:{{ elasticsearch_http_port }}"
+    method: GET
+  register: version_found
+  retries: 10
+  delay: 10
+  when: docker_skip_tasks is not defined or not docker_skip_tasks
+
+- name: Display current Elasticsearch full version number
+  debug:
+    var: version_found.json.version.number
+  when: docker_skip_tasks is not defined or not docker_skip_tasks
+
+- name: Display desired Elasticsearch version
+  debug:
+    var: elasticsearch_major_version
+
+- name: Set the Elasticsearch major version found
+  set_fact:
+    es_version_found: "{{ version_found.json.version.number | list | first }}"
+  when: docker_skip_tasks is not defined or not docker_skip_tasks
+
+- name: "Docker image building only: set found version to desired version"
+  set_fact:
+    es_version_found: "{{ elasticsearch_major_version | list | first }}"
+  when: docker_skip_tasks is defined and docker_skip_tasks
+
+- name: Set the Elasticsearch major version desired
+  set_fact:
+    es_version_desired: "{{ elasticsearch_major_version | list | first }}"
+
+# Do false first. Then force_do_elasticsearch_upgrade can override
+- name: Set do_elasticsearch_upgrade to FALSE
+  set_fact:
+    do_elasticsearch_upgrade: False
+  when: es_version_found|int == es_version_desired|int
+
+# Note: force_do_elasticsearch_upgrade not set anywhere. This can be used with:
+#       `meza deploy ... --extra-vars "force_do_elasticsearch_upgrade=True"`
+- name: Set do_elasticsearch_upgrade to TRUE
+  set_fact:
+    do_elasticsearch_upgrade: True
+  when: (es_version_found|int != es_version_desired|int) or (force_do_elasticsearch_upgrade is defined and force_do_elasticsearch_upgrade)
+
+#
+# Upgrade Elasticsearch if required
+#
+- name: Temporarily set Elasticsearch yum repo to point to 2.x
+  template:
+    src: elasticsearch2.repo.j2
+    dest: /etc/yum.repos.d/elasticsearch.repo
+    mode: 0644
+  when: do_elasticsearch_upgrade and es_version_found|int == 1
+
+- name: Include upgrade tasks for ES 1.6 --> 2.x
+  include: es_upgrade.yml
+  when: do_elasticsearch_upgrade and es_version_found|int == 1
+
+- name: Do reindex if switching for ES 1.6 --> 2.x
+  include: es_reindex.yml
+  when: do_elasticsearch_upgrade and es_version_found|int == 1
+
+- name: Reset Elasticsearch yum repo to point to 5.x
+  template:
+    src: elasticsearch5.repo.j2
+    dest: /etc/yum.repos.d/elasticsearch.repo
+    mode: 0644
+  when: do_elasticsearch_upgrade and es_version_found|int == 1
+
+# Uncomment this when doing upgrade to 5.x
+- name: Include upgrade tasks for ES 2.x --> 5.x
+  include: es_upgrade.yml
+  when: do_elasticsearch_upgrade
+

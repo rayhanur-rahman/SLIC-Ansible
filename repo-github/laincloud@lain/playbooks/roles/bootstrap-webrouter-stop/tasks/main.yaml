@@ -1,0 +1,25 @@
+- name: stop bootstrap-webrouter
+  docker:
+    image: "{{ bootstrap_webrouter_image }}"
+    name: bootstrap-webrouter
+    state: absent
+
+- name: remove console.lain
+  set_config_domain: domain="console.lain" record=""
+
+- name: remove console.DOMAIN
+  set_config_domain: domain="console.{{ domain }}" record=""
+
+- name: remove registry.DOMAIN
+  set_config_domain: domain="registry.{{ domain }}" record=""
+
+- name: wait for DNS resolution ready
+  pause: seconds=2
+
+- name: check new webrouter works well
+  shell: "curl -s registry.lain.local/v2/"
+  register: result
+  until: result|success
+  retries: 50
+  delay: 5
+  changed_when: False

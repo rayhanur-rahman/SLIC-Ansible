@@ -1,0 +1,77 @@
+---
+# Copyright 2014, Rackspace US, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- name: haproxy base config
+  hosts: haproxy
+  gather_facts: "{{ gather_facts | default(True) }}"
+  user: root
+  pre_tasks:
+    - include: common-tasks/os-lxc-container-setup.yml
+    - include: common-tasks/os-log-dir-setup.yml
+      vars:
+        log_dirs:
+          - src: "/openstack/log/{{ inventory_hostname }}-haproxy"
+            dest: "/var/log/haproxy"
+  roles:
+    - role: "keepalived"
+      when: haproxy_use_keepalived | bool
+      tags:
+        - keepalived
+  vars_files:
+    - "{{ haproxy_keepalived_vars_file | default('vars/configs/keepalived_haproxy.yml') }}"
+  vars:
+    is_metal: "{{ properties.is_metal|default(false) }}"
+  tags:
+    - haproxy-config
+    - haproxy
+
+- name: Install haproxy
+  hosts: haproxy
+  gather_facts: "{{ gather_facts | default(True) }}"
+  max_fail_percentage: 20
+  user: root
+  pre_tasks:
+    - name: Remove legacy haproxy configuration files
+      file:
+        dest: "/etc/haproxy/conf.d/{{ item }}"
+        state: "absent"
+      with_items:
+        - "keystone_internal"
+      when: internal_lb_vip_address == external_lb_vip_address
+      tags:
+        - haproxy-config  # this tag is present because the task is ONLY a config task
+    - name: Remove legacy haproxy logging file
+      file:
+        dest: "/etc/rsyslog.d/haproxy.conf"
+        state: "absent"
+      tags:
+        - haproxy-config  # this tag is present because the task is ONLY a config task
+  roles:
+    - role: "haproxy_server"
+      haproxy_service_configs: "{{ haproxy_default_services + haproxy_extra_services|default([]) }}"
+    - role: "rsyslog_client"
+      rsyslog_client_log_rotate_file: haproxy_log_rotate
+      rsyslog_client_log_dir: "/var/log/haproxy"
+      rsyslog_client_config_name: "99-haproxy-rsyslog-client.conf"
+      tags:
+        - rsyslog
+  post_tasks:
+    - include: common-tasks/package-cache-proxy.yml
+  vars_files:
+    - vars/configs/haproxy_config.yml
+  vars:
+    is_metal: "{{ properties.is_metal|default(false) }}"
+  tags:
+    - haproxy

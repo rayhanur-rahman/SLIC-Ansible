@@ -1,0 +1,46 @@
+---
+# Copyright 2015, Rackspace US, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- name: Build new repo packages for a given release
+  hosts: repo_all[0]
+  gather_facts: true
+  user: root
+  pre_tasks:
+    - name: Load local packages
+      debug:
+        msg: "Loading Packages"
+      with_py_pkgs:
+        - ../
+        - /etc/ansible/roles
+        - /etc/openstack_deploy
+      register: local_packages
+      tags:
+        - repo-clone-repos
+        - repo-set-requirements
+        - repo-get-global-requirements
+        - repo-set-requirement-names
+        - repo-set-requirement-names-filtered
+        - repo-set-constraints
+        - repo-build-constraints-file
+        - repo-create-venv-archive
+        - repo-venv-compress-archive
+        - repo-build-venvs
+  roles:
+    - role: "repo_build"
+      repo_build_release_tag: "{{ openstack_release }}"
+      repo_build_pip_default_index: "https://rpc-repo.rackspace.com/pools"
+      repo_build_pip_extra_index: "https://pypi.python.org/simple"
+      tags:
+        - "repo-build"

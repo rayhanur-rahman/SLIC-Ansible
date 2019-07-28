@@ -1,0 +1,28 @@
+- hosts: all
+  become: true
+  vars:
+    foreman_server_repositories_katello: true
+    katello_repositories_version: nightly
+    foreman_repositories_version: nightly
+    foreman_repositories_environment: staging
+    puppet_repositories_version: 5
+    foreman_installer_scenario: katello
+    foreman_installer_additional_packages:
+      - katello
+    foreman_installer_options_internal_use_only:
+      - "--disable-system-checks"
+      - "--foreman-initial-admin-password {{ foreman_installer_admin_password }}"
+      - "--katello-enable-ostree=true"
+      - "--puppet-server-max-active-instances 1"
+      - "--puppet-server-jvm-min-heap-size 1G"
+      - "--puppet-server-jvm-max-heap-size 1G"
+  roles:
+    - umask
+    - selinux
+    - etc_hosts
+    - foreman_server_repositories
+    - disable_firewall
+    - haveged
+    - swapfile
+    - foreman_installer
+    - foreman_testing

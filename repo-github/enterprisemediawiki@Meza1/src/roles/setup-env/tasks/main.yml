@@ -1,0 +1,40 @@
+---
+
+- name: Ensure secret config directory exists
+  file:
+    path: "{{ m_local_secret }}"
+    state: directory
+    owner: "{{ m_config_secret_owner }}"
+    group: "{{ m_config_secret_group }}"
+    mode: "{{ m_config_secret_dir_mode }}"
+
+- name: Ensure secret config environment directory exists
+  file:
+    path: "{{ m_local_secret }}/{{ env }}"
+    state: directory
+    owner: "{{ m_config_secret_owner }}"
+    group: "{{ m_config_secret_group }}"
+    mode: "{{ m_config_secret_dir_mode }}"
+
+# Ansible writing Ansible
+- name: Ensure hosts file configured
+  template:
+    src: hosts.j2
+    dest: "{{ m_local_secret }}/{{ env }}/hosts"
+    owner: "{{ m_config_secret_owner }}"
+    group: "{{ m_config_secret_group }}"
+    mode: "{{ m_config_secret_file_mode }}"
+
+    # We don't want to overwrite an existing hosts file with the default
+    force: no
+
+- name: Ensure secret.yml configured
+  template:
+    src: secret.yml.j2
+    dest: "{{ m_local_secret }}/{{ env }}/secret.yml"
+    owner: "{{ m_config_secret_owner }}"
+    group: "{{ m_config_secret_group }}"
+    mode: "{{ m_config_secret_file_mode }}"
+
+    # don't overwrite existing
+    force: no

@@ -1,0 +1,60 @@
+---
+# Copyright 2014, Rackspace US, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- name: Install galera server
+  hosts: galera_all
+  max_fail_percentage: 20
+  user: root
+  pre_tasks:
+    - name: Galera extra lxc config
+      lxc_container:
+        name: "{{ container_name }}"
+        container_command: |
+          [[ ! -d "/var/lib/mysql" ]] && mkdir -p "/var/lib/mysql"
+        container_config:
+          - "lxc.mount.entry=/openstack/{{ container_name }} var/lib/mysql none bind 0 0"
+      delegate_to: "{{ physical_host }}"
+      when: is_metal == false or is_metal == "False"
+      tags:
+        - galera-mysql-dir
+    - name: Flush net cache
+      command: /usr/local/bin/lxc-system-manage flush-net-cache
+      delegate_to: "{{ physical_host }}"
+      tags:
+        - flush-net-cache
+    - name: Wait for container ssh
+      wait_for:
+        port: "22"
+        delay: 5
+        host: "{{ ansible_ssh_host }}"
+      delegate_to: "{{ physical_host }}"
+      tags:
+        - galera-ssh-wait
+  roles:
+    - { role: "galera_server", tags: [ "galera-server" ] }
+    - role: "rsyslog_client"
+      rsyslog_client_log_dir: "/var/log/mysql_logs"
+      rsyslog_client_log_files:
+        - /var/log/mysql.log
+        - /var/log/mysql.err
+      rsyslog_client_config_name: "99-galera-rsyslog-client.conf"
+      tags:
+        - "galera-rsyslog-client"
+        - "rsyslog-client"
+  vars:
+    galera_wsrep_node_name: "{{ container_name }}"
+    ansible_hostname: "{{ container_name }}"
+    ansible_ssh_host: "{{ container_address }}"
+    is_metal: "{{ properties.is_metal|default(false) }}"

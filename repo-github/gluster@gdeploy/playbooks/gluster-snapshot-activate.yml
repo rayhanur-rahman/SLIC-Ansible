@@ -1,0 +1,10 @@
+---
+- hosts: master
+  become: true
+  gather_facts: no
+
+  tasks:
+  - name: Activates a snapshot
+    snapshot: action=activate
+             snapname="{{ snapname }}"
+             force="{{ force }}"

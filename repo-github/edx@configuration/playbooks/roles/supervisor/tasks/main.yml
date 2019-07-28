@@ -1,0 +1,254 @@
+#
+# edX Configuration
+#
+# github:     https://github.com/edx/configuration
+# wiki:       https://openedx.atlassian.net/wiki/display/OpenOPS
+# code style: https://openedx.atlassian.net/wiki/display/OpenOPS/Ansible+Code+Conventions
+# license:    https://github.com/edx/configuration/blob/master/LICENSE.TXT
+#
+#
+#
+# Tasks for role supervisor
+#
+# Overview:
+#   Role for supervisord, a parameterized role for installing supervisord
+#
+#   By default supervisor will be installed into {{ COMMON_APP_DIR }}/supervisor
+#   and log to {{ COMMON_LOG_DIR }}/supervisor and run as the
+#   {{ common_web_user }}
+#
+#   The including supervisor with the following parameters
+#   will install it into a different location:
+#
+#    - supervisor_app_dir
+#    - supervisor_data_dir
+#    - supervisor_log_dir
+#    - supervisor_venv_dir
+#    - supervisor_service_user
+#    - supervisor_service
+#
+# Dependencies:
+#   - common
+#
+# Example play:
+#
+#   # Install in the default location,
+#   # run as the default user
+#
+#   roles:
+#     - common
+#     - role: supervisor
+#
+#   # Install in an alternate directory
+#   # and run as user "foo"
+#  - role: supervisor
+#    supervisor_app_dir: /path/to/supervisor/dir/for/configs
+#    supervisor_data_dir: /path/to/supervisor/data/dir (for pid and sock files)
+#    supervisor_log_dir: /path/to/supervisor/log/dir
+#    supervisor_venv_dir: /path/to/supervisor/venv/dir
+#    supervisor_service_user: user to run supervisor as
+#    supervisor_service: upstart-service-name
+#
+---
+- name: Create application and supervisor service user
+  user:
+    name: "{{ item }}"
+    createhome: no
+    shell: /bin/false
+  with_items:
+    - "{{ supervisor_user }}"
+    - "{{ supervisor_service_user }}"
+  tags:
+    - install
+    - install:base
+
+- name: Create supervisor and service user accessible directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ supervisor_user }}"
+    group: "{{ supervisor_service_user }}"
+    mode: "0755"
+  with_items:
+    - "{{ supervisor_app_dir }}"
+    - "{{ supervisor_venv_dir }}"
+    - "{{ supervisor_cfg_dir }}"
+    - "{{ supervisor_available_dir }}"
+  tags:
+    - install
+    - install:base
+
+- name: Create supervisor directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ supervisor_service_user }}"
+    group: "{{ supervisor_user }}"
+  with_items:
+    - "{{ supervisor_data_dir }}"
+    - "{{ supervisor_log_dir }}"
+  tags:
+    - install
+    - install:base
+
+- name: Install supervisor in its venv
+  pip:
+    name: supervisor
+    version: "{{ supervisor_version }}"
+    virtualenv: "{{ supervisor_venv_dir }}"
+    state: present
+    extra_args: "-i {{ COMMON_PYPI_MIRROR_URL }}"
+  become_user: "{{ supervisor_user }}"
+  tags:
+    - install
+    - install:base
+
+- name: Install supervisor in its venv
+  pip:
+    name: "{{ item }}"
+    virtualenv: "{{ supervisor_venv_dir }}"
+    state: present
+    extra_args: "-i {{ COMMON_PYPI_MIRROR_URL }}"
+  become_user: "{{ supervisor_user }}"
+  with_items: "{{ supervisor_pip_pkgs }}"
+  tags:
+    - install
+    - install:base
+
+  # 14.04
+- name: Create supervisor upstart job
+  template:
+    src: "etc/init/supervisor-upstart.conf.j2"
+    dest: "/etc/init/{{ supervisor_service }}.conf"
+    owner: root
+    group: root
+  when: ansible_distribution_release == 'trusty'
+  tags:
+    - install
+    - install:base
+
+# NB: with systemd, pre_supervisor is a pre-task for supervisor, not a separate service
+- name: Create supervisor systemd job
+  template:
+    src: "etc/init/supervisor-systemd.service.j2"
+    dest: "/etc/systemd/system/{{ supervisor_service }}.service"
+    owner: root
+    group: root
+  when: ansible_distribution_release == 'xenial' or ansible_distribution_release == 'bionic'
+  tags:
+    - install
+    - install:base
+
+- name: Write the pre_suprevisor python script
+  copy:
+    src: pre_supervisor_checks.py
+    dest: "{{ supervisor_app_dir }}/pre_supervisor_checks.py"
+    owner: "{{ supervisor_user }}"
+    group: "{{ supervisor_service_user }}"
+    mode: "0750"
+  when: disable_edx_services
+  tags:
+    - to-remove
+    - aws-specfic
+
+- name: Create supervisor master config
+  template:
+    src: "edx/app/supervisor/supervisord.conf.j2"
+    dest: "{{ supervisor_cfg }}"
+    owner: "{{ supervisor_user }}"
+    group: "{{ supervisor_service_user }}"
+    mode: "0644"
+  tags:
+    - install
+    - install:configuration
+
+# this link is deprecated in favor of the shell wrapper
+- name: Remove a symlink for supervisortctl
+  file:
+    src: "{{ supervisor_ctl }}"
+    dest: "{{ COMMON_BIN_DIR }}/{{ supervisor_ctl | basename }}"
+    state: absent
+  when: supervisor_service == "supervisor"
+  tags:
+    - install
+    - install:configuration
+
+# these links are deprecated in favor of the shell wrapper
+- name: Remove symlink for supervisor cfg
+  file:
+    src: "{{ item }}"
+    dest: "{{ COMMON_CFG_DIR }}/{{ item | basename }}"
+    state: absent
+  when: supervisor_service == "supervisor"
+  with_items:
+    - "{{ supervisor_cfg }}"
+    - "{{ supervisor_cfg_dir }}"
+  tags:
+    - install
+    - install:configuration
+
+- name: Create helper script for running supervisor
+  template:
+    src: "edx/bin/supervisorctl.j2"
+    dest: "{{ COMMON_BIN_DIR }}/supervisorctl"
+    owner: "{{ supervisor_service_user }}"
+    mode: "0755"
+  when: supervisor_service == "supervisor"
+  tags:
+    - install
+    - install:configuration
+
+  # This command and the subsequent check in the when condition are related
+  # to this bug: https://github.com/ansible/ansible-modules-core/issues/593
+- name: Are we in a Docker container
+  shell: echo $(egrep -q 'docker' /proc/self/cgroup && echo 'yes' || echo 'no')
+  ignore_errors: yes
+  register: docker_container
+  tags:
+    - install
+    - install:base
+
+- name: Enable supervisor to start on boot
+  service:
+    name: "{{ supervisor_service }}.service"
+    enabled: yes
+  when: (ansible_distribution_release == 'xenial' or ansible_distribution_release == 'bionic') and docker_container.stdout != 'yes'
+  tags:
+    - install
+    - install:base
+
+- name: Start supervisor
+  service:
+    name: "{{ supervisor_service }}"
+    state: started
+  register: start_supervisor
+  when: not disable_edx_services
+  tags:
+    - manage
+    - manage:start
+
+  # calling update on supervisor too soon after it
+  # starts will result in an errror.
+- name: Wait for web port to be available
+  wait_for:
+    port: "{{ supervisor_http_bind_port }}"
+    timeout: 5
+  when: start_supervisor.changed
+  tags:
+    - manage
+    - manage:start
+
+  # call supervisorctl update every time, this reloads
+  # the supervisorctl config
+  #
+  # we don't use notifications for supervisor because
+  # they don't work well with parameterized roles.
+  # See https://github.com/ansible/ansible/issues/4853
+- name: Update supervisor configuration
+  shell:  "{{ supervisor_ctl }} -c {{ supervisor_cfg }} update"
+  when: not disable_edx_services
+  register: supervisor_update
+  changed_when: supervisor_update.stdout is defined and supervisor_update.stdout != ""
+  tags:
+    - manage
+    - manage:start

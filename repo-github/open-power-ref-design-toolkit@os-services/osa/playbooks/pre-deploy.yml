@@ -1,0 +1,96 @@
+---
+# Copyright 2016 IBM Corp.
+#
+# All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- name: Update apt cache
+  hosts: all
+  environment: "{{ deployment_environment | default({}) }}"
+  vars:
+    cache_timeout: 600
+  tasks:
+    # OpenStack-Ansible does the following for apt cache update. We do it here
+    # as well to ensure the cache is properly updated on all systems before all
+    # other tasks, including Ceph Ansible.
+    # Replace the next 2 tasks by a standard apt with cache
+    # when https://github.com/ansible/ansible-modules-core/pull/1517 is merged
+    # in 1.9.x or we move to 2.0 (if tested working)
+    - name: Check apt last update file
+      stat:
+        path: /var/cache/apt
+      register: apt_cache_stat
+
+    - name: Update apt if needed
+      apt:
+        update_cache: yes
+      when: "ansible_date_time.epoch|float - apt_cache_stat.stat.mtime > {{cache_timeout}}"
+
+- name: Initialize first controller node
+  hosts: localhost
+  connection: local
+  environment: "{{ deployment_environment | default({}) }}"
+  roles:
+    - local
+
+- name: Initialize known_hosts file for default osa networks on all servers
+  hosts: all
+  roles:
+    - role: "known_hosts"
+      key: "hostname"
+    - role: "known_hosts"
+      key: "openstack_mgmt_addr"
+    - role: "known_hosts"
+      key: "openstack_stg_addr"
+    - role: "known_hosts"
+      key: "external1_addr"
+    - role: "known_hosts"
+      key: "ceph_public_storage_addr"
+
+# Perform all setup steps in parallel prior to the inventory update.
+- name: Swift setup storage
+  hosts: swift-metadata:swift-object
+  environment: "{{ deployment_environment | default({}) }}"
+  roles:
+    - role: "swift_hosts"
+      swift_do_setup: true
+      swift_do_inventory: false
+      swift_do_cleanup: false
+
+# Each host should be processed one at a time when updating the
+# /var/oprc/inventory.yml (genesis inventory).  For this reason
+# serial=1 is set.  Without this multiple hosts would collide
+# trying to access the inventory file at the same time.
+- name: Swift update storage inventory
+  hosts: swift-metadata:swift-object
+  serial: 1
+  environment: "{{ deployment_environment | default({}) }}"
+  roles:
+    - role: "swift_hosts"
+      swift_do_setup: false
+      swift_do_inventory: true
+      swift_do_cleanup: false
+
+# All the inventory update files are stored within the same directory.
+# This means the cleanup step must be performed as a separate play,
+# because if any single host were to clean up that directory during
+# the inventory step it would impact all subsequent hosts.
+- name: Swift cleans up remnants from the setup storage and inventory plays
+  hosts: swift-metadata:swift-object
+  environment: "{{ deployment_environment | default({}) }}"
+  roles:
+    - role: "swift_hosts"
+      swift_do_setup: false
+      swift_do_inventory: false
+      swift_do_cleanup: true

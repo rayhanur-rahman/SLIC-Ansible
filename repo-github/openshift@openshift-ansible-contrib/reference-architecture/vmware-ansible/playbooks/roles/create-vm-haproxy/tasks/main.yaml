@@ -1,0 +1,38 @@
+---
+- name: Create haproxy VM on vCenter
+  vmware_guest:
+    hostname: "{{ openshift_cloudprovider_vsphere_host }}"
+    username: "{{ openshift_cloudprovider_vsphere_username }}"
+    password: "{{ openshift_cloudprovider_vsphere_password }}"
+    validate_certs: False
+    name: "{{ hostvars[item].inventory_hostname }}"
+    cluster: "{{ openshift_cloudprovider_vsphere_cluster}}"
+    datacenter: "{{ openshift_cloudprovider_vsphere_datacenter }}"
+    resource_pool: "{{ openshift_cloudprovider_vsphere_resource_pool }}"
+    template: "{{ openshift_cloudprovider_vsphere_template }}"
+    folder: "{{ openshift_cloudprovider_vsphere_datacenter }}/vm/{{ openshift_cloudprovider_vsphere_folder }}"
+    annotation: "{{ hostvars[item].openshift_node_labels }}"
+    state: poweredon
+    wait_for_ip_address: true
+    disk:
+    - size_gb: 60
+      datastore: "{{ openshift_cloudprovider_vsphere_datastore }}"
+      type: thin
+    - size_gb: 40
+      datastore: "{{ openshift_cloudprovider_vsphere_datastore }}"
+      type: thin
+    - size_gb: 40
+      datastore: "{{ openshift_cloudprovider_vsphere_datastore }}"
+      type: thin
+    networks:
+    - name: "{{ openshift_cloudprovider_vsphere_vm_network }}"
+      ip: "{{ hostvars[item].ipv4addr }}"
+      netmask: "{{ openshift_cloudprovider_vsphere_vm_netmask }}"
+      gateway: "{{ openshift_cloudprovider_vsphere_vm_gateway }}"
+    customization:
+      domain: "{{ default_subdomain }}"
+      dns_servers:
+      - "{{ openshift_cloudprovider_vsphere_vm_dns }}"
+      dns_suffix: "{{ default_subdomain }}"
+      hostname: "{{ hostvars[item].inventory_hostname }}"
+  with_items: "{{ groups['lb'] }}"

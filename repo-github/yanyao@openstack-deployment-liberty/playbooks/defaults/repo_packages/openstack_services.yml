@@ -1,0 +1,101 @@
+---
+# Copyright 2014, Rackspace US, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
+## NOTICE on items in this file:
+##   * If you use anything in the *._git_install_branch field that is not a TAG
+##     make sure to leave an in-line comment as to "why".
+
+## For the sake of anyone else editing this file:
+##   * If you add services to this file please do so in alphabetical order.
+##   * Every entry should be name spaced with the name of the client followed by an "_"
+##   * All items with this file should be separated by `name_` note that the name of the
+##     package should be one long name with no additional `_` separating it.
+
+
+### Before this is shipped all of these services should have a tag set as the branch,
+### or have a comment / reason attached to them as to why a tag can not work.
+
+
+## Global Requirements
+requirements_git_repo: https://git.openstack.org/openstack/requirements
+requirements_git_install_branch: 2854532c8549e82b180e348fd11a43bc13f8af6a # HEAD of "master" as of 24.10.2015
+requirements_git_dest: "/opt/requirements_{{ requirements_git_install_branch | replace('/', '_') }}"
+
+
+## Ceilometer service
+ceilometer_git_repo: https://git.openstack.org/openstack/ceilometer
+ceilometer_git_install_branch: b34865f80818165187552e7feca4ead2e61a30d3 # HEAD of "master" as of 24.10.2015
+ceilometer_git_dest: "/opt/ceilometer_{{ceilometer_git_install_branch | replace('/', '_') }}"
+
+
+## Cinder service
+cinder_git_repo: https://git.openstack.org/openstack/cinder
+cinder_git_install_branch: 774c8a9dc4cfe559a1d2f3afd2380ea8f9cdd6ee # HEAD of "master" as of 24.10.2015
+cinder_git_dest: "/opt/cinder_{{ cinder_git_install_branch | replace('/', '_') }}"
+
+
+## Glance service
+glance_git_repo: https://git.openstack.org/openstack/glance
+glance_git_install_branch: b7703a4aab4f4c6315a5f0a12620336f96532108 # HEAD of "master" as of 24.10.2015
+glance_git_dest: "/opt/glance_{{ glance_git_install_branch | replace('/', '_') }}"
+
+
+## Heat service
+heat_git_repo: https://git.openstack.org/openstack/heat
+heat_git_install_branch: cd1a61e3d794bd37dd964ba7c37f1d0cb2bb2e81 # HEAD of "master" as of 24.10.2015
+heat_git_dest: "/opt/heat_{{ heat_git_install_branch | replace('/', '_') }}"
+
+
+## Horizon service
+horizon_git_repo: https://git.openstack.org/openstack/horizon
+horizon_git_install_branch: aa068eca807885182886b2a2f28591d6ac9e689e # HEAD of "master" as of 24.10.2015
+horizon_git_dest: "/opt/horizon_{{ horizon_git_install_branch | replace('/', '_') }}"
+
+
+## Keystone service
+keystone_git_repo: https://git.openstack.org/openstack/keystone
+keystone_git_install_branch: ebe82fcd21116f4bdae9dc97407e04f5184dc9b0 # HEAD of "master" as of 24.10.2015
+keystone_git_dest: "/opt/keystone_{{ keystone_git_install_branch | replace('/', '_') }}"
+
+
+## Neutron service
+neutron_git_repo: https://git.openstack.org/openstack/neutron
+neutron_git_install_branch: 554b5d96cdb8b0b8987f37b8ae0336e910c5675c # HEAD of "master" as of 24.10.2015
+neutron_git_dest: "/opt/neutron_{{ neutron_git_install_branch | replace('/', '_') }}"
+
+neutron_lbaas_git_repo: https://git.openstack.org/openstack/neutron-lbaas
+neutron_lbaas_git_install_branch: 8427934f76f1c213044a54da60c3b266930efef1 # HEAD of "master" as of 24.10.2015
+neutron_lbaas_git_dest: "/opt/neutron_lbaas_{{ neutron_lbaas_git_install_branch | replace('/', '_') }}"
+
+neutron_vpnaas_git_repo: https://git.openstack.org/openstack/neutron-vpnaas
+neutron_vpnaas_git_install_branch: d4e477d2c515d80a66cf7e5f60a452edc89219d9 # HEAD of "master" as of 24.10.2015
+neutron_vpnaas_git_dest: "/opt/neutron_vpnaas_{{ neutron_vpnaas_git_install_branch | replace('/', '_') }}"
+
+neutron_fwaas_git_repo: https://git.openstack.org/openstack/neutron-fwaas
+neutron_fwaas_git_install_branch: 64c0e6a56cec1021b8af5b76e5da0485e37d5efb # HEAD of "master" as of 24.10.2015
+neutron_fwaas_git_dest: "/opt/neutron_fwaas_{{ neutron_fwaas_git_install_branch | replace('/', '_') }}"
+
+
+## Nova service
+nova_git_repo: https://git.openstack.org/openstack/nova
+nova_git_install_branch: 71d2ed17950edbeb97b479bf04958dbee8f23fc5 # HEAD of "master" as of 24.10.2015
+nova_git_dest: "/opt/nova_{{ nova_git_install_branch | replace('/', '_') }}"
+
+
+## Swift service
+swift_git_repo: https://git.openstack.org/openstack/swift
+swift_git_install_branch: a094560f0cef9a51f03b9f72dd516d4df717bec6 # HEAD of "master" as of 24.10.2015
+swift_git_dest: "/opt/swift_{{ swift_git_install_branch | replace('/', '_') }}"

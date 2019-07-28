@@ -1,0 +1,18 @@
+- name: install pip
+  package: name=python-pip state=present
+
+- name: install python packages
+  command: pip install --upgrade --force-reinstall {{ item }}
+  with_items:
+    - pip
+    - python-dateutil==2.5.2
+    - python-etcd==0.4.3
+    - docker-py==1.8.0
+    - psutil==4.1.0
+    - requests==2.11.1
+  register: result
+  changed_when: "'Successfully installed' in result.stdout"
+
+- name: install lainctl
+  command: pip install --upgrade --force-reinstall lain-admin-cli==v2.1.2
+  when: bootstrapping is defined and bootstrapping|bool

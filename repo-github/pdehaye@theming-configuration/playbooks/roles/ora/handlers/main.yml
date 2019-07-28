@@ -1,0 +1,5 @@
+---
+- name: ora | restart edx-ora
+  service: name=edx-ora state=restarted
+- name: ora | restart edx-ora-celery
+  service: name=edx-ora-celery state=restarted

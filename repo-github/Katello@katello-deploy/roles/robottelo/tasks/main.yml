@@ -1,0 +1,42 @@
+---
+- include_tasks: ssh.yml
+- include_tasks: install.yml
+
+- name: robottelo properties file
+  shell: cp robottelo.properties.sample robottelo.properties
+  args:
+    chdir: "{{ robottelo_directory }}"
+
+- name: Set robottelo hostname
+  ini_file:
+    path: "{{ robottelo_directory }}/robottelo.properties"
+    section: server
+    option: hostname
+    value: "{{ robottelo_hostname }}"
+
+- name: Set robottelo SSH key
+  ini_file:
+    path: "{{ robottelo_directory }}/robottelo.properties"
+    section: server
+    option: ssh_key
+    value: "{{ robottelo_ssh_key }}"
+
+- name: Set robottelo SSH username
+  ini_file:
+    path: "{{ robottelo_directory }}/robottelo.properties"
+    section: server
+    option: ssh_username
+    value: "{{ robottelo_ssh_username }}"
+
+- name: Set robottelo logging
+  replace:
+    dest: "{{ robottelo_directory }}/logging.conf"
+    regexp: "^level=DEBUG"
+    replace: "level=INFO"
+
+- name: Run tests
+  command: "{{ robottelo_virtualenv_path }}/bin/py.test --junit-xml={{ robottelo_junit_file }}
+             -m '{{ robottelo_test_options[robottelo_test_type] | default(robottelo_test_options.default) }}'
+             {{ robottelo_test_path[robottelo_test_type] | default(robottelo_test_path.default) }}"
+  args:
+    chdir: "{{ robottelo_directory }}"

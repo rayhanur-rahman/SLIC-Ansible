@@ -1,0 +1,111 @@
+---
+# Copyright 2014, Rackspace US, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- name: Installation and setup of Keystone
+  hosts: keystone_all
+  serial: "{{ keystone_serial }}"
+  gather_facts: "{{ gather_facts | default(True) }}"
+  max_fail_percentage: 20
+  user: root
+  pre_tasks:
+    - include: common-tasks/os-lxc-container-setup.yml
+      vars:
+        extra_container_config_no_restart:
+          - "lxc.start.order=89"
+    - include: common-tasks/rabbitmq-vhost-user.yml
+      static: no
+      vars:
+        user: "{{ keystone_rabbitmq_userid }}"
+        password: "{{ keystone_rabbitmq_password }}"
+        vhost: "{{ keystone_rabbitmq_vhost }}"
+        _rabbitmq_host_group: "{{ keystone_rabbitmq_host_group }}"
+      when:
+        - inventory_hostname == groups['keystone_all'][0]
+        - groups[keystone_rabbitmq_host_group] | length > 0
+    - include: common-tasks/rabbitmq-vhost-user.yml
+      static: no
+      vars:
+        user: "{{ keystone_rabbitmq_telemetry_userid }}"
+        password: "{{ keystone_rabbitmq_telemetry_password }}"
+        vhost: "{{ keystone_rabbitmq_telemetry_vhost }}"
+        _rabbitmq_host_group: "{{ keystone_rabbitmq_telemetry_host_group }}"
+      when:
+        - keystone_ceilometer_enabled | bool
+        - inventory_hostname == groups['keystone_all'][0]
+        - groups[keystone_rabbitmq_telemetry_host_group] is defined
+        - groups[keystone_rabbitmq_telemetry_host_group] | length > 0
+        - groups[keystone_rabbitmq_telemetry_host_group] != groups[keystone_rabbitmq_host_group]
+    - include: common-tasks/os-log-dir-setup.yml
+      vars:
+        log_dirs:
+          - src: "/openstack/log/{{ inventory_hostname }}-keystone"
+            dest: "/var/log/keystone"
+    - include: common-tasks/mysql-db-user.yml
+      static: no
+      vars:
+        user_name: "{{ keystone_galera_user }}"
+        password: "{{ keystone_container_mysql_password }}"
+        login_host: "{{ keystone_galera_address }}"
+        db_name: "{{ keystone_galera_database }}"
+      when: inventory_hostname == groups['keystone_all'][0]
+    - include: common-tasks/package-cache-proxy.yml
+
+    # todo(cloudnull): this task is being run only if/when keystone is installed on a physical host.
+    #  This is not being run within a container because it is an unsupported action due to this
+    #  issue: (https://bugs.launchpad.net/ubuntu/+source/lxc/+bug/1279041)
+    #  This issue was resolved however we'll need to eval it in the next LTS release.
+    #  Related OSA Bug: https://launchpad.net/bugs/1426371
+    - name: Add keystone reserved port to physical host
+      sysctl:
+        name: "{{ item.key }}"
+        value: "{{ item.value }}"
+        sysctl_set: "{{ item.set|default('yes') }}"
+        state: "{{ item.state|default('present') }}"
+        reload: "{{ item.reload|default('yes') }}"
+      with_items:
+        - { key: "net.ipv4.ip_local_reserved_ports", value: "{{ keystone_admin_port }}"}
+      when: is_metal | bool
+    - include: common-tasks/haproxy-endpoint-manage.yml
+      haproxy_state: disabled
+      when: "{{ groups['keystone_all'] | length > 1 }}"
+  roles:
+    - role: "os_keystone"
+    - role: "openstack_openrc"
+      tags:
+        - openrc
+    - role: "rsyslog_client"
+      rsyslog_client_log_rotate_file: keystone_log_rotate
+      rsyslog_client_log_dir: "/var/log/keystone"
+      rsyslog_client_config_name: "99-keystone-rsyslog-client.conf"
+      tags:
+        - rsyslog
+    - role: "system_crontab_coordination"
+      tags:
+        - crontab
+  post_tasks:
+    - include: common-tasks/haproxy-endpoint-manage.yml
+      haproxy_state: enabled
+      when: "{{ groups['keystone_all'] | length > 1 }}"
+  vars:
+    is_metal: "{{ properties.is_metal|default(false) }}"
+    keystone_serial:
+      - 1
+      - 100%
+    keystone_admin_port: 35357
+    keystone_galera_user: keystone
+    keystone_galera_database: keystone
+    keystone_galera_address: "{{ galera_address }}"
+  tags:
+    - keystone

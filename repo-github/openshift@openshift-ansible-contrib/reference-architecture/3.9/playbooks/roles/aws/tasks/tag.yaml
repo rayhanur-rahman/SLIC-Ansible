@@ -1,0 +1,13 @@
+---
+#How to initialize me: Add the following to your role
+#- import_task: roles/aws/tasks/aws-tag.yaml
+#  vars:
+#    - resource: "{{ vpcdhcpopts.dhcp_options_id }}"
+#    - tagss: "Key1=Value1, Key2={{ var2 }}, string/{{ var3 }}={{ var3 }}"
+
+- name: Create tag
+  ec2_tag:
+    resource: "{{ resource }}"
+    region: "{{ aws_region }}"
+    state: present
+    tags: "{{ tagss }}"

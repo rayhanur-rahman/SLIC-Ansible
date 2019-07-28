@@ -1,0 +1,9 @@
+---
+- hosts: master
+  become: true
+  gather_facts: no
+
+  tasks:
+  - name: Deletes a node in the cluster
+    shell: /usr/libexec/ganesha/ganesha-ha.sh --delete "{{ ha_base_dir }}" {{ item }}
+    with_items: "{{ nodes }}"

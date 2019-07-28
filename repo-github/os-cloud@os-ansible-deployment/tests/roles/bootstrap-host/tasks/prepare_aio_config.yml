@@ -1,0 +1,153 @@
+---
+# Copyright 2015, Rackspace US, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
+- name: Create the required deployment directories
+  file:
+    path: "{{ item }}"
+    state: directory
+  with_items:
+    - "/etc/openstack_deploy/"
+    - "/etc/openstack_deploy/conf.d"
+  tags:
+    - create-directories
+
+
+- name: Deploy user conf.d configuration
+  config_template:
+    src: "{{ item.path | default(bootstrap_host_aio_config_path ~ '/conf.d') }}/{{ item.name }}"
+    dest: "/etc/openstack_deploy/conf.d/{{ item.name | regex_replace('.aio$', '') }}"
+    config_overrides: "{{ item.override | default({}) }}"
+    config_type: "yaml"
+  with_items: "{{ openstack_confd_entries | default([]) }}"
+  tags:
+    - deploy-confd
+
+- name: Deploy openstack_user_config
+  config_template:
+    src: "{{ bootstrap_host_aio_config_path }}/openstack_user_config.yml.aio"
+    dest: "/etc/openstack_deploy/openstack_user_config.yml"
+    config_overrides: "{{ openstack_user_config_overrides | default({}) }}"
+    config_type: "yaml"
+    list_extend: false
+  tags:
+    - deploy-openstack-user-config
+
+- name: Deploy user_secrets file
+  config_template:
+    src: "{{ bootstrap_host_aio_config_path }}/user_secrets.yml"
+    dest: "/etc/openstack_deploy/{{ bootstrap_host_user_secrets_filename }}"
+    config_overrides: "{{ user_secrets_overrides | default({}) }}"
+    config_type: "yaml"
+  tags:
+    - deploy-user-secrets
+
+- name: Generate any missing values in user_secrets
+  command: "{{ bootstrap_host_aio_script_path }}/pw-token-gen.py --file /etc/openstack_deploy/{{ bootstrap_host_user_secrets_filename }}"
+  changed_when: false
+  tags:
+    - generate_secrets
+
+- name: Detect whether the host is an OpenStack-CI host
+  stat:
+    path: /etc/nodepool
+  register: nodepool_dir
+
+- name: Set the UCA repository URL in OpenStack-CI
+  set_fact:
+    uca_apt_repo_url: "{{ bootstrap_host_ubuntu_repo | netorigin }}/ubuntu-cloud-archive"
+  when:
+    - nodepool_dir.stat.exists
+    - bootstrap_host_ubuntu_repo is defined
+
+- name: Set the MariaDB repository URL in OpenStack-CI
+  set_fact:
+    galera_repo_url: "{{ bootstrap_host_ubuntu_repo | netorigin }}/ubuntu-mariadb/10.1"
+  when:
+    - nodepool_dir.stat.exists
+    - bootstrap_host_ubuntu_repo is defined
+
+- name: Set the package cache timeout to 60 mins in OpenStack-CI
+  set_fact:
+    cache_timeout: 3600
+  when:
+    - cache_timeout is not defined
+    - nodepool_dir.stat.exists
+
+- name: Determine if the host has a global pip config file
+  stat:
+    path: /etc/pip.conf
+  register: pip_conf_file
+
+- name: Determine the fastest available OpenStack-Infra wheel mirror
+  command: "{{ bootstrap_host_aio_script_path }}/fastest-infra-wheel-mirror.py"
+  register: fastest_wheel_mirror
+  when: not pip_conf_file.stat.exists
+
+- name: Set repo_build_pip_extra_indexes fact
+  set_fact:
+    repo_build_pip_extra_indexes: "{{ fastest_wheel_mirror.stdout_lines }}"
+  when: not pip_conf_file.stat.exists
+
+- name: Check whether the host has a git cache
+  stat:
+    path: /opt/git/openstack
+  register: _local_git_cache
+
+- name: Set repo_build_git_cache fact
+  set_fact:
+    repo_build_git_cache: /opt/git/openstack
+  when: _local_git_cache.stat.exists
+
+- name: Set the user_variables
+  config_template:
+    src: "user_variables.{{ bootstrap_host_scenario }}.yml.j2"
+    dest: "/etc/openstack_deploy/{{ bootstrap_host_user_variables_filename }}"
+    config_overrides: "{{ user_variables_overrides | default({}) }}"
+    config_type: yaml
+
+- name: Add user_conf_files to contain the list of files to copy into containers
+  file:
+    path: /etc/openstack_deploy/user_conf_files.yml
+    state: touch
+  when: pip_conf_file.stat.exists
+  tags:
+    - container-conf-files
+
+- name: Ensure that the first line in user_conf_files is correct
+  lineinfile:
+    dest: /etc/openstack_deploy/user_conf_files.yml
+    line: "---"
+    insertbefore: BOF
+  when: pip_conf_file.stat.exists
+  tags:
+    - container-conf-files
+
+- name: Ensure that the second line in user_conf_files is correct
+  lineinfile:
+    dest: /etc/openstack_deploy/user_conf_files.yml
+    line: "lxc_container_cache_files:"
+    insertafter: "^---"
+  when: pip_conf_file.stat.exists
+  tags:
+    - container-conf-files
+
+- name: Add the dict to copy the global pip config file into user_conf_files
+  lineinfile:
+    dest: /etc/openstack_deploy/user_conf_files.yml
+    line: " - { src: '/etc/pip.conf', dest: '/etc/pip.conf' }"
+  when: pip_conf_file.stat.exists
+  tags:
+    - container-conf-files

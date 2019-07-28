@@ -1,0 +1,70 @@
+---
+# Copyright 2016 IBM Corp.
+#
+# All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- name: Configure the pre-req software on ppc64le compute host
+  hosts: compute_all
+  environment: "{{ deployment_environment_variables | default({}) }}"
+  user: root
+
+  tasks:
+    # To make nested virtualization work on ppc64le compute nodes,
+    # use ocata UCA temporarily when installing QEMU/Libvirt packages.
+    # Ocata UCA is removed after that step.
+    - name: Install Ocata UCA
+      apt_repository:
+        repo: "deb http://ubuntu-cloud.archive.canonical.com/ubuntu xenial-updates/ocata main"
+        state: present
+        update_cache: true
+      register: install_repo
+      until: install_repo|success
+      retries: 5
+      delay: 5
+      when: ansible_architecture == 'ppc64le'
+      tags:
+        - pkvm-install-libvirt
+
+    - name: Install QEMU/Libvirt packages
+      apt:
+        pkg: "{{ item }}"
+        force: yes
+        state: present
+      register: install_packages|success
+      with_items:
+        - qemu-system-ppc
+        - libvirt-bin
+      when: ansible_architecture == 'ppc64le'
+      tags:
+       - pkvm-install-libvirt
+
+    - name: Disable SMT
+      command: /usr/sbin/ppc64_cpu --smt=off
+      register: smt_disable_result
+      failed_when: false
+      when: ansible_architecture == 'ppc64le'
+      tags:
+       - pkvm-disable-smt
+#
+#    - name: Upstart script to disable SMT
+#      copy:
+#        src: "files/smt.conf"
+#        dest: "/etc/init/smt.conf"
+#      when:
+#        - ansible_architecture == 'ppc64le'
+#        - smt_disable_result.rc is defined
+#        - smt_disable_result.rc == 0
+#      tags:
+#       - pkvm-disable-smt

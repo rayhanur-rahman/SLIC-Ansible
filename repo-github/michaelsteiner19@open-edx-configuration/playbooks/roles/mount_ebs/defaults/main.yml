@@ -1,0 +1,19 @@
+# Expects a list of dicts with these keys
+#  - device: /dev/xvdk
+#    mount: /edx/var/mongo
+#    options: "defaults,noatime"
+#    fstype: ext4
+# While mount, options and fstype are pretty standard in our app, the device names
+# will be highly dependent on how you stand up your instances.
+#
+# Additionally - order is important if you have child directories.  If you want to mount
+# /edx/var/mongo and /edx/var/mongo/mongodb/journal, you must specify them in that order,
+# otherwise this role will mount /edx/var/mongo over the top of /edx/var/mongo/mongodb/journal
+# which is not what you wanted.
+volumes: []
+
+UNMOUNT_DISKS: false
+# WARNING! FORCE_REFORMAT_DISKS will cause your volumes to always be reformatted
+# even if all the volume's attributes already match what you've defined in volumes[]
+# Enable this flag at your own risk with an abundance of caution
+FORCE_REFORMAT_DISKS: false

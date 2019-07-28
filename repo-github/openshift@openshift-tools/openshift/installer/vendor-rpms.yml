@@ -1,0 +1,48 @@
+#!/usr/bin/ansible-playbook
+- hosts: localhost
+  gather_facts: no
+  vars:
+    vendored_dir_relative: "vendored/openshift-ansible-{{ installer_version }}"
+    vendored_dir: "{{ lookup('env', 'PWD') ~ '/' ~ vendored_dir_relative }}"
+    installer_dirs:
+    - "{{ vendored_dir }}/filter_plugins"
+    - "{{ vendored_dir }}/lookup_plugins"
+  pre_tasks:
+  - fail:
+      msg: "{{ item }} is required."
+    when: "{{ item }} is not defined"
+    with_items:
+    - openshift_version
+    - installer_version
+    - rpm_directory
+
+  - debug: var=rpm_directory
+
+  - name: Remove a current installer directory if it exists
+    file:
+      state: absent
+      path: "{{ vendored_dir }}"
+
+  - name: create the installer directory
+    file:
+      state: directory
+      path: "{{ vendored_dir }}"
+
+  - name: run the vendor openshift ansible role
+    include_role:
+      name: tools_roles/vendor_openshift_ansible_rpms
+    vars:
+      vosar_output_directory: "{{ vendored_dir }}"
+      vosar_rpm_directory: "{{ rpm_directory }}"
+
+  - name: Symlink the openshift version to the installer
+    file:
+      state: absent
+      path: "atomic-openshift-{{ openshift_version }}"
+
+  - name: Symlink the openshift version to the installer
+    file:
+      state: link
+      src: "{{ vendored_dir_relative }}"
+      dest: "atomic-openshift-{{ openshift_version }}"
+      force: yes

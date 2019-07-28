@@ -1,0 +1,53 @@
+---
+- name: Set cluster_id crs annoation
+  set_fact:
+    crs_annoation: "{{ cluster_id }}-crs"
+
+- name: Create CRS production VMs on vCenter
+  vmware_guest:
+    hostname: "{{ openshift_cloudprovider_vsphere_host }}"
+    username: "{{ openshift_cloudprovider_vsphere_username }}"
+    password: "{{ openshift_cloudprovider_vsphere_password }}"
+    validate_certs: False
+    name: "{{ item.value.guestname }}"
+    cluster: "{{ openshift_cloudprovider_vsphere_cluster}}"
+    datacenter: "{{ openshift_cloudprovider_vsphere_datacenter }}"
+    resource_pool: "{{ openshift_cloudprovider_vsphere_resource_pool }}"
+    template: "{{openshift_cloudprovider_vsphere_template}}"
+    state: poweredon
+    wait_for_ip_address: true
+    folder: "{{ openshift_cloudprovider_vsphere_datacenter }}/vm/{{ openshift_cloudprovider_vsphere_folder }}"
+    annotation: "{{ crs_annoation }}"
+    disk:
+    - size_gb: 60
+      datastore: "{{ openshift_cloudprovider_vsphere_datastore }}"
+      type: thin
+    - size_gb: 40
+      datastore: "{{ openshift_cloudprovider_vsphere_datastore }}"
+      type: thin
+    - size_gb: 40
+      datastore: "{{ openshift_cloudprovider_vsphere_datastore }}"
+      type: thin
+    - size_gb: 300
+      datastore: "{{ openshift_cloudprovider_vsphere_datastore }}"
+      type: eagerZeroedThick
+    hardware:
+      memory_mb: 32768
+    networks:
+    - name: "{{ openshift_cloudprovider_vsphere_vm_network }}"
+      ip: "{{ item.value.ip4addr }}"
+      netmask: "{{ openshift_cloudprovider_vsphere_vm_netmask }}"
+      gateway: "{{ openshift_cloudprovider_vsphere_vm_gateway }}"
+    customization:
+      domain: "{{default_subdomain}}"
+      dns_servers:
+      - "{{ openshift_cloudprovider_vsphere_vm_dns }}"
+      dns_suffix: "{{default_subdomain}}"
+      hostname: "{{ item.value.guestname}}"
+  with_dict: "{{host_inventory}}"
+  when: "'crs' in item.value.guestname"
+
+- name: Add CRS production VMs to inventory
+  add_host: hostname="{{ item.value.guestname }}" ansible_ssh_host="{{ item.value.ip4addr }}" groups="{{ crs_annoation }}, crs, production_group"
+  with_dict: "{{host_inventory}}"
+  when: "'crs' in item.value.guestname"

@@ -1,0 +1,40 @@
+---
+- name: master api
+  stat:
+    path: /usr/local/bin/master-restart
+  register: l_master_restart
+  changed_when: true
+  notify:
+  - master api less than 3.10
+  - master api 3.10 and greater
+  listen: 'restart openshift master services'
+
+- name: master controllers
+  stat:
+    path: /usr/local/bin/master-restart
+  register: l_master_restart
+  changed_when: true
+  notify:
+  - master controllers less than 3.10
+  - master controllers 3.10 and greater
+  listen: 'restart openshift master services'
+
+- name: master api less than 3.10
+  systemd:
+    name: 'atomic-openshift-master-api'
+    state: restarted
+  when: not l_master_restart.stat.exists
+
+- name: master api 3.10 and greater
+  command: /usr/local/bin/master-restart api api
+  when: l_master_restart.stat.exists
+
+- name: master controllers less than 3.10
+  systemd:
+    name: 'atomic-openshift-master-controllers'
+    state: restarted
+  when: not l_master_restart.stat.exists
+
+- name: master controllers 3.10 and greater
+  command: /usr/local/bin/master-restart controllers controllers
+  when: l_master_restart.stat.exists

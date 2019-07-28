@@ -1,0 +1,13 @@
+---
+- hosts: master_node
+  become: true
+  gather_facts: no
+
+  tasks:
+  - name: Make the volume a gluster shared volume
+    volume_set: action=set
+                volume=all
+                key=cluster.enable-shared-storage
+                value=enable
+    ignore_errors: true
+

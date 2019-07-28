@@ -1,0 +1,60 @@
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+---
+- name: redefine cloud settings vars for backward compat
+  set_fact:
+    clouds:
+      bifrost:
+        config_username: "{{ config_username }}"
+        config_password: "{{ config_password }}"
+        config_project_name: "{{ config_project_name }}"
+        config_region_name: "{{ config_region_name }}"
+        config_auth_url: "{{ config_auth_url}}"
+        config_project_domain_id: "{{ config_project_domain_id|default('default') }}"
+        config_user_domain_id: "{{ config_user_domain_id|default('default') }}"
+  when:
+    - "{{ enable_keystone | default(false) | bool }}"
+    - "{{ clouds is undefined }}"
+    - "{{ config_username is defined }}"
+    - "{{ config_password is defined }}"
+    - "{{ config_project_name is defined }}"
+    - "{{ config_region_name is defined }}"
+    - "{{ config_auth_url is defined }}"
+
+- name: "Ensure the ~/.config exists"
+  file:
+    name: "~{{ user | default('root') }}/.config"
+    state: directory
+    owner: "{{ user | default('root') }}"
+    mode: 0700
+
+- name: "Ensure ~/.config/openstack/ exists"
+  file:
+    name: "~{{ user | default('root') }}/.config/openstack"
+    state: directory
+    owner: "{{ user | default('root') }}"
+    mode: 0700
+
+- name: "Write clouds.yaml configuration from template"
+  template:
+    src: clouds.yaml.j2
+    dest: "~{{ user | default('root') }}/.config/openstack/clouds.yaml"
+    owner: "{{ user | default('root') }}"
+    mode: 0600
+
+- name: "Write openrc configuration from template"
+  template:
+    src: openrc.j2
+    dest: "~{{ user | default('root') }}/openrc"
+    owner: "{{ user | default('root') }}"
+    mode: 0600

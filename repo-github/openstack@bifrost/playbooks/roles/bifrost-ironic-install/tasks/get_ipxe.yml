@@ -1,0 +1,53 @@
+# Copyright (c) 2016 Hewlett Packard Enterprise Development LP.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+---
+- import_role:
+    name: venv_python_path
+
+- name: Create {{ ipxe_dir }}
+  file:
+    name={{ ipxe_dir }}
+    state=directory
+    owner=root
+    group=root
+    mode=0755
+
+- name: Get iPXE files
+  get_url:
+    url: "https://boot.ipxe.org/{{ item }}"
+    dest: "{{ ipxe_dir }}/{{ item }}"
+    force: yes
+  register: ipxe_files_download_done
+  until: ipxe_files_download_done|succeeded
+  retries: 5
+  delay: 10
+  with_items:
+    - undionly.kpxe
+    - ipxe.pxe
+  environment: "{{ venv }}"
+
+- name: Get iPXE EFI binary
+  get_url:
+    url: "https://boot.ipxe.org/{{ item }}"
+    dest: "{{ ipxe_dir }}/{{ item }}"
+    force: yes
+  register: ipxe_efi_binary_download_done
+  until: ipxe_efi_binary_download_done|succeeded
+  retries: 5
+  delay: 10
+  with_items:
+    - "{{ ipxe_efi_binary }}"
+  environment: "{{ venv }}"
+  when: enable_uefi_ipxe | bool == true

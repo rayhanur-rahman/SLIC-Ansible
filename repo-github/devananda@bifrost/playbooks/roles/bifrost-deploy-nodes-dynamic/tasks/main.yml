@@ -1,0 +1,61 @@
+# Copyright (c) 2015 Hewlett-Packard Development Company, L.P.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+---
+# TODO(TheJulia) It would make sense to perform basic validation prior
+# to deployment, although direct definition of instance info on
+# the pass-through could mean that the user could deploy
+# things that are not directly accessible or reasonable
+# to be inspected.
+- name: "Setup DHCP for nodes."
+  template: src=dhcp-host.j2 dest=/etc/dnsmasq.d/bifrost.dhcp-hosts.d/{{ hostname }}
+  delegate_to: localhost
+  when: inventory_dhcp | bool and instance_info is defined and instance_info | to_json != '{}'
+- name: "Sending dnsmasq HUP"
+  # Note(TheJulia): We need to actually to send a hup signal directly as
+  # Ansible's reloaded state does not pass through to the init script.
+  command: killall -HUP dnsmasq
+  when: inventory_dhcp | bool and instance_info is not defined or ( instance_info is defined and instance_info | to_json == '{}' )
+- name: "Deploy to hardware - Using custom instance_info."
+  os_ironic_node:
+    auth_type: None
+    auth: None
+    ironic_url: "{{ ironic_url }}"
+    uuid: "{{ uuid }}"
+    state: present
+    config_drive: "http://{{ hostvars[inventory_hostname]['ansible_' + ans_network_interface]['ipv4']['address'] }}:{{ nginx_port }}/configdrive-{{ uuid }}.iso.gz"
+    instance_info: "{{ instance_info }}"
+  delegate_to: localhost
+  when: instance_info is defined and instance_info | to_json != '{}'
+- name: "Collect the checksum of the deployment image."
+  local_action: stat path={{deploy_image}}
+  register: test_deploy_image
+  when: instance_info is not defined or ( instance_info is defined and instance_info | to_json == '{}' )
+- name: "Error if deploy_image is not present, and instance_info is not defined"
+  fail: msg="The user-defined deploy_image, which is the image to be written to the remote node(s) upon deployment, was not found. Cannot proceed."
+  when: instance_info is not defined and test_deploy_image.stat.exists | bool == false
+- name: "Deploy to hardware - bifrost default"
+  os_ironic_node:
+    auth_type: None
+    auth: None
+    ironic_url: "{{ ironic_url }}"
+    uuid: "{{ uuid }}"
+    state: present
+    config_drive: "http://{{ hostvars[inventory_hostname]['ansible_' + ans_network_interface]['ipv4']['address'] }}:{{ nginx_port }}/configdrive-{{ uuid }}.iso.gz"
+    instance_info:
+      image_source: "http://{{ hostvars[inventory_hostname]['ansible_' + ans_network_interface]['ipv4']['address'] }}:{{ nginx_port }}/{{deploy_image_filename}}"
+      image_checksum: "{{ test_deploy_image.stat.md5 }}"
+      image_disk_format: "raw"
+      root_gb: 10
+  delegate_to: localhost
+  when: instance_info is not defined or ( instance_info is defined and instance_info | to_json == '{}' )

@@ -1,0 +1,8 @@
+---
+
+- name: Install system packages
+  apt: pkg={{','.join(edxapp_common_debian_pkgs)}}
+       state=present update_cache=yes
+  tags:
+    - install
+    - install:base

@@ -1,0 +1,208 @@
+---
+# This task is invoked during the invocation of the playbook below:
+#
+# ansible-playbook -i host_file dbimage-make.yml -u ubuntu -c ssh
+#
+# This is invoked on a controller node as ubuntu and then
+# becomes root before any of these tasks are run
+
+- name: Get image name for dbimage-make.sh
+  set_fact:
+    imageName: "{{ hostvars[groups['dib'][0]].outputImage.split('.')[0] }}"
+  when: dbimageCmd == 'make'
+
+- name: Set image name for dbimage-upload.sh
+  set_fact:
+    imageName: "{{ imageName.split('.')[0] }}"
+  when: dbimageCmd == 'upload'
+
+- name: Get distro package name from deployer facts
+  set_fact:
+    pkgDistroName: "{{ hostvars[groups['deployer'][0]].pkgDistroName }}"
+
+- name: Get distro package version from deployer facts
+  set_fact:
+    dbVersion: "{{ hostvars[groups['deployer'][0]].dbVersion }}"
+  when: not dbVersion
+
+- name: Get utility container name
+  shell: /usr/bin/lxc-ls --filter utility_container
+  register: utility_container
+
+- name: Get mount point for the utility container
+  set_fact:
+    utilityBaseDir: "/var/lib/lxc/{{ utility_container.stdout }}/rootfs"
+
+- name: Get trove API container name
+  shell: /usr/bin/lxc-ls --filter trove_api
+  register: trove_container
+
+- name: Get mount point for the trove api container
+  set_fact:
+    troveBaseDir: "/var/lib/lxc/{{ trove_container.stdout }}/rootfs"
+
+- name: Get directory for trove source code in trove api container
+  set_fact:
+    troveCodeDir: "/var/lib/lxc/{{ trove_container.stdout }}/rootfs/openstack/venvs/{{ trove_venv }}/lib/python2.7/site-packages/trove"
+
+- name: mktemp directory in utility container for image
+  command: mktemp -d "{{ utilityBaseDir }}/tmp/dbimage-builder.XXXX"
+  register: mktemprc
+
+- name: Set permissions on temp directory
+  file:
+    path: "{{ mktemprc.stdout }}"
+    state: directory
+    mode: 0755
+
+- name: Copy image to utility container
+  copy:
+    src: "{{ baseDir }}/images/{{ imageName }}.img"
+    dest: "{{ mktemprc.stdout }}/{{ imageName }}.img"
+
+- name: Update image name for community edition
+  set_fact:
+    imageSource: "-c{{ imageSource }}"
+  when: communityEdition == true
+
+- name: Update image name for enterprise edition
+  set_fact:
+    imageSource: "-e{{ imageSource }}"
+  when: enterpriseEdition == true
+
+- name: Upload image "{{ dbName }}-{{ dbVersion }}{{ imageSource }}-{{ ansible_date_time.date }}"
+  shell: >-
+    /usr/bin/lxc-attach -n '{{ utility_container.stdout }}' -e --
+    /bin/bash -c '
+    source /root/openrc;
+    glance image-create
+    --name {{ dbName }}-{{ dbVersion }}{{ imageSource }}-{{ ansible_date_time.date }}
+    --disk-format raw
+    --container-format bare
+    --file {{ mktemprc.stdout.split( utilityBaseDir )[-1] }}/{{ imageName }}.img'
+  register: glancerc
+  failed_when: false
+  retries: 3
+  delay: 15
+
+- debug: var=glancerc
+
+- name: Remove temp directory containing image
+  file:
+    path: "{{ mktemprc.stdout }}"
+    state: absent
+
+- name: Halt on glance image create error
+  fail:
+    msg: "{{ glancerc.stderr }}"
+  when: glancerc['rc']
+
+- name: Get the glance-id
+  set_fact:
+    glance_id: "{{ item.split()[3] }}"
+  with_items: "{{ glancerc['stdout_lines'] }}"
+  when: "'| id ' in item"
+
+- debug: var=glance_id
+
+- name: Register a new datastore "{{ dbName }}"
+  shell: >-
+    /usr/bin/lxc-attach -n '{{ trove_container.stdout }}' --
+    /bin/bash -c '
+    source /openstack/venvs/trove*/bin/activate;
+    source /root/openrc;
+    trove-manage datastore_update {{ dbName }} "'""'"'
+  register: troverc
+  retries: 3
+  delay: 15
+
+- debug: var=troverc
+
+- name: Halt on trove-manage datastore_update error
+  fail:
+    msg: "{{ troverc.stderr }}"
+  when: troverc['stdout'] != "Datastore \'" + dbName + "\' updated."
+
+- name: Add the glance-id "{{ glance_id }}" to the datastore
+  shell: >-
+    /usr/bin/lxc-attach -n '{{ trove_container.stdout }}' --
+    /bin/bash -c '
+    source /openstack/venvs/trove*/bin/activate;
+    source /root/openrc;
+    trove-manage datastore_version_update
+    {{ dbName }} {{ dbVersion }}
+    {{ dbName }} {{ glance_id }}
+    {{ pkgDistroName }} 1'
+  register: troverc
+  failed_when: false
+  retries: 3
+  delay: 15
+
+- debug: var=troverc
+
+- name: Halt on trove-manage datastore_version_update error
+  fail:
+    msg: "{{ troverc.stderr }}"
+  when: troverc['stdout'] != "Datastore version \'" + dbVersion + "\' updated."
+
+- name: Add version "{{ dbVersion }}" to the datastore
+  shell: >-
+    /usr/bin/lxc-attach -n '{{ trove_container.stdout }}' --
+    /bin/bash -c '
+    source /openstack/venvs/trove*/bin/activate;
+    source /root/openrc;
+    trove-manage datastore_update {{ dbName }} {{ dbVersion }}'
+  register: troverc
+  retries: 3
+  delay: 15
+
+- debug: var=troverc
+
+- name: Halt on trove-manage datastore_update error
+  fail:
+    msg: "{{ troverc.stderr }}"
+  when: troverc['stdout'] != "Datastore \'" + dbName + "\' updated."
+
+# Trove provides a default set of validation rules for each database which can
+# be updated by the user.  These rules are related to database configuration
+# parameters.  For xenial, we updated the rules for postgresql to remove the
+# deprecated checkpoint_segments configuration parameter.
+
+- block:
+  - name: mktemp directory in trove api container for image
+    command: mktemp -d "{{ troveBaseDir }}/tmp/dbimage-builder.XXXX"
+    register: mktemprc
+
+  - name: Set permissions on temp directory
+    file:
+      path: "{{ mktemprc.stdout }}"
+      state: directory
+      mode: 0755
+
+  - name: Copy "{{ dbName }}" configuration parameters to the trove api container
+    copy:
+      src: "{{ hostvars[groups['deployer'][0]].validationRules }}"
+      dest: "{{ mktemprc.stdout }}/validation-rules.json"
+
+  - name: Datastore update configuration parameters
+    shell: >-
+      /usr/bin/lxc-attach -n '{{ trove_container.stdout }}' --
+      /bin/bash -c '
+      source /openstack/venvs/trove*/bin/activate;
+      source /root/openrc;
+      trove-manage db_load_datastore_config_parameters
+      {{ dbName }} {{ dbVersion }}
+      {{ mktemprc.stdout.split( troveBaseDir )[-1] }}/validation-rules.json'
+    register: troverc
+    retries: 3
+    delay: 15
+
+  - name: Remove temp directory containing configuration parameters
+    file:
+      path: "{{ mktemprc.stdout }}"
+      state: absent
+
+  - debug: var=troverc
+
+  when: hostvars[groups['deployer'][0]].validationRules is defined
+

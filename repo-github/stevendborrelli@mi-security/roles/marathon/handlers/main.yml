@@ -1,0 +1,16 @@
+---
+- name: reload marathon
+  sudo: yes
+  shell: /bin/systemctl daemon-reload
+
+- name: restart marathon 
+  sudo: yes
+  shell: /bin/systemctl restart marathon
+
+- name: reload consul
+  sudo: yes
+  shell: "{{ consul_bin }} reload"
+
+- name: restart nginx-marathon
+  sudo: yes
+  shell: systemctl restart nginx-marathon

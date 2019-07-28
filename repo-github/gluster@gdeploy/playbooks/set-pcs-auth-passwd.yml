@@ -1,0 +1,12 @@
+---
+- hosts: gluster_servers
+  become: true
+  gather_facts: no
+
+  tasks:
+  - name: Create a user hacluster in all the cluster nodes if not already present
+    user: name=hacluster
+
+  - name: Set the hacluster user the same password on all machines
+    shell: echo hacluster | passwd --stdin hacluster
+

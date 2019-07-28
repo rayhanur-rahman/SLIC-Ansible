@@ -1,0 +1,7 @@
+- name: 'Install templates plugin'
+  include_role:
+    name: plugins/plugin_installer
+  vars:
+    plugin_installer_options: >
+      --enable-foreman-plugin-templates
+      {{ foreman_templates_installer_options }}

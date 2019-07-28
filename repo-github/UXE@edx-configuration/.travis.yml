@@ -1,0 +1,50 @@
+# Travis CI configuration file for running tests
+language: python
+python:
+  - "2.7"
+install:
+  - "sudo apt-get install -y nodejs python-demjson"
+  - "pip install --allow-all-external -r requirements.txt"
+  - "pip install --allow-all-external demjson"
+script:
+  - |
+    for yml in $(find . -name "*.yml"); do
+      python -c "import sys,yaml; yaml.load(open(sys.argv[1]))" $yml >/dev/null
+      if [[ $? -ne 0 ]]; then
+        echo "ERROR parsing $yml"
+        exit 1
+      fi
+    done
+  - |
+    for json in $(find . -name "*.json"); do
+      jsonlint -v $json
+      if [[ $? -ne 0 ]]; then
+        echo "ERROR parsing $json"
+        exit 1
+      fi
+    done
+  - |
+    pushd playbooks
+    for j2 in $(git diff --name-only refs/heads/master..$(git rev-parse --abbrev-ref HEAD) |grep -E '.+\.j2$|.+\.yml'); do
+      python ../util/jinja_check.py ../$j2
+      if [[ $? -ne 0 ]]; then
+          echo "Jinja parsing error on $j2"
+          exit 1
+      fi
+    done
+    popd
+  - |
+    set -e
+    cd playbooks/edx-east
+    ROLE_DIRS=$(/bin/ls -d roles/*)
+    cat <<EOF >travis-test.yml
+    - name: Play to test all roles
+      hosts: all
+      roles:
+    EOF
+    for role_dir in $ROLE_DIRS; do
+        echo "    - $(basename $role_dir)" >> travis-test.yml
+    done
+
+    ansible-playbook -i localhost, --syntax-check travis-test.yml
+

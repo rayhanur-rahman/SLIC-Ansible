@@ -1,0 +1,39 @@
+- name: connect a sandbox to production data
+  hosts: all
+  gather_facts: False
+  become: True
+  tasks:
+
+      # WARNING - calling lineinfile on a symlink
+      # will convert the symlink to a file!
+      # don't use /edx/etc/server-vars.yml here
+      #
+      # What we are doing here is updating the sandbox
+      # server-vars config file so that when update
+      # is called it will use the new MYSQL connection
+      # info.
+    - name: Update RDS to point to the sandbox clone
+      lineinfile:
+        dest: /edx/app/edx_ansible/server-vars.yml
+        line: "{{ item }}"
+      with_items:
+        - "EDXAPP_MYSQL_HOST: {{ EDXAPP_MYSQL_HOST }}"
+        - "EDXAPP_MYSQL_DB_NAME: {{ EDXAPP_MYSQL_DB_NAME }}"
+        - "EDXAPP_MYSQL_USER: {{ EDXAPP_MYSQL_USER }}"
+        - "EDXAPP_MYSQL_PASSWORD: {{ EDXAPP_MYSQL_PASSWORD }}"
+      tags: update_edxapp_mysql_host
+
+    - name: Update mongo to point to the sandbox mongo clone
+      lineinfile:
+        dest: /edx/app/edx_ansible/server-vars.yml
+        line: "{{ item }}"
+      with_items:
+        - "EDXAPP_MONGO_HOSTS: {{ EDXAPP_MONGO_HOSTS }}"
+        - "EDXAPP_MONGO_DB_NAME: {{ EDXAPP_MONGO_DB_NAME }}"
+        - "EDXAPP_MONGO_USER: {{ EDXAPP_MONGO_USER }}"
+        - "EDXAPP_MONGO_PASSWORD: {{ EDXAPP_MONGO_PASSWORD }}"
+      tags: update_edxapp_mysql_host
+
+    - name: call update on edx-platform
+      shell: "/edx/bin/update edx-platform {{ edxapp_version }}"
+      tags: update_edxapp_mysql_host

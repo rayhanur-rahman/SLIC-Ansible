@@ -1,0 +1,27 @@
+---
+- name: "{{ 'Create' if (state is undefined or 'absent' not in state) else 'Terminate' }} Route53 zone"
+  route53_zone:
+    comment: "{{ clusterid }}.{{ dns_domain }}"
+    hosted_zone_id: "{{ '' if (state is undefined or 'absent' not in state) else item.id | replace('/hostedzone/', '') }}"
+    state: "{{ state | default('present') }}"
+    vpc_id: "{{ item.vpc_id }}"
+    vpc_region: "{{ aws_region }}"
+    zone: "{{ clusterid }}.{{ dns_domain }}."
+  with_items: "[\
+    {%- if r53_zones is defined and r53_zones[0] | length >= 1 -%}
+      {% for zone in r53_zones[0] -%}
+        {%- if zone.PrivateZone == true -%}
+          { 'id': '{{ zone.Id | safe }}', 'vpc_id': '{{ vpc.vpcs[0].vpc_id }}' },
+        {%- else -%}
+          { 'id': '{{ zone.Id | safe }}', 'vpc_id': '' },
+        {%- endif -%}
+      {% endfor -%}
+    {%- else -%}
+      { 'id': '', 'vpc_id': '' },
+      { 'id': '', 'vpc_id': '{{ vpc.vpc.id }}' },
+    {%- endif -%}]"
+  when: "\
+  (state is undefined or 'absent' not in state) \
+  or \
+  ( ( r53_zones is defined ) and ( r53_zones[0] | length >= 1 ) ) \
+  "

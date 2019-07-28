@@ -1,0 +1,4 @@
+
+- name: xserver | restart nginx
+  service: name=nginx state=restarted
+

@@ -1,0 +1,48 @@
+---
+- name: 'Get Server Hostname'
+  shell: hostname -f
+  delegate_to: "{{ foreman_proxy_content_server }}"
+  register: server_fqdn
+
+- name: 'Get Server IP Address'
+  shell: ifconfig eth0 2>/dev/null|awk '/inet/ {print $2}'|sed 's/addr://'
+  delegate_to: "{{ foreman_proxy_content_server }}"
+  register: server_ip
+
+- name: 'Set fact for Server IP'
+  set_fact: server_ip="{{ server_ip.stdout.split('\n')[0] }}"
+
+- name: 'Add /etc/hosts record for foreman_proxy_content'
+  delegate_to: "{{ foreman_proxy_content_server }}"
+  lineinfile:
+    dest: /etc/hosts
+    regexp: ".*{{ ansible_nodename }}$"
+    line: "{{ foreman_proxy_content_ip }} {{ ansible_nodename }}"
+    state: present
+
+- name: 'Get oauth-consumer-key'
+  shell: grep oauth_consumer_key "{{ foreman_directory }}"settings.yaml | cut -d ' ' -f 2
+  delegate_to: "{{ foreman_proxy_content_server }}"
+  register: oauth_consumer_key
+
+- name: 'Get oauth-consumer-secret'
+  shell: grep oauth_consumer_secret "{{ foreman_directory }}"settings.yaml | cut -d ' ' -f 2
+  delegate_to: "{{ foreman_proxy_content_server }}"
+  register: oauth_consumer_secret
+
+- name: 'Get pulp-oauth-secret'
+  shell: grep oauth_secret /etc/pulp/server.conf | tail -1 | cut -d ' ' -f 2
+  delegate_to: "{{ foreman_proxy_content_server }}"
+  register: pulp_oauth_secret
+
+- include_tasks: certs_generate.yml
+
+- name: 'Change cert permissions'
+  file: path='/etc/pki/katello/private' mode=0775
+  delegate_to: "{{ foreman_proxy_content_server }}"
+  when: devel is defined and devel == true
+
+- name: 'Install Capsule Installer RPM'
+  yum:
+    name: foreman-proxy-content
+  when: custom_install == False

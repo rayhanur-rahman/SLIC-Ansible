@@ -1,0 +1,28 @@
+# vim: set ft=ansible:
+---
+- include: cloudformation_setup.yml
+
+- include: group_setup.yml
+
+- name: Register host(s)
+  hosts: cluster_hosts
+  serial: 1
+  gather_facts: no
+  tasks:
+  - name: Register host
+    redhat_subscription:
+      username: "{{ rhsm_user }}"
+      password: "{{ rhsm_pass }}"
+      state: present
+      pool: "^(60 Day Supported OpenShift Enterprise|OpenShift Enterprise, Standard|OpenShift Enterprise, Premium|Employee)"
+    register: register_result
+    when: not (skip_subscription_management | bool)
+
+  - name: Disable all known rhsm repos
+    command: subscription-manager repos --disable='*'
+    when: register_result | changed
+
+  - name: Subscribe only to the ose repo
+    command: subscription-manager repos --enable=rhel-7-server-ose-3.2-rpms
+    when: register_result | changed
+

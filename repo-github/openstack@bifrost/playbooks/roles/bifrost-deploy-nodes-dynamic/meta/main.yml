@@ -1,0 +1,23 @@
+---
+galaxy_info:
+  author: Ironic Developers
+  description: Deploys the image on to nodes in Ironic
+  company: OpenStack
+  license: Apache
+  min_ansible_version: 2.0
+  platforms:
+  - name: EL
+    versions:
+    - 7
+  - name: Debian
+    versions:
+    - jessie
+    - stretch
+  - name: Ubuntu
+    versions:
+    - xenial
+    - bionic
+  categories:
+  - cloud
+  - cloud:openstack
+dependencies: []

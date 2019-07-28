@@ -1,0 +1,14 @@
+---
+dib_os_element: "debian"
+dib_env_vars:
+  http_proxy: "{{ lookup('env','http_proxy') }}"
+  https_proxy: "{{ lookup('env','https_proxy') }}"
+  DIB_INSTALL_TYPE_simple_init: repo
+build_ramdisk: false
+dib_trace: false
+dib_uncompressed: false
+dib_clearenv: false
+dib_notmpfs: false
+dib_offline: false
+dib_skipbase: false
+dib_packages: ""

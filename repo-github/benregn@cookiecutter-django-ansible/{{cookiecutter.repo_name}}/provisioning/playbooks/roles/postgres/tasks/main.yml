@@ -1,0 +1,84 @@
+{% raw %}---
+- name: add postgres signing key
+  sudo: True
+  apt_key: >
+    url=https://www.postgresql.org/media/keys/ACCC4CF8.asc
+    state=present
+  tags:
+    - postgres
+
+- name: add postgres apt repo
+  apt_repository: >
+    repo='deb http://apt.postgresql.org/pub/repos/apt/ precise-pgdg main'
+    update_cache=yes
+    state=present
+  sudo: True
+  tags:
+    - postgres
+
+- name: install postgres packages
+  apt: >
+    pkg={{item}}
+    update_cache=yes
+    cache_valid_time={{six_hours}}
+    state=installed
+  sudo: True
+  with_items: postgres_packages
+  tags:
+    - postgres
+
+# - name: add postgres user to admin group
+#   user: name=postgres groups=admin append=yes
+#   sudo: True
+#   tags:
+#     - postgres
+
+# - name: update postgres db configuration
+#   copy: src=postgresql.conf dest=/etc/postgresql/9.3/main/postgresql.conf
+#   sudo: True
+#   tags:
+#     - postgres
+
+- name: update postgres pg_hba.conf
+  template: >
+    src=pg_hba.conf
+    dest=/etc/postgresql/9.3/main/pg_hba.conf
+  sudo: True
+  tags:
+    - postgres
+
+- name: change listen_addresses to '*'
+  lineinfile: >
+    dest=/etc/postgresql/9.3/main/postgresql.conf
+    regexp="^#listen_addresses"
+    line="listen_addresses = '*'"
+    state=present
+    backup=yes
+  sudo: True
+  tags:
+    - postgres
+
+- name: ensure postgres is restarted
+  service: >
+    name=postgresql
+    state=restarted
+  sudo: True
+
+- name: create a postgres user
+  postgresql_user: >
+    user={{ postgres_user_name }}
+    password={{ postgres_password }}
+  sudo: True
+  sudo_user: postgres
+  tags:
+    - postgres
+
+- name: create database
+  postgresql_db: >
+    name={{ postgres_db_name }}
+    owner={{ postgres_user_name }}
+  sudo: True
+  sudo_user: postgres
+  tags:
+    - postgres
+{% endraw %}

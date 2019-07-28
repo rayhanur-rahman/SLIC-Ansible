@@ -1,0 +1,41 @@
+---
+- include: epel7.yml
+
+# Ensure we see fresh data
+- command: yum clean expire-cache
+
+# Add in here direct RPM links, for things that are still pending repodata
+- command: yum -y localinstall {{ item }}
+  with_items:
+    - https://kojipkgs.fedoraproject.org//packages/python-distro/1.0.1/2.el7/noarch/python2-distro-1.0.1-2.el7.noarch.rpm
+
+# Disable epel testing to work around https://bodhi.fedoraproject.org/updates/FEDORA-EPEL-2017-6fb8d59d10
+- yum: name={{ item }} state=latest disablerepo=epel-testing
+  with_items:
+    - rsync
+    - docker
+    - libsolv
+    - glib2
+    - PyYAML
+    - ansible
+    - virt-install
+
+- user: name={{ item }} groups=wheel
+  with_items:
+    - builder
+    - prbuilder
+
+- lineinfile: "dest=/etc/sudoers state=present regexp='^%wheel' line='%wheel ALL=(ALL) NOPASSWD: ALL'"
+
+- authorized_key:
+    user: "{{ item }}"
+    key: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
+  with_items:
+    - builder
+    - prbuilder
+
+- name: Start docker service
+  service:
+    name: docker
+    state: restarted
+    enabled: yes

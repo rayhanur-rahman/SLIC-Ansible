@@ -1,0 +1,15 @@
+---
+- name: "Load OS variables"
+  include_vars: "{{ ansible_os_family }}.yml"
+
+- name: 'install sos'
+  package:
+    name: '{{ sos_package }}'
+    state: present
+
+- name: 'Generate sosreport'
+  command: "sosreport --batch --tmp-dir={{ sosreport_output_dir }}"
+  ignore_errors: true
+
+- include_tasks: 'sosreport_fetch_results.yml'
+  when: sosreport_fetch

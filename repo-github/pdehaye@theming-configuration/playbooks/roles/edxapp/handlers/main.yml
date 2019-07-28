@@ -1,0 +1,27 @@
+---
+- name: start edxapp
+  service: name=edxapp state=started
+  tags:
+  - lms
+  - lms-xml
+  - lms-preview
+  - cms
+  - deploy
+
+- name: stop edxapp
+  service: name=edxapp state=stopped
+  tags:
+  - lms
+  - lms-xml
+  - lms-preview
+  - cms
+  - deploy
+
+- name: restart edxapp
+  service: name=edxapp state=restarted
+  tags:
+  - lms
+  - lms-xml
+  - lms-preview
+  - cms
+  - deploy

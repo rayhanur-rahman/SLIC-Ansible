@@ -1,0 +1,167 @@
+---
+all:
+  vars:
+    app_dns_prefix: apps
+    public_hosted_zone: example.com
+    load_balancer_hostname: lb.{{public_hosted_zone}}
+    openshift_master_cluster_hostname: "{{ load_balancer_hostname }}"
+    openshift_master_cluster_public_hostname: openshift-master.{{ public_hosted_zone }}
+    openshift_master_default_subdomain: "{{ app_dns_prefix }}.{{ public_hosted_zone }}"
+    openshift_public_hostname: "{{openshift_master_cluster_public_hostname}}"
+  hosts:
+    localhost:
+      ansible_connection: local
+      # RHV Engine
+      engine_url: "{{ vault_engine_url }}"
+      engine_user: "{{ vault_engine_user }}"
+      engine_password: "{{ vault_engine_password }}"
+      # CA file copied from engine:/etc/pki/ovirt-engine/ca.pem
+      # path is relative to playbook directory
+      engine_cafile: ../ca.pem
+
+      # QCOW2 KVM Guest Image
+      #qcow_url: https://cloud.centos.org/centos/7/images/CentOS-7-x86_64-GenericCloud.qcow2c
+      qcow_url: https://access.cdn.redhat.com//content/origin/files/XXX/rhel-server-7.5-x86_64-kvm.qcow2?_auth_=XXX
+      template_name: rhel75
+      image_path: "{{ lookup('env', 'HOME') }}/Downloads/{{ template_name }}.qcow2"
+
+      # RHV VM Cluster Info
+      rhv_cluster: Default
+      rhv_data_storage: vmstore
+      root_ssh_key: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
+
+      # DNS server for nsupdate
+      #nsupdate_server: localhost
+  children:
+    OSEv3:
+      children:
+        nodes:
+          children:
+            masters:
+              hosts:
+                master[0:2].example.com
+              vars:
+                openshift_node_labels: "{'region': 'master'}"
+                openshift_schedulable: true
+            apps:
+              hosts:
+                app[0:2].example.com
+              vars:
+                openshift_node_labels: "{'region': 'primary'}"
+                openshift_schedulable: true
+            infras:
+              hosts:
+                infra[0:2].example.com
+              vars:
+                openshift_node_labels: "{'region': 'infra'}"
+                openshift_schedulable: true
+            lb:
+              hosts:
+                lb.example.com
+            etcd:
+              hosts:
+                master[0:2].example.com
+      vars:
+        # General variables
+        ansible_ssh_user: root
+        console_port: 8443
+        debug_level: 2
+        deployment_type: openshift-enterprise
+        openshift_clock_enabled: true
+        openshift_debug_level: "{{ debug_level }}"
+        openshift_deployment_type: "{{ deployment_type }}"
+        openshift_master_cluster_method: native
+        openshift_node_debug_level: "{{ node_debug_level | default(debug_level, true) }}"
+        openshift_release: 3.9
+        openshift_vers: v3_9
+        osm_default_node_selector: "region=primary"
+
+        # RHV Specific Settings
+        openshift_enable_service_catalog: False
+        # openshift_cloudprovider_kind: ovirt
+        # openshift_cloudprovider_ovirt_auth_url:
+        # openshift_cloudprovider_ovirt_username:
+        # openshift_cloudprovider_ovirt_password:
+
+        # Docker
+        container_runtime_docker_storage_setup_device: /dev/vdb
+        container_runtime_docker_storage_type: overlay2
+        openshift_docker_use_system_container: False
+        openshift_node_local_quota_per_fsgroup: 512Mi
+        openshift_use_system_containers: False
+        oreg_url: "registry.access.redhat.com/openshift3/ose-${component}:${version}"
+        openshift_examples_modify_imagestreams: true
+
+        # Pod Networking
+        os_sdn_network_plugin_name: redhat/openshift-ovs-networkpolicy
+        # DNS
+        app_dns_prefix: apps
+        public_hosted_zone: example.com
+        load_balancer_hostname: lb.{{public_hosted_zone}}
+        openshift_master_cluster_hostname: "{{ load_balancer_hostname }}"
+        openshift_master_cluster_public_hostname: openshift.{{ public_hosted_zone }}
+        openshift_master_default_subdomain: "{{app_dns_prefix}}.{{public_hosted_zone}}"
+        openshift_public_hostname: "{{openshift_master_cluster_public_hostname}}"
+
+        # Registry
+        openshift_hosted_registry_replicas: 1
+        openshift_hosted_registry_storage_kind: nfs
+        openshift_hosted_registry_storage_access_modes: ['ReadWriteMany']
+        openshift_hosted_registry_selector: region=infra
+        openshift_hosted_registry_storage_host:
+        openshift_hosted_registry_storage_nfs_directory: /var/lib/exports
+        openshift_hosted_registry_storage_volume_name: registryvol
+        openshift_hosted_registry_storage_volume_size: 20Gi
+
+        # Authentication
+        openshift_master_identity_providers:
+          - name: htpasswd_auth
+            login: true
+            challenge: true
+            kind: HTPasswdPasswordIdentityProvider
+            filename: /etc/origin/master/htpasswd
+        openshift_master_htpasswd_users: {'myuser': '$apr1$zAhyA9Ko$rBxBOwAwwtRuuaw8OtCwH0'}
+
+        # Red Hat Subscription Management
+        rhsub_pool: Red Hat OpenShift Container Platform*
+        rhsub_server: "{{ vault_rhsub_server }}"
+        rhsub_user: "{{ vault_rhsub_user }}"
+        rhsub_password: "{{ vault_rhsub_password }}"
+
+        # Load Balancer Config
+        openshift_loadbalancer_additional_frontends:
+          - name: apps-http
+            option: tcplog
+            binds:
+              - "*:80"
+            default_backend: apps-http
+          - name: apps-https
+            option: tcplog
+            binds:
+              - "*:443"
+            default_backend: apps-http
+        openshift_loadbalancer_additional_backends:
+          - name: apps-http
+            balance: source
+            servers:
+              - name: infra0
+                address: "{{ groups['infras'].0 }}:80"
+                opts: check
+              - name: infra1
+                address: "{{ groups['infras'].1 }}:80"
+                opts: check
+              - name: infra2
+                address: "{{ groups['infras'].2 }}:80"
+                opts: check
+          - name: apps-https
+            balance: source
+            servers:
+              - name: infra0
+                address: "{{ groups['infras'].0 }}:443"
+                opts: check
+              - name: infra1
+                address: "{{ groups['infras'].1 }}:443"
+                opts: check
+              - name: infra2
+                address: "{{ groups['infras'].2 }}:443"
+                opts: check

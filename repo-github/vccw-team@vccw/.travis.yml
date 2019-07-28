@@ -1,0 +1,17 @@
+branches:
+  only:
+  - master
+  - "/^[0-9\\.]+/"
+script:
+- ls -al
+after_success:
+- bash bin/deploy.sh
+- ls -al
+deploy:
+  provider: releases
+  api_key:
+    secure: b9JCxWfNanmspzZ1nsNVS9CP1w3/89ejLltk3WPUjo4YR1BRmia62zPeHSj/A+JU/ErzoRRqCne3ssUFlDDeZlzFato+Zxvd6mAQA1/98N7ywifErxZOxKf4sf8NaH/evRO+M6gCXhPvn9x74NdNOsQzKz9LTLR6FnfqBve5DLA=
+  file: vccw-${TRAVIS_TAG}.zip
+  on:
+    tags: true
+    repo: vccw-team/vccw

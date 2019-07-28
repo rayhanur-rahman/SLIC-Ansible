@@ -1,0 +1,288 @@
+---
+# Meza default config file
+
+# meza install location
+m_install: /opt
+m_meza: /opt/meza
+
+# Use development or production settings for this server
+# production being as performant and secure as possible
+# development being less secure and providing optional features useful for dev
+m_use_production_settings: True
+
+# config dir
+m_config_core: /opt/meza/config/core
+m_local_secret: /opt/conf-meza/secret
+m_local_public: /opt/conf-meza/public
+m_config_vault: /opt/conf-meza/vault
+m_home: /opt/conf-meza/users
+
+# Config files written by Ansible which need a place to live on non-controller
+# nodes.
+m_deploy: /opt/.deploy-meza
+
+# scripts dir
+m_scripts: /opt/meza/src/scripts
+
+# test dir
+m_test: /opt/meza/test
+
+# data dir
+m_meza_data: /opt/data-meza
+m_cache_directory: /opt/data-meza/cache
+m_tmp: /opt/data-meza/tmp
+m_logs: /opt/data-meza/logs
+
+# uploads dir. This WILL BE OVERIDDEN if multiple app servers are used, and
+# instead will use /opt/data-meza/uploads-gluster to use GlusterFS distributed
+# file system.
+m_uploads_dir: /opt/data-meza/uploads
+
+# GlusterFS vars
+gluster_mount_dir: /opt/data-meza/uploads-gluster
+gluster_brick_dir: /opt/data-meza/gluster/brick
+gluster_brick_name: gluster
+
+# Location where backups will go, specified by environment, e.g.
+# /opt/data-meza/backups/prod for "prod" environment
+m_backups: /opt/data-meza/backups
+
+# webserver variables
+m_htdocs: /opt/htdocs
+m_mediawiki: /opt/htdocs/mediawiki
+m_cert_private: /etc/pki/tls/private/meza.key
+m_cert_public: /etc/pki/tls/certs/meza.crt
+m_ca_cert: /etc/pki/tls/certs/meza-ca.crt
+
+
+# app locations
+m_apache: /etc/httpd
+m_apache_conf: /etc/httpd/conf/httpd.conf
+m_php_ini: /etc/php.ini
+m_memcached_conf: /etc/sysconfig/memcached
+m_parsoid_path: /etc/parsoid
+m_simplesamlphp_path: /opt/simplesamlphp
+m_profiling_xhgui_directory: /opt/xhgui
+
+# files
+m_i18n: /opt/meza/config/core/i18n
+m_db_replication_dump_file: /opt/data-meza/db_master_for_replication.sql
+m_db_replication_log_file: /opt/data-meza/db_master_log_file
+m_db_replication_log_pos: /opt/data-meza/db_master_log_pos
+
+m_httpd_server_admin: "admin@example.com"
+m_timezone: "America/Chicago"
+
+meza_server_log_db: meza_server_log
+
+ntp_server: [0.pool.ntp.org, 1.pool.ntp.org, 2.pool.ntp.org, 3.pool.ntp.org]
+
+m_language: en
+
+allow_backup_downloads: false
+
+# Allow skipping certain wikis when doing backups
+# Example:
+# wikis_to_skip_overwrite
+#   - mywiki
+#   - yourwiki
+wikis_to_skip_overwrite: []
+
+# Allow redirecting wiki IDs to other wikis. This is useful if if wikis are renamed or merged.
+# Example:
+# wiki_id_redirects:
+#   eva: iss
+#   oso: iss
+#   robo: iss
+wiki_id_redirects: {}
+
+m_force_debug: false
+
+enable_wiki_emails: true
+
+enable_haproxy_stats: false
+haproxy_stats_user: admin
+haproxy_stats_password: password
+
+# Only useful for developers and testing performance issues
+m_setup_php_profiling: false
+
+# Enable slow query log
+mysql_slow_query_log_enabled: yes
+mysql_slow_query_time: "5"
+mysql_slow_query_log_file: /var/log/mariadb/slow-queries.log
+
+# Default to using the performance schema
+# But allow it to be turned OFF easily in low mem environments
+# or for high performance environments like prod
+# http://dev.mysql.com/doc/refman/5.5/en/performance-schema.html
+# https://mariadb.com/kb/en/mariadb/performance-schema-overview/
+mysql_performance_schema: "on"
+
+# If using a load balancer not managed by meza, on what port should you
+# access Parsoid and MediaWiki internal services?
+load_balancer_unmanaged_parsoid_port: 8000
+load_balancer_unmanaged_mediawiki_port: 8080
+
+# If false, keep all SQL files on backup servers. If true, only keep the latest
+do_cleanup_sql_backup: False
+
+# sshd_config defaults
+sshd_config_UsePAM: "yes"
+sshd_config_PasswordAuthentication: "yes"
+use_default_ssh_config: True
+
+#
+# Software versions
+#
+
+# Version of MediaWiki core
+mediawiki_version: "1.31.2"
+
+# Branch to use on many extensions extensions and skins
+mediawiki_default_branch: "REL1_31"
+
+# PHP version
+php_ius_version: "php71u"
+
+# Parsoid version
+m_parsoid_version: "tags/v0.9.0"
+
+# MediaWiki 1.27 and earlier require ElasticSearch 1.6
+# MediaWiki 1.28 and higher require ElasticSearch 2.x
+# MediaWiki 1.29 and higher require ElasticSearch 5.x
+elasticsearch_major_version: "5.x"
+
+
+
+#
+# NOTIFICATIONS
+#
+server_performance_crontime: "*/10 * * * *"
+
+# at what level do we display amber colored notification
+server_performance_memory_usage_warning: "50"
+
+# same as ^ but red danger message
+server_performance_memory_usage_danger: "75"
+
+disk_space_usage_crontime: "0 1 * * *"
+
+# Icons display in Slack
+server_performance_notification_icon: https://github.com/enterprisemediawiki/meza/raw/master/src/roles/configure-wiki/files/logo.png
+disk_space_usage_notification_icon: https://github.com/enterprisemediawiki/meza/raw/master/src/roles/configure-wiki/files/logo.png
+
+# secret.yml has additional configuration options commented out. See that file
+# for more details.
+
+
+#
+# Misc cron times
+#
+
+# Cleanup upload stash (temporary files) daily at 6pm
+clean_upload_stash_crontime: "0 18 * * *"
+
+
+#
+# FILE MODES, OWNERS, GROUPS
+#
+
+m_meza_owner: meza-ansible
+m_meza_group: wheel
+# Don't set mode for /opt/meza for now. Don't want to impact execute bit which
+# is managed by Git
+# FIXME: Later specify read and write permissions only if Ansible supports
+
+
+m_data_mode: "0755"
+m_data_owner: meza-ansible
+m_data_group: wheel
+
+
+#
+# Used for many things within htdocs that don't require apache to manipulate
+#
+m_htdocs_mode: "u=rwX,g=rwX,o=rX"
+m_htdocs_owner: meza-ansible
+m_htdocs_group: wheel
+
+
+# uploads directory. Note: user meza-ansible is in group "apache"
+m_uploads_dir_mode: "0775"
+m_uploads_dir_owner: apache
+m_uploads_dir_group: apache
+
+# Per [1] this should not be accessible from the web and should have mode of
+# 0700. However, we need it to be accessible by apache httpd for page requests
+# but also allow command line scripts to run it, specifically for running jobs.
+# Fortunately jobs are run by the meza-ansible user, who is in group "apache"
+# and therefore we'll use mode=0770.
+#
+# [1] https://www.mediawiki.org/wiki/Manual:$wgCacheDirectory
+m_cache_directory_mode: "0770"
+m_cache_directory_owner: apache
+m_cache_directory_group: apache
+
+
+m_logs_mode: "0755"
+m_logs_owner: meza-ansible
+m_logs_group: wheel
+
+
+m_backups_mode: "0775"
+m_backups_owner: meza-ansible
+m_backups_group: meza-backups
+
+# mode/ownership for anything in /etc/cron.d
+m_crond_mode: "0644"
+m_crond_owner: root
+m_crond_group: root
+
+m_config_public_mode: "0755"
+m_config_public_owner: meza-ansible
+m_config_public_group: wheel
+
+m_config_secret_file_mode: "0660"
+m_config_secret_dir_mode: "0775"
+m_config_secret_owner: meza-ansible
+m_config_secret_group: wheel
+
+m_simplesamlphp_mode: "u=rwX,g=rwX,o=rX"
+m_simplesamlphp_owner: meza-ansible
+m_simplesamlphp_group: wheel
+
+
+#
+# PHP config
+#
+
+# The OPcache shared memory storage size
+php_opcache_memory_consumption: 256
+
+# The amount of memory for interned strings in Mbytes
+php_opcache_interned_strings_buffer: 16
+
+# The amount of input variables that may be accepted
+php_max_input_vars: 2000
+
+# It's important for this number to be greater than the number of PHP files on a
+# server.
+# sudo find /opt/htdocs -type f -print | grep php | wc -l
+#    On one server on 17-SEP-2018, 13859 files
+# sudo find /opt/conf-meza -type f -print | grep php | wc -l
+#    On one server on 17-SEP-2018, 134 files
+# sudo find /opt/simplesamlphp -type f -print | grep php | wc -l
+#    On one server on 17-SEP-2018, 5032 files
+# total = ~19000 files
+#
+# This number could be increased based on the number of extensions in a server's
+# MezaLocalExtensions.yml file. In order to leave plenty of room, pick a prime
+# number about 50% bigger than 19000.
+php_opcache_max_accelerated_files: 28001
+
+# How often (in seconds) to check file timestamps for changes to the shared
+# memory storage allocation. ("1" means validate once per second, but only
+# once per request. "0" means always validate)
+php_opcache_revalidate_freq: 0
+

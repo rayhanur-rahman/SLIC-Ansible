@@ -1,0 +1,81 @@
+# Copyright (c) 2015 Hewlett-Packard Development Company, L.P.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+---
+# Note(TheJulia): Fact collection from ironic is necessary to obtain
+# the host's assigned UUID value.
+- name: "Update facts from ironic to fill in any missing values"
+  include: update_facts_from_ironic.yaml
+- name: "Identify ssh_public_key if ssh_public_key_path is defined"
+  include: ssh_public_key_path.yaml
+  when: ssh_public_key is undefined and ssh_public_key_path is defined
+- name: "Make temporary folder to build configdrive"
+  local_action: command mktemp -d
+  register: variable_configdrive_location
+- name: "Make metadata folder - /openstack/{{ metadata_version }}"
+  file:
+    state: directory
+    name: "{{ variable_configdrive_location.stdout }}/{{ uuid }}/openstack/{{ metadata_version }}/"
+- name: "Make metadata folder - /openstack/latest"
+  file:
+    state: directory
+    name: "{{ variable_configdrive_location.stdout }}/{{ uuid }}/openstack/latest/"
+- name: "Place template in each openstack/{{ metadata_version }} folder"
+  template:
+    src: openstack_meta_data.json.j2
+    dest: "{{ variable_configdrive_location.stdout }}/{{ uuid }}/openstack/{{ metadata_version }}/meta_data.json"
+- name: "Place template in each openstack/latest folder"
+  template:
+    src: openstack_meta_data.json.j2
+    dest: "{{ variable_configdrive_location.stdout }}/{{ uuid }}/openstack/latest/meta_data.json"
+- name: "Generate network_info"
+  network_metadata:
+    ipv4_address: "{{ ipv4_address | default('') }}"
+    ipv4_gateway: "{{ ipv4_gateway | default('') }}"
+    ipv4_interface_mac: "{{ ipv4_interface_mac | default('') }}"
+    ipv4_nameserver: "{{ ipv4_nameserver | default('') }}"
+    ipv4_subnet_mask: "{{ ipv4_subnet_mask | default('') }}"
+    vlan_id: "{{ vlan_id | default('') }}"
+    network_mtu: "{{ network_mtu | default('1500') }}"
+    nics: "{{ nics | default('') }}"
+    node_network_info: "{{ node_network_info | default('') }}"
+  when: addressing_mode is undefined and '"dhcp" not in addressing_mode'
+- name: "Place network info template in each openstack/latest folder"
+  template:
+    src: network_info.json.j2
+    dest: "{{ variable_configdrive_location.stdout }}/{{ uuid }}/openstack/latest/network_info.json"
+  when: addressing_mode is undefined and '"dhcp" not in addressing_mode'
+- name: "Make metadata folder - /openstack/latest"
+  file:
+    state: directory
+    name: "{{ variable_configdrive_location.stdout }}/{{ uuid }}/openstack/content/"
+- name: "Write network Debian style interface template"
+  local_action: template src=interfaces.j2 dest={{ variable_configdrive_location.stdout }}/{{ uuid }}/openstack/content/0000
+  when: write_interfaces_file | bool
+- name: "Make config drive files"
+  become: yes
+  command: mkisofs -R -V config-2 -o {{http_boot_folder}}/configdrive-{{ uuid }}.iso {{ variable_configdrive_location.stdout }}/{{ uuid }}
+- name: "Make config drive files base64 encoded and gzip compressed"
+  become:  yes
+  shell: gzip -c {{http_boot_folder}}/configdrive-{{ uuid }}.iso | base64 > {{http_boot_folder}}/configdrive-{{ uuid }}.iso.gz
+- name: "Cleanup configdrive .iso files"
+  become: yes
+  file:
+    state: absent
+    name: "{{http_boot_folder}}/configdrive-{{ uuid }}.iso"
+- name: "Cleanup configdrive temp folder"
+  become: yes
+  file:
+    state: absent
+    force: yes
+    name: "{{ variable_configdrive_location.stdout }}"

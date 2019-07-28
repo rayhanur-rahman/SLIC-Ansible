@@ -1,0 +1,69 @@
+---
+#### Enable periodic security updates
+- name: Install security packages
+  apt:
+    name: "{{ item }}"
+    state: latest
+    update_cache: yes
+  with_items: "{{ security_debian_pkgs }}"
+
+
+- name: Update all system packages
+  apt:
+    upgrade: safe
+  when: SAFE_UPGRADE_ON_ANSIBLE
+
+- name: Configure periodic unattended-upgrades
+  template:
+    src: "etc/apt/apt.conf.d/10periodic"
+    dest: "/etc/apt/apt.conf.d/10periodic"
+    owner: root
+    group: root
+    mode: "0644"
+  when: SECURITY_UNATTENDED_UPGRADES
+
+- name: Disable unattended-upgrades if Xenial (16.04)
+  command: "{{ item }}"
+  when: ansible_distribution_release == 'xenial' and not SECURITY_UNATTENDED_UPGRADES
+  with_items:
+    - "systemctl disable apt-daily.service"
+    - "systemctl disable apt-daily.timer"
+    - "systemctl disable apt-daily-upgrade.timer"
+  ignore_errors: true
+
+- name: Disable unattended-upgrades
+  file:
+    path: "/etc/apt/apt.conf.d/10periodic"
+    state: absent
+  when: not SECURITY_UNATTENDED_UPGRADES
+
+- name: Only unattended-upgrade from security repo
+  template:
+    src: "etc/apt/apt.conf.d/20unattended-upgrade"
+    dest: "/etc/apt/apt.conf.d/20unattended-upgrade"
+    owner: root
+    group: root
+    mode: "0644"
+  when: SECURITY_UNATTENDED_UPGRADES and not SECURITY_UPDATE_ALL_PACKAGES
+
+- name: Add debian blacklist
+  template:
+    src: "etc/apt/apt.conf.d/50unattended-upgrades"
+    dest: "/etc/apt/apt.conf.d/50unattended-upgrades"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Disable security only updates on unattended-upgrades
+  file:
+    path: "/etc/apt/apt.conf.d/20unattended-upgrade"
+    state: absent
+  when: SECURITY_UPDATE_ALL_PACKAGES or not SECURITY_UNATTENDED_UPGRADES
+
+# We dry-run because unattended-upgrade is quiet, and only had -d (debug) not -v (verbose)
+- name: "Take security updates during ansible runs"
+  command: "{{ item }}"
+  when: SECURITY_UPGRADE_ON_ANSIBLE
+  with_items:
+    - unattended-upgrade --dry-run
+    - unattended-upgrade

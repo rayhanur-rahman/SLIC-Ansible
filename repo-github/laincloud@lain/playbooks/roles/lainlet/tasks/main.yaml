@@ -1,0 +1,38 @@
+- name: set lainlet's auth configuration on etcd
+  etcd_set_key:
+    key: /lain/config/super_apps/{{item}}
+    value: " {}"
+    etcd_client_port: "{{ etcd_client_port }}"
+  with_items:
+    - console
+    - webrouter
+    - tinydns
+    - backupctl
+    - lvault
+    - registry
+    - hedwig
+    - streamrouter
+
+- name: copy lainlet binary file
+  copy:
+    src: lainlet
+    dest: /usr/bin/lainlet
+    force: yes
+    mode: a+x
+
+- name: generate lainlet.service
+  template:
+    src: lainlet.service.j2
+    dest: /etc/systemd/system/lainlet.service
+
+- name: systemctl daemon-reload
+  command: systemctl daemon-reload
+
+- name: systemctl restart lainlet && systemctl enable lainlet
+  service:
+    name: lainlet
+    state: restarted
+    enabled: yes
+
+- name: set lainlet restart cron
+  template: src=lainlet.cron.j2 dest=/etc/cron.d/lainlet.cron

@@ -1,0 +1,148 @@
+---
+#
+# edX Configuration
+#
+# github:     https://github.com/edx/configuration
+# wiki:       https://openedx.atlassian.net/wiki/display/OpenOPS
+# code style: https://openedx.atlassian.net/wiki/display/OpenOPS/Ansible+Code+Conventions
+# license:    https://github.com/edx/configuration/blob/master/LICENSE.TXT
+#
+#
+#
+# Tasks for role splunk
+#
+# Overview:
+#
+#
+# Dependencies:
+#
+#
+# Example play:
+#
+#
+
+# Install Splunk Forwarder for common_debian_variants
+- name: Install splunkforwarder specific system packages
+  apt:
+    name: "{{ item }}"
+    state: present
+  with_items: "{{ splunk_debian_pkgs }}"
+  tags:
+    - splunk
+    - install
+    - update
+  when: ansible_distribution in common_debian_variants
+
+- name: Download the splunk deb
+  get_url:
+    dest: "/tmp/{{ SPLUNKFORWARDER_DEB }}"
+    url: "{{ SPLUNKFORWARDER_PACKAGE_URL }}"
+  register: download_deb
+  until: download_deb is succeeded
+  retries: 5
+  when: ansible_distribution in common_debian_variants
+
+- name: Install splunk forwarder deb
+  shell: "gdebi -nq /tmp/{{ SPLUNKFORWARDER_DEB }}"
+  when: ansible_distribution in common_debian_variants and download_deb.changed
+
+# Install Splunk Forwarder for common_redhat_variants
+- name: Download the splunk rpm
+  get_url:
+    dest: "/tmp/{{ SPLUNKFORWARDER_RPM }}"
+    url: "{{ SPLUNKFORWARDER_PACKAGE_URL }}"
+  register: download_rpm
+  until: download_rpm is succeeded
+  retries: 5
+  when: ansible_distribution in common_redhat_variants
+
+- name: Install splunk forwarder rpm
+  shell: "rpm -i /tmp/{{ SPLUNKFORWARDER_RPM }}"
+  when: ansible_distribution in common_redhat_variants and download_rpm.changed
+
+- name: Create splunk user
+  user:
+    name: splunk
+    createhome: no
+    state: present
+    append: yes
+    groups: syslog,adm
+  when: download_rpm.changed or download_deb.changed
+
+- name: Create boot script
+  shell: "{{ splunkforwarder_output_dir }}/bin/splunk enable boot-start -systemd-unit-file-name SplunkForwarder.service -user splunk --accept-license --answer-yes --no-prompt"
+  args:
+    creates: /etc/systemd/system/SplunkForwarder.service
+  register: create_boot_script
+  when: download_rpm.changed or download_deb.changed
+
+- name: Remove old boot script
+  file:
+    path: /etc/init.d/splunk
+    state: absent
+  when: (download_rpm.changed or download_deb.changed) and create_boot_script.changed
+
+- name: Accept the Splunk license automatically when starting
+  lineinfile:
+    dest: /etc/systemd/system/SplunkForwarder.service
+    regexp: '^ExecStart='
+    line: 'ExecStart=/opt/splunkforwarder/bin/splunk _internal_launch_under_systemd --accept-license --no-prompt --answer-yes'
+  when: (download_rpm.changed or download_deb.changed) and create_boot_script.changed
+
+- name: reload systemd configuration
+  command: systemctl daemon-reload
+  when: (download_rpm.changed or download_deb.changed) and create_boot_script.changed
+  notify: restart splunkforwarder
+
+- name: Ensure splunk forder permissions
+  file:
+    path: "{{ splunkforwarder_output_dir }}"
+    state: directory
+    recurse: yes
+    owner: splunk
+    group: splunk
+  when: download_rpm.changed or download_deb.changed
+  notify: restart splunkforwarder
+
+- name: Make sure necessary dirs exist
+  file:
+    path: "{{ item }}"
+    owner: splunk
+    group: splunk
+    state: directory
+  with_items:
+    - "{{ splunkforwarder_output_dir }}/{{ splunkforwarder_ssl_cert_path }}"
+    - /opt/splunkforwarder/etc/system/local
+
+- name: Write SSL certs to disk
+  copy:
+    dest: "{{ splunkforwarder_output_dir }}/{{ splunkforwarder_ssl_cert_path }}/{{ item.target_group }}.pem"
+    content: "{{ item.ssl_cert }}"
+    owner: splunk
+    group: splunk
+    mode: "0400"
+  when: item.ssl_cert is defined
+  with_items: "{{ SPLUNKFORWARDER_SERVERS }}"
+
+- name: Write root CA to disk
+  copy:
+    dest: "{{ splunkforwarder_output_dir }}/{{ splunkforwarder_ssl_cert_path }}/{{ item.target_group }}-rootca.pem"
+    content: "{{ item.ssl_root_ca }}"
+    owner: splunk
+    group: splunk
+    mode: "0400"
+  when: item.ssl_cert is defined
+  with_items: "{{ SPLUNKFORWARDER_SERVERS }}"
+
+- name: Create inputs, outputs and server configuration
+  template:
+    src: "opt/splunkforwarder/etc/system/local/{{ item }}.conf.j2"
+    dest: "/opt/splunkforwarder/etc/system/local/{{ item }}.conf"
+    owner: splunk
+    group: splunk
+    mode: "0644"
+  with_items:
+    - inputs
+    - outputs
+    - server
+  notify: restart splunkforwarder

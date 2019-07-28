@@ -1,0 +1,69 @@
+---
+#
+# edX Configuration
+#
+# github:     https://github.com/edx/configuration
+# wiki:       https://github.com/edx/configuration/wiki
+# code style: https://github.com/edx/configuration/wiki/Ansible-Coding-Conventions
+# license:    https://github.com/edx/configuration/blob/master/LICENSE.TXT
+#
+##
+# Defaults for role aws
+#
+#
+# Rotate logs to S3
+# Only for when edX is running in AWS since it organizes
+# logs by security group.
+# !! The buckets defined below MUST exist prior to enabling !!
+# this feature and the instance IAM role must have write permissions
+# to the buckets
+AWS_S3_LOGS: false
+# If there are any issues with the s3 sync an error
+# log will be sent to the following address.
+# This relies on your server being able to send mail
+AWS_S3_LOGS_NOTIFY_EMAIL: dummy@example.com
+AWS_S3_LOGS_FROM_EMAIL: dummy@example.com
+
+#
+# vars are namespace with the module name.
+#
+aws_role_name: aws
+
+aws_dirs:
+  home:
+    path: "{{ COMMON_APP_DIR }}/{{ aws_role_name }}"
+    owner: "root"
+    group: "root"
+    mode: "0755"
+  logs:
+    path: "{{ COMMON_LOG_DIR }}/{{ aws_role_name }}"
+    owner: "syslog"
+    group: "syslog"
+    mode: "0650"
+  data:
+    path: "{{ COMMON_DATA_DIR }}/{{ aws_role_name }}"
+    owner: "root"
+    group: "root"
+    mode: "0700"
+
+aws_s3_sync_script: "{{ aws_dirs.home.path }}/send-logs-to-s3"
+aws_s3_logfile: "{{ aws_dirs.logs.path }}/s3-log-sync.log"
+aws_region: "us-east-1"
+# default path to the aws binary
+aws_s3cmd: "{{ COMMON_BIN_DIR }}/s3cmd"
+aws_cmd: "/usr/local/bin/aws"
+#
+# OS packages
+#
+
+aws_debian_pkgs:
+  - python-setuptools
+
+aws_pip_pkgs:
+  - https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
+  - awscli==1.4.2
+  - boto=="{{ common_boto_version }}"
+
+aws_redhat_pkgs: []
+aws_s3cmd_version: s3cmd-1.5.0-beta1
+aws_s3cmd_url: "http://files.edx.org/s3cmd/{{ aws_s3cmd_version }}.tar.gz"

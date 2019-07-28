@@ -1,0 +1,57 @@
+---
+#Configure Firewall for out-of-box install
+#
+
+- name: Include vars of envs_spectrum_conductor_dli.yml into the 'ports' variable
+  include_vars:
+    file: envs_spectrum_conductor_dli.yml
+    name: ports
+
+- name: DEBUG - List imported variables
+  debug:
+    msg: "{{ ports }}"
+
+#Enable and Start firewall
+- name: Enable firewall on clients
+  command: "systemctl enable firewalld"
+
+- name: Start firewall service
+  command: "systemctl start firewalld"
+
+#Check State of Firewall (Running/not Running)
+- name: Check status of firewall
+  command: "firewall-cmd --state"
+  register: host_firewall_status
+  ignore_errors: yes
+  become: yes
+
+- name: DEBUG - Print success status of host firewall
+  debug:
+    msg: "Firewall Running"
+  when: host_firewall_status.stdout == 'running'
+
+- name: DEBUG - Print fail status if firewall not enbaled
+  debug:
+    msg: "Firewall Not Enabled"
+  when: host_firewall_status.stderr == 'not running'
+
+#Open Ports
+- name: Open Ports for Spectrum Conductor
+  firewalld:
+    port: "{{ item }}"
+    permanent: true
+    state: enabled
+    immediate: true
+  with_items:
+     - "{{ ports.DLI_DLPD_REST_PORT }}/tcp"
+     - "{{ ports.DLI_DLPD_REST_PORT_SSL_NOT_ENABLED }}/tcp"
+     - "{{ ports.DLI_INSIGHTS_MONITOR_PORT }}/tcp"
+     - "{{ ports.DLI_INSIGHTS_OPTIMIZER_PORT }}/tcp"
+     - "{{ ports.DLI_MONGODB_PORT }}/tcp"
+     - "{{ ports.DLI_REDIS_PORT }}/tcp"
+  become: yes
+  register: new_port_stat
+
+- name: Debug - Open Ports for Spectrum Conductor
+  debug:
+    msg: "{{ new_port_stat }}"

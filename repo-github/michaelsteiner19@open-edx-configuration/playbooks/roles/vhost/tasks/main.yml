@@ -1,0 +1,103 @@
+---
+#
+# edX Configuration
+#
+# github:     https://github.com/edx/configuration
+# wiki:       https://openedx.atlassian.net/wiki/display/OpenOPS
+# code style: https://openedx.atlassian.net/wiki/display/OpenOPS/Ansible+Code+Conventions
+# license:    https://github.com/edx/configuration/blob/master/LICENSE.TXT
+#
+#
+#
+# Tasks for role vhost
+#
+# Overview:
+#
+# This task is to contain tasks that should be run in vhost
+# vitualation environments like AWS and Vagrant, but not in
+# containers.  You typically would not run this role
+# independently
+#
+# Dependencies:
+# - common
+#
+
+- name: Create all service directories
+  file:
+    path: "{{ item.value.path }}"
+    state: directory
+    owner: "{{ item.value.owner }}"
+    group: "{{ item.value.group }}"
+    mode: "{{ item.value.mode }}"
+  with_dict: "{{ vhost_dirs }}"
+
+- name: Force logrotate on supervisor stop
+  template:
+    src: etc/init/sync-on-stop.conf.j2
+    dest: /etc/init/sync-on-stop.conf
+    owner: root
+    group: root
+    mode: 0644
+  when: COMMON_OBJECT_STORE_LOG_SYNC
+
+- name: Update /etc/dhcp/dhclient.conf
+  template:
+    src: etc/dhcp/dhclient.conf.j2
+    dest: /etc/dhcp/dhclient.conf
+  when: COMMON_CUSTOM_DHCLIENT_CONFIG
+
+- name: Rerun dhclient to apply template
+  shell: dhclient -n
+  when: COMMON_CUSTOM_DHCLIENT_CONFIG
+
+- name: Copy the MOTD template in place
+  template:
+    src: etc/motd.tail.j2
+    dest: /etc/motd.tail
+    owner: root
+    group: root
+    mode: '755'
+
+- name: Add motd.tail support for 16.04
+  copy:
+    dest: "/etc/update-motd.d/75-motd-tail"
+    content: "#!/bin/sh\necho\ncat /etc/motd.tail\n"
+    force: true
+    owner: root
+    group: root
+    mode: "0755"
+  when: ansible_distribution_release == 'xenial'
+
+- name: Update sshd logging to VERBOSE
+  lineinfile:
+    dest: /etc/ssh/sshd_config
+    state: present
+    regexp: "^LogLevel .*"
+    line: "LogLevel VERBOSE"
+  register: sshd_config_line1
+
+- name: Update sshd logging to VERBOSE
+  lineinfile:
+    dest: /etc/ssh/sshd_config
+    state: present
+    regexp: "^PasswordAuthentication .*"
+    line: "PasswordAuthentication {{ COMMON_SSH_PASSWORD_AUTH }}"
+  register: sshd_config_line2
+
+- name: Restart ssh
+  service:
+    name: ssh
+    state: restarted
+  become: True
+  when: >
+    (sshd_config_line1.changed or sshd_config_line2.changed) and
+    ansible_distribution in common_debian_variants
+
+- name: Restart ssh
+  service:
+    name: sshd
+    state: restarted
+  become: True
+  when: >
+    (sshd_config_line1.changed or sshd_config_line2.changed) and
+    ansible_distribution in common_redhat_variants

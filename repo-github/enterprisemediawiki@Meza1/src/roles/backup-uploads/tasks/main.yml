@@ -1,0 +1,48 @@
+---
+
+
+- name: Get individual wikis from controller config
+  find:
+    paths: "{{ m_local_public }}/wikis/"
+    file_type: directory
+  register: wiki_dirs
+  delegate_to: localhost
+
+# FIXME #805: option to delete existing uploads backups initially (clean slate)
+
+- name: Ensure backups directory exists for environment
+  file:
+    path: "{{ m_backups }}/{{ env }}"
+    state: directory
+    mode: 0755
+    owner: root
+    group: root
+
+- name: Ensure backups directory exists for each wiki
+  file:
+    path: "{{ m_backups }}/{{ env }}/{{ item }}"
+    state: directory
+    mode: 0755
+    owner: root
+    group: root
+  with_items: "{{ wiki_dirs.files | map(attribute='path') | map('basename') | list }}"
+
+- name: Ensure backups uploads directory exists for each wiki
+  file:
+    path: "{{ m_backups }}/{{ env }}/{{ item }}/uploads"
+    state: directory
+    mode: 0755
+    owner: root
+    group: root
+  with_items: "{{ wiki_dirs.files | map(attribute='path') | map('basename') | list }}"
+
+- name: "Run role:rsync - Copy uploads directory to backups"
+  include_role:
+    name: rsync
+  vars:
+    pulling_to_server:   "{{ inventory_hostname }}"
+    pulling_to_path:     "{{ m_backups }}/{{ env }}/{{ item }}/uploads"
+    pulling_from_server: "{{ groups['app-servers'][0] }}"
+    pulling_from_path:   "{{ m_uploads_dir }}/{{ item }}/"
+    pulling_from_user:   "meza-ansible"
+  with_items: "{{ wiki_dirs.files | map(attribute='path') | map('basename') | list }}"

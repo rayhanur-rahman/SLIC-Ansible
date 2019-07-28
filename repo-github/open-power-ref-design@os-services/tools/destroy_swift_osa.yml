@@ -1,0 +1,114 @@
+---
+
+# This playbook should be used with the "openstack-ansible" command
+# and is meant for testing purposes only.  Copy the file to
+# the /opt/openstack-ansible/playbooks directory before executing.
+# The purpose of the playbook is to allow easy cleanup of the Swift
+# rings.  This is useful for cases where someone wants to rerun
+# their OpenStack-Ansible Swift deployment with a different ring
+# configuration.
+
+- name: Destroy swift config
+  hosts: swift_all
+  vars_prompt:
+    - name: "confirm_purge"
+      prompt: "Are you sure you want to destroy the cluster rings? (yes,no)"
+      default: "no"
+      private: no
+  vars:
+    swift_account_program_names:
+      - swift-account-server
+      - swift-account-auditor
+      - swift-account-replicator
+      - swift-account-reaper
+      - swift-account-replicator-server
+
+    swift_container_program_names:
+      - swift-container-server
+      - swift-container-auditor
+      - swift-container-replicator
+      - swift-container-sync
+      - swift-container-updater
+      - swift-container-replicator-server
+      - swift-container-reconciler
+
+    swift_object_program_names:
+      - swift-object-server
+      - swift-object-auditor
+      - swift-object-replicator
+      - swift-object-updater
+      - swift-object-replicator-server
+      - swift-object-expirer
+
+    swift_proxy_program_names:
+      - swift-proxy-server
+  tasks:
+    - name: exit playbook if user did not mean to purge cluster
+      fail:
+        msg: >
+            Exiting destroy_swift_osa playbook, cluster was NOT purged.
+            To purge the cluster, either say 'yes' on the prompt or
+            or use `-e confirm_purge=yes` on the command line when
+            invoking the playbook
+      when: confirm_purge != "yes"
+
+    - name: "Ensure services are stopped"
+      service:
+        name: "{{ item }}"
+        state: "stopped"
+        pattern: "{{ item }}"
+      with_items:
+        - "{{ swift_account_program_names }}"
+        - "{{ swift_container_program_names }}"
+        - "{{ swift_object_program_names }}"
+      when: inventory_hostname in groups['swift_hosts']
+
+    - name: "Ensure services are stopped"
+      service:
+        name: "{{ item }}"
+        state: "stopped"
+        pattern: "{{ item }}"
+      with_items: swift_proxy_program_names
+      when: inventory_hostname in groups['swift_proxy']
+
+    - name: Remove ring builder files
+      shell: rm /etc/swift/*.builder
+      ignore_errors: True
+
+    - name: Remove ring files
+      shell: rm /etc/swift/*.ring.gz
+      ignore_errors: True
+
+    - name: Remove swift backups directory
+      shell: rm -rf /etc/swift/backups
+      ignore_errors: True
+
+    - name: Remove swift ring_build_files directory
+      shell: rm -rf /etc/swift/ring_build_files
+      ignore_errors: True
+
+    - name: Recreate swift directories we just removed.
+      file:
+        path: "{{ item.path }}"
+        state: directory
+        owner: "{{ item.owner|default(swift_system_user_name) }}"
+        group: "{{ item.group|default(swift_system_group_name) }}"
+        mode: "{{ item.mode|default('0755') }}"
+      with_items:
+       - { path: "/etc/swift/backups" }
+       - { path: "/etc/swift/ring_build_files" }
+
+    - name: Define swift_vars if undefined
+      set_fact:
+        swift_vars: {}
+      when: swift_vars is not defined
+
+    - name: Get the list of devices, falling back to defaults
+      set_fact:
+        all_devices: "{{ swift_vars.drives | default(swift.drives | default([])) }}"
+
+    - name: Remove data from Swift disks
+      shell: "rm -rf /srv/node/{{ item.name }}/*"
+      with_items: "{{ all_devices }}"
+      ignore_errors: True
+      when: inventory_hostname in groups['swift_hosts']

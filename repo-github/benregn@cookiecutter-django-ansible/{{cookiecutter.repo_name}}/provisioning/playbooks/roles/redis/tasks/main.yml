@@ -1,0 +1,4 @@
+---
+- include: redis.yml
+- include: redmon.yml
+  when: install_redmon

@@ -1,0 +1,75 @@
+---
+# Copyright 2019 IBM Corp.
+#
+# All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- name: Generate udev persistent net rules
+  template:
+    src: "{{ playbook_dir }}/templates/persistent-net-rules.j2"
+    dest: /etc/udev/rules.d/99-persistent-net.rules
+    owner: "root"
+    group: "root"
+    mode: "0644"
+
+# Need to add support for Red Hat
+- name: Copy udev links rules
+  command: "cp /lib/systemd/network/99-default.link /etc/systemd/network/99-default.link"
+  when: ansible_distribution == 'Ubuntu'
+
+- name: Modify udev links rules
+  lineinfile:
+    path: /etc/systemd/network/99-default.link
+    regexp: '^NamePolicy='
+    line: 'NamePolicy=onboard slot path'
+  when: ansible_distribution == 'Ubuntu'
+
+- name: Update boot ram disk
+  command: "update-initramfs -u"
+  register: updateinitramfs
+  when: ansible_distribution == 'Ubuntu'
+- debug: var=updateinitramfs.stdout_lines
+
+- name: Generate Ubuntu interfaces file
+  template:
+    src: "{{ playbook_dir }}/templates/interfaces_ubuntu.j2"
+    dest: "/etc/network/interfaces"
+    owner: "root"
+    group: "root"
+    mode: "0644"
+    backup: yes
+  when: ansible_distribution == 'Ubuntu'
+
+- name: Add nameservers to resolved.conf.j2 (Ubuntu 18.04+)
+  template:
+    src: "{{ playbook_dir }}/templates/resolved.conf.j2"
+    dest: "/etc/systemd/resolved.conf"
+    owner: "root"
+    group: "root"
+    mode: "0644"
+    backup: yes
+  when: ansible_distribution == 'Ubuntu' and ansible_distribution_release == 'bionic'
+
+- name: Generate RHEL/CentOS interfaces files
+  template:
+    src: "{{ playbook_dir }}/templates/interfaces_rhel.j2"
+    dest: "/etc/sysconfig/network-scripts/ifcfg-{{ item['DEVICE'] }}"
+    owner: "root"
+    group: "root"
+    mode: "0644"
+    backup: no
+  when: ansible_distribution == 'CentOS' or ansible_distribution == 'RedHat'
+  with_items: "{{ interfaces }}"
+
+...

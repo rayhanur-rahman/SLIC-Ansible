@@ -1,0 +1,153 @@
+---
+# Copyright 2014, Rackspace US, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- name: Installation and setup of Neutron
+  hosts: neutron_all
+  max_fail_percentage: 20
+  user: root
+  pre_tasks:
+    - name: Use the lxc-openstack aa profile
+      lxc_container:
+        name: "{{ container_name }}"
+        container_config:
+          - "lxc.aa_profile=unconfined"
+      delegate_to: "{{ physical_host }}"
+      when: >
+        not is_metal | bool and
+        inventory_hostname in groups['neutron_agent']
+      register: container_config
+      tags:
+        - lxc-aa-profile
+    - name: Neutron extra lxc config
+      lxc_container:
+        name: "{{ container_name }}"
+        container_command: |
+          [[ ! -d "/lib/modules" ]] && mkdir -p "/lib/modules"
+        container_config:
+          - "lxc.cgroup.devices.allow=a *:* rmw"
+          - "lxc.mount.entry=/lib/modules lib/modules none bind 0 0"
+      delegate_to: "{{ physical_host }}"
+      when: >
+        not is_metal | bool and
+        inventory_hostname in groups['neutron_agent']
+      register: container_extra_config
+      tags:
+        - neutron-container-setup
+    - name: Wait for container ssh
+      wait_for:
+        port: "22"
+        delay: "{{ ssh_delay }}"
+        search_regex: "OpenSSH"
+        host: "{{ ansible_ssh_host }}"
+      delegate_to: "{{ physical_host }}"
+      when: >
+            (container_config is defined and container_config | changed) or
+            (container_extra_config is defined and container_extra_config | changed)
+      register: ssh_wait_check
+      until: ssh_wait_check | success
+      retries: 3
+      tags:
+        - ssh-wait
+    - name: Sort the rabbitmq servers
+      dist_sort:
+        value_to_lookup: "{{ container_name }}"
+        ref_list: "{{ groups['neutron_all'] }}"
+        src_list: "{{ rabbitmq_servers }}"
+      register: servers
+    - name: Set rabbitmq servers
+      set_fact:
+        rabbitmq_servers: "{{ servers.sorted_list }}"
+    - name: Create log dir
+      file:
+        path: "{{ item.path }}"
+        state: directory
+      with_items:
+        - { path: "/openstack/log/{{ inventory_hostname }}-neutron" }
+      when: is_metal | bool
+      tags:
+        - neutron-logs
+        - neutron-log-dirs
+    - name: Create log aggregation links
+      file:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        state: "{{ item.state }}"
+        force: "yes"
+      with_items:
+        - { src: "/openstack/log/{{ inventory_hostname }}-neutron", dest: "/var/log/neutron", state: "link" }
+      when: is_metal | bool
+      tags:
+        - neutron-logs
+
+    - name: Create the neutron provider networks facts
+      provider_networks:
+        provider_networks: "{{ provider_networks }}"
+        bind_prefix: "{{ bind_prefix }}"
+        is_metal: "{{ is_metal }}"
+      register: pndata
+      tags:
+        - neutron-provider-networks
+        - neutron-config
+
+    - name: Set provider network fact(s)
+      set_fact:
+        _provider_networks: "{{ pndata }}"
+        _overlay_network: "{{ container_networks.tunnel_address|default({}) }}"
+      tags:
+        - neutron-provider-networks
+        - neutron-config
+
+    - name: set local_ip fact (is_metal)
+      set_fact:
+        _local_ip: "{{ hostvars[inventory_hostname]['ansible_' + _overlay_network.bridge|replace('-', '_')]['ipv4']['address'] }}"
+      when: is_metal | bool
+      tags:
+        - neutron-config
+
+    - name: set local_ip fact (container)
+      set_fact:
+        _local_ip: "{{ _overlay_network.address|default(ansible_ssh_host) }}"
+      when: not is_metal | bool
+      tags:
+        - neutron-config
+  roles:
+    - role: "os_neutron"
+      neutron_venv_tag: "{{ openstack_release }}"
+      neutron_venv_download_url: "{{ openstack_repo_url }}/venvs/{{ openstack_release }}/{{ ansible_distribution | lower }}/neutron-{{ openstack_release }}.tgz"
+      neutron_galera_address: "{{ galera_address }}"
+      neutron_local_ip: "{{ _local_ip }}"
+      neutron_overlay_network: "{{ _overlay_network }}"
+      neutron_provider_networks: "{{ _provider_networks }}"
+      tags:
+        - "os-neutron"
+    - { role: "openstack_openrc", tags: [ "openstack-openrc" ] }
+    - role: "rsyslog_client"
+      rsyslog_client_log_rotate_file: neutron_log_rotate
+      rsyslog_client_log_dir: "/var/log/neutron"
+      rsyslog_client_config_name: "99-neutron-rsyslog-client.conf"
+      rsyslog_client_log_files:
+        - /var/log/conntrackd.log
+        - /var/log/conntrackd-stats.log
+      tags:
+        - "neutron-rsyslog-client"
+        - "rsyslog-client"
+    - role: "system_crontab_coordination"
+      tags:
+        - "system-crontab-coordination"
+  vars:
+    galera_address: "{{ internal_lb_vip_address }}"
+    ansible_hostname: "{{ container_name }}"
+    is_metal: "{{ properties.is_metal|default(false) }}"
+    bind_prefix: "{{ provider_network_bind_prefix|default('') }}"

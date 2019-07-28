@@ -1,0 +1,6 @@
+---
+
+- name: Install the OpenShift Dedicated Admin scripts
+  yum:
+    name: openshift-scripts-dedicated
+    state: present

@@ -1,0 +1,77 @@
+- hosts: localhost
+  vars_files:
+    - vars/install_base.yml
+    - vars/{{ pipeline_type }}_base.yml
+  roles:
+    - forklift
+
+- hosts:
+  - "{{ forklift_server_name }}"
+  - "{{ forklift_proxy_name }}"
+  become: yes
+  vars:
+    foreman_installer_skip_installer: true
+  vars_files:
+    - vars/install_base.yml
+    - vars/{{ pipeline_type }}_base.yml
+    - vars/{{ pipeline_type }}_base_staging.yml
+  roles:
+    - role: forklift_versions
+      scenario: "{{ pipeline_type }}"
+      scenario_version: "{{ pipeline_version }}"
+    - role: disable_firewall
+    - role: disable_ipv6
+    - role: foreman_server_repositories
+    - role: foreman_client_repositories
+    - role: update_os_packages
+    - role: foreman
+      when: pipeline_type == 'foreman'
+    - role: katello
+      when: pipeline_type != 'foreman'
+
+- hosts: "{{ forklift_server_name }}"
+  become: yes
+  vars_files:
+    - vars/install_base.yml
+    - vars/{{ pipeline_type }}_base.yml
+    - vars/{{ pipeline_type }}_base_staging.yml
+  roles:
+    - role: forklift_versions
+      scenario: "{{ pipeline_type }}"
+      scenario_version: "{{ pipeline_version }}"
+    - foreman_installer
+
+- hosts: "{{ forklift_proxy_name }}"
+  become: yes
+  vars_files:
+    - vars/install_base.yml
+    - vars/{{ pipeline_type }}_base_staging.yml
+  vars:
+    foreman_proxy_content_server: "{{ forklift_server_name }}"
+    foreman_installer_scenario: foreman-proxy-content
+    foreman_installer_options_internal_use_only:
+      - "--disable-system-checks"
+      - "--certs-tar-file {{ foreman_proxy_content_certs_tar }}"
+      - "--foreman-proxy-trusted-hosts {{ server_fqdn.stdout }}"
+      - "--foreman-proxy-trusted-hosts {{ ansible_nodename }}"
+      - "--foreman-proxy-foreman-base-url https://{{ server_fqdn.stdout }}"
+      - "--foreman-proxy-oauth-consumer-key {{ oauth_consumer_key.stdout }}"
+      - "--foreman-proxy-oauth-consumer-secret {{ oauth_consumer_secret.stdout }}"
+      - "--foreman-proxy-content-parent-fqdn {{ server_fqdn.stdout }}"
+      - "--puppet-server-foreman-url https://{{ server_fqdn.stdout }}"
+  roles:
+    - role: forklift_versions
+      scenario: "{{ pipeline_type }}"
+      scenario_version: "{{ pipeline_version }}"
+    - foreman_proxy_content
+    - foreman_installer
+
+- hosts: "{{ forklift_server_name }}"
+  become: true
+  vars_files:
+    - vars/install_base.yml
+    - vars/{{ pipeline_type }}_base.yml
+  environment:
+    FOREMAN_EXPECTED_VERSION: "{{ foreman_expected_version | default('') }}"
+  roles:
+    - foreman_testing

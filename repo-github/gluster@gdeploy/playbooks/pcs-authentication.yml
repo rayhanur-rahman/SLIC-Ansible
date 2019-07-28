@@ -1,0 +1,13 @@
+---
+- hosts: gluster_servers
+  become: true
+  gather_facts: no
+
+  tasks:
+  - name: Pcs cluster authenticate the hacluster users in all the nodes
+    shell: pcs cluster auth -u hacluster -p hacluster {{ item }}
+    register: result
+    with_items: "{{ cluster_nodes }}"
+
+  - name: Pause for a few seconds
+    pause: seconds=3

@@ -1,0 +1,93 @@
+---
+#
+# edX Configuration
+#
+# github:     https://github.com/edx/configuration
+# wiki:       https://openedx.atlassian.net/wiki/display/OpenOPS
+# code style: https://openedx.atlassian.net/wiki/display/OpenOPS/Ansible+Code+Conventions
+# license:    https://github.com/edx/configuration/blob/master/LICENSE.TXT
+#
+##
+# Vars for role splunk
+#
+
+#
+# vars are namespace with the module name.
+#
+splunk_role_name: 'splunk'
+
+SPLUNKFORWARDER_PACKAGE_URL: !!null
+SPLUNKFORWARDER_DEB: !!null
+SPLUNKFORWARDER_PASSWORD: !!null
+
+# A list of dicts with the following keys:
+#   target_group: the name of the group
+#   server: the hostname/IP address of the splunk server
+#   default: whether this group is the default logging group
+# The following keys are for SSL configuration with the server in question.
+# Either all must be defined, or none.
+#   ssl_cert: the text of the SSL cert to use
+#   ssl_cert_password: the password of the SSL cert
+#   ssl_root_ca: the root CA cert that signed the SSL cert
+#   ssl_common_name: the common name (CN) on the SSL cert
+SPLUNKFORWARDER_SERVERS:
+  - target_group: "default_output_server"
+    server: "localhost:9997"
+    default: true
+
+# For more details about setting up splunk with SSL, see
+# https://openedx.atlassian.net/wiki/display/EdxOps/viewpage.action?pageId=40174184
+
+############################ DANGER WILL ROBINSON #############################
+# Splunk server only supports a single SSL cert for all connections!          #
+# If you ever need to rotate the cert, you will have to either take downtime  #
+# or let new logs buffer on the forwarders until you update them.             #
+# When you do update the forwarders, you can't simply roll out new AMIs since #
+# there will be un-forwarded logs. Instead, you must run ansible against your #
+# entire fleet.                                                               #
+###############################################################################
+
+SPLUNKFORWARDER_LOG_ITEMS:
+  - source: '{{ COMMON_LOG_DIR }}/lms'
+    recursive: true
+    index: '{{ COMMON_ENVIRONMENT }}-{{ COMMON_DEPLOYMENT }}'
+    sourcetype: 'edx'
+  - source: '{{ COMMON_LOG_DIR }}/cms'
+    recursive: true
+    index: '{{ COMMON_ENVIRONMENT }}-{{ COMMON_DEPLOYMENT }}'
+    sourcetype: 'edx'
+  - source: '{{ COMMON_LOG_DIR }}/mongo'
+    recursive: true
+    index: '{{ COMMON_ENVIRONMENT }}-{{ COMMON_DEPLOYMENT }}'
+    sourcetype: 'mongo'
+  - source: '{{ COMMON_LOG_DIR }}'
+    recursive: true
+    index: '{{ COMMON_ENVIRONMENT }}-{{ COMMON_DEPLOYMENT }}'
+    sourcetype: 'syslog'
+  - source: '/var/log'
+    recursive: true
+    index: '{{ COMMON_ENVIRONMENT }}-{{ COMMON_DEPLOYMENT }}'
+    sourcetype: 'syslog'
+  - source: '{{ COMMON_LOG_DIR }}/nginx'
+    recursive: true
+    index: '{{ COMMON_ENVIRONMENT }}-{{ COMMON_DEPLOYMENT }}'
+    sourcetype: 'nginx'
+  - source: '{{ COMMON_LOG_DIR }}/rabbitmq'
+    recursive: true
+    index: '{{ COMMON_ENVIRONMENT }}-{{ COMMON_DEPLOYMENT }}'
+    sourcetype: 'rabbitmq'
+  - source: '/var/log/neo4j'
+    recursive: true
+    index: '{{ COMMON_ENVIRONMENT }}-{{ COMMON_DEPLOYMENT }}'
+    sourcetype: 'neo4j'
+
+#
+# OS packages
+#
+splunk_debian_pkgs:
+  - gdebi
+
+splunk_redhat_pkgs: []
+
+splunkforwarder_output_dir: '/opt/splunkforwarder/'
+splunkforwarder_ssl_cert_path: 'etc/auth/edxcerts'

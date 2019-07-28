@@ -1,0 +1,43 @@
+---
+- name: Verify yr_repo_list is a list
+  assert:
+    that:
+    - yr_yum_repo_list is iterable
+    - yr_yum_repo_list is not string
+    - yr_yum_repo_list is not mapping
+    msg: "yr_yum_repo_list needs to be a list."
+
+- name: copy certs
+  copy:
+    content: "{{ item.content }}"
+    dest: "{{ yr_yum_cert_dir }}/{{ item.filename }}"
+  with_items:
+  - filename: "client-cert.pem"
+    content: "{{ yr_yum_cert_content }}"
+  - filename: "client-key.pem"
+    content: "{{ yr_yum_key_content }}"
+  when: yr_yum_cert_content is defined
+  no_log: true
+
+- name: Ensure yum reposdir is default path
+  ini_file:
+    create: no
+    path: /etc/yum.conf
+    section: main
+    option: reposdir
+    state: absent
+
+- name: Manage yum repositories
+  yum_repository:
+    name: "{{ item.name }}"
+    state: "{{ item.state | default('present') }}"
+    file: "{{ item.file }}"
+    description: "{{ item.description }}"
+    baseurl: "{{ item.baseurl | default(omit) }}"
+    enabled: "{{ item.enabled | default(1) }}"
+    gpgkey: "{{ item.gpgkey | default(omit) }}"
+    gpgcheck: "{{ item.gpgcheck | default(1) }}"
+    sslverify: "{{ item.sslverify | default(1) }}"
+    sslclientkey: "{{ item.sslclientkey | default(omit) }}"
+    sslclientcert: "{{ item.sslclientcert | default(omit) }}"
+  with_items: "{{ yr_yum_repo_list }}"

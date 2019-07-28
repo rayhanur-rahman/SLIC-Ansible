@@ -1,0 +1,58 @@
+---
+
+# This task is invoked during the invocation of the playbook below:
+#
+# ansible-playbook -i host_file dbimage-make.yml -u ubuntu -c ssh
+#
+# This is invoked on the deployer node AKA localhost as ubuntu
+
+- debug: var=deployment_environment
+
+- name: Create directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: 0755
+  with_items:
+    - "{{ baseDir }}/etc/ssh"
+    - "{{ baseDir }}/etc/trove"
+
+- name: Clean environment
+  file:
+    path: "{{ item }}"
+    state: absent
+  with_items:
+    - "{{ baseDir }}/etc/ssh/"
+    - "{{ baseDir }}/etc/trove/trove-guestagent.conf"
+    - "{{ baseDir }}/etc/inventory.yml"
+    - "{{ baseDir }}/etc/inventory-simulated"
+
+- name: Update apt cache
+  apt:
+    update_cache: yes
+    cache_valid_time: 600
+  register: apt_update
+  until: apt_update|success
+  retries: 5
+  delay: 60
+
+- name: Install apt packages
+  apt:
+    pkg: "{{ item }}"
+    state: present
+  register: install_packages
+  until: install_packages|success
+  with_items: "{{ dbimage_apt_packages }}"
+  retries: 5
+  delay: 20
+  when: dbimage_apt_packages
+
+- name: Install pip packages
+  pip:
+    name: "{{ dbimage_pip_packages | join(' ') }}"
+    state: present
+  register: install_packages
+  until: install_packages|success
+  retries: 5
+  delay: 20
+  when: dbimage_pip_packages

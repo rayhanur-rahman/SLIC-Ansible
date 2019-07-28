@@ -1,0 +1,49 @@
+---
+# Copyright 2016 IBM Corp.
+#
+# All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+  - name: Local host file cleanup.
+    file:
+      dest: "{{ execute_dir }}/output.{{ item }}.diskprep.{{ inventory_hostname }}"
+      state: absent
+    with_items:
+      - account
+      - container
+      - object
+    delegate_to: localhost
+
+  - name: Local host dir cleanup.
+    file:
+      dest: "{{ execute_dir }}"
+      state: absent
+    delegate_to: localhost
+    run_once: true
+
+  - name: Remote host file, script, and dir cleanup.
+    file:
+      dest: "{{ item }}"
+      state: absent
+    with_items:
+      - "/tmp/output.account.diskprep"
+      - "/tmp/output.container.diskprep"
+      - "/tmp/output.object.diskprep"
+      - "/tmp/output.account.diskprep.sdname"
+      - "/tmp/output.container.diskprep.sdname"
+      - "/tmp/output.object.diskprep.sdname"
+      - "{{ execute_dir }}/swift_check_devicelist.py"
+      - "{{ execute_dir }}/swift_setup_storage.sh"
+      - "{{ execute_dir }}"
+

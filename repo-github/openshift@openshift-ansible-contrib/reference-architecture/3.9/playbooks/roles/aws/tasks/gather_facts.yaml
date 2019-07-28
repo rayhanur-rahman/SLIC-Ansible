@@ -1,0 +1,63 @@
+---
+- name: Gather Route53 zone facts
+  route53_facts:
+    query: hosted_zone
+  register: r53_zones
+
+- name: Filter Route53 zones
+  set_fact:
+    r53_zones: ['{% for zone in r53_zones.HostedZones -%}
+        {%- if clusterid ~ ".sysdeseng.com." in zone.Name -%}
+          {%- if zone.Config.PrivateZone == true -%}
+            { "Id": "{{ zone.Id | safe }}", "Name": "{{ zone.Name | safe }}", "PrivateZone": true },
+          {%- else -%}
+            { "Id": "{{ zone.Id | safe }}", "Name": "{{ zone.Name | safe }}" , "PrivateZone": false },
+          {%- endif -%}
+        {%- endif -%}
+      {% endfor -%}']
+  register: r53_zones
+
+- name: Gather Route53 record facts
+  ignore_errors: True
+  route53:
+    command: get
+    private_zone: "{{ item.private_zone }}"
+    record: "{{ item.record }}"
+    type: CNAME
+    zone: "{{ item.zone }}"
+  register: r53_record
+  with_items:
+    - private_zone: no
+      record: "{{ 'master' + '.' + clusterid + '.' + dns_domain }}"
+      type: 'CNAME'
+      zone: "{{ clusterid + '.' + dns_domain }}."
+    - private_zone: no
+      record: "*.apps.{{ clusterid }}.{{ dns_domain }}"
+      type: 'CNAME'
+      zone: "{{ clusterid + '.' + dns_domain }}."
+    - private_zone: yes
+      record: "{{ 'master' + '.' + clusterid + '.' + dns_domain }}"
+      zone: "{{ clusterid + '.' + dns_domain }}."
+    - private_zone: yes
+      record: "*.apps.{{ clusterid }}.{{ dns_domain }}"
+      type: 'CNAME'
+      zone: "{{ clusterid + '.' + dns_domain }}."
+  changed_when: "( r53_record.msg is defined ) and ( 'filler msg to prevent changed task' in r53_record.msg )"
+  failed_when: "( r53_record.msg is defined ) and ( 'filler msg to prevent failed task' in r53_record.msg )"
+
+- name: Gather VPC facts
+  ec2_vpc_net_facts:
+    filters:
+      tag:Name: "{{ clusterid }}"
+    region: "{{ aws_region }}"
+  register: vpc
+
+- name: Gather NatGW facts
+  ec2_vpc_nat_gateway_facts:
+    filters: "{{ {
+      'tag:kubernetes.io/cluster/' ~ clusterid: clusterid,
+      'tag:clusterid': clusterid,
+      'state': 'available'
+    } }}"
+    region: "{{ aws_region }}"
+  register: natgws

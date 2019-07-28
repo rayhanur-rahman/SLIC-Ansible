@@ -1,0 +1,144 @@
+- hosts: "{{ target_hosts }}"
+  gather_facts: false
+  tasks:
+    - name: Ensure artefacts directories exists
+      file:
+        path: "{{ item }}"
+        state: directory
+      with_items:
+        - "{{ artifacts_dir }}/{{ inventory_hostname }}/host"
+        - "{{ artifacts_dir }}/{{ inventory_hostname }}/containers"
+      delegate_to: "localhost"
+
+    - name: Generate ARA reports
+      shell: |
+        ARA_CMD="/opt/ansible-runtime/bin/ara"
+        if [[ -e ${ARA_CMD} ]]; then
+            ARA_REPORT_PATH="/openstack/log/ara-report"
+            mkdir -p ${ARA_REPORT_PATH}
+            ${ARA_CMD} generate html ${ARA_REPORT_PATH}
+            ${ARA_CMD} generate junit ${ARA_REPORT_PATH}/deployment_results.xml
+            cp "${HOME}/.ara/ansible.sqlite" ${ARA_REPORT_PATH}/
+        fi
+      args:
+        executable: /bin/bash
+      # We never want a failure of this task to cause a
+      # failure in the playbook, so we ignore errors to
+      # ensure that the task shows failure, but does not
+      # fail the playbook.
+      ignore_errors: yes
+      # This needs to run wherever the ansible runtime is.
+      # For AIO deployments, the deploy host is localhost.
+      # For MNAIO deployments, the deploy host is infra1.
+      when:
+        - (inventory_hostname == 'localhost') or
+          (inventory_hostname == 'infra1')
+
+    - name: Collect journald logs
+      command: >
+               journalctl
+               --output json
+               --no-pager
+      register: host_journald_logs
+      ignore_errors: true
+      tags:
+        - skip_ansible_lint
+
+    - name: Write journald logs to a file
+      copy:
+        content: "{{ host_journald_logs.stdout }}"
+        dest: /var/log/{{ inventory_hostname }}-journald.log.json
+      ignore_errors: true
+      tags:
+        - skip_ansible_lint
+
+    - name: Grab host data
+      command: >
+               rsync
+               --archive
+               --compress
+               --verbose
+               --relative
+               --rsh 'ssh -o StrictHostKeyChecking=no'
+               --ignore-missing-args
+               --safe-links
+               --no-perms
+               --no-owner
+               --no-group
+               {{ inventory_hostname }}:{{ item }}
+               {{ artifacts_dir }}/{{ inventory_hostname }}/host
+      with_items:
+        - "/openstack/log"
+        - "/etc"
+        - "/var/./log"
+      delegate_to: "localhost"
+      ignore_errors: true
+      tags:
+        - skip_ansible_lint
+
+    - name: List containers
+      command: "lxc-ls -1"
+      failed_when:
+        - containers.rc != 0
+        - containers.msg != '[Errno 2] No such file or directory'
+      changed_when: false
+      register: containers
+
+    - name: Get container PIDs
+      command: "lxc-info --name {{ item }} --no-humanize --pid"
+      with_items:
+        - "{{ containers.stdout_lines | default([]) }}"
+      register: container_pids
+
+    - name: Grab container data
+      command: >
+               rsync
+               --archive
+               --compress
+               --verbose
+               --rsh 'ssh -o StrictHostKeyChecking=no'
+               --ignore-missing-args
+               --safe-links
+               --no-perms
+               --no-owner
+               --no-group
+               {{ inventory_hostname }}:/proc/{{ item[0].stdout }}/root/{{ item[1] }}
+               {{ artifacts_dir }}/{{ inventory_hostname }}/containers/{{ item[0].item }}
+      when:
+        - containers.rc == 0
+        - item[0].stdout != ""
+      with_nested:
+        - "{{ container_pids.results }}"
+        -
+          - "etc"
+          - "var/log"
+      delegate_to: "localhost"
+      tags:
+        - skip_ansible_lint
+  vars:
+    artifacts_dir: "/tmp/artifacts"
+    target_hosts: "localhost"
+
+- hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Ensure result directory exists
+      file:
+        path: "{{ result_dir }}"
+        state: directory
+
+    - name: Find tempest results file
+      find:
+        paths: "{{ artifacts_dir }}"
+        recurse: yes
+        patterns: "deployment_results.xml,tempest_results.xml,test_list.txt"
+      register: results_files
+
+    - name: Copy tempest results to RE_HOOK_RESULT_DIR
+      copy:
+       src: "{{ item.path }}"
+       dest: "{{ result_dir }}/"
+      with_items: "{{ results_files.files }}"
+      when: results_files.matched > 0
+  vars:
+    result_dir: "/tmp/result"

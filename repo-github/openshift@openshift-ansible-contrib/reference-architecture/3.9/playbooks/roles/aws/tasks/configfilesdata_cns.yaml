@@ -1,0 +1,16 @@
+---
+- name: "Land openshift-ansible installer host inventory (CNS nodes)"
+  blockinfile:
+    path: "~/.ssh/config-{{ clusterid }}.{{ dns_domain }}-hostscns"
+    create: yes
+    marker: "#<!-- {mark} ANSIBLE MANAGED BLOCK -->"
+    content: |
+      {{ lookup('template', ( playbook_dir + '/roles/aws/templates/outputhostscns.j2') ) }}
+
+- name: "Land openshift-ansible installer host inventory (GFS)"
+  blockinfile:
+    path: "~/.ssh/config-{{ clusterid }}.{{ dns_domain }}-hostsgfs"
+    create: yes
+    marker: "#<!-- {mark} ANSIBLE MANAGED BLOCK -->"
+    content: |
+      {{ lookup('template', ( playbook_dir + '/roles/aws/templates/outputhostsgfs.j2') ) }}

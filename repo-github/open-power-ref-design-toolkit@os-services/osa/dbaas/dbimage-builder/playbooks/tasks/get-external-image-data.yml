@@ -1,0 +1,56 @@
+---
+
+# This task is invoked during the invocation of the playbook below:
+#
+# ansible-playbook -i host_file dbimage-make.yml -u ubuntu -c ssh
+#
+# This is invoked on the deployer node AKA localhost as ubuntu
+
+- name: Create deployer's ssh key
+  command: "ssh-keygen -t rsa -f ~/.ssh/id_rsa -N ''"
+  args:
+    creates: "~/.ssh/id_rsa"
+
+- name: Get deployer's public key
+  slurp:
+    src: "~/.ssh/id_rsa.pub"
+  register: public_key
+
+- name: Remember deployer's public key
+  set_fact:
+    deployer_pub_key: "{{ public_key.content | b64decode }}"
+
+- name: Add deployer's public key to the authorized_keys file
+  authorized_key:
+    user: "{{ dibUser }}"
+    state: present
+    key: "{{ deployer_pub_key }}"
+    path: "/home/{{ dibUser }}/.ssh/authorized_keys"
+  when: ipAddrDib == 'localhost'
+
+# Trove provides a default set of validation rules for each database which can
+# be updated by the user.  These rules are related to database configuration
+# parameters.  For xenial, we updated the rules for postgresql to remove the
+# deprecated checkpoint_segments configuration parameter.
+
+- name: Lookup validation rules for database version
+  stat:
+    path: "{{ src_trove }}/{{ dbName }}/{{ dbVersion }}/validation-rules.json"
+  register: statrc
+
+- name: Set validation rules for database version
+  set_fact:
+    validationRules: "{{ src_trove }}/{{ dbName }}/{{ dbVersion }}/validation-rules.json"
+  when: statrc.stat.exists
+
+- name: Lookup validation rules for database
+  stat:
+    path: "{{ src_trove }}/{{ dbName }}/validation-rules.json"
+  register: statrc
+  when: validationRules is not defined
+
+- name: Set validation rules for database
+  set_fact:
+    validationRules: "{{ src_trove }}/{{ dbName }}/validation-rules.json"
+  when: statrc.stat.exists
+

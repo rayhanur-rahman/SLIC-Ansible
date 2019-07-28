@@ -1,0 +1,13 @@
+# Usage: ansible-playbook -i jenkins-host, -e@path/to/jenkins-extra-vars.yml -e@path/to/secure.yml -e 'COMMON_ENABLE_NEWRELIC=false' -e 'COMMON_ENABLE_DATADOG=false'
+
+- name: Configure instance(s)
+  hosts: all
+  become: True
+  roles:
+  - role: jenkins_analytics
+    ansible_ssh_user: ubuntu
+  - role: nginx
+    nginx_sites:
+    - jenkins
+    nginx_default_sites:
+    - jenkins

@@ -1,0 +1,4 @@
+---
+- package:
+    name: atomic-openshift-utils
+    state: present

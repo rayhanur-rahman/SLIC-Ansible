@@ -1,0 +1,162 @@
+---
+
+# This task is invoked during the invocation of the playbook below:
+#
+# ansible-playbook -i host_file dbimage-make.yml -u ubuntu -c ssh
+#
+# This is invoked on dibvm under the ubuntu user
+
+- name: Clean environment
+  file:
+    path: "{{ item }}"
+    state: absent
+  when: clean_environment
+  become: true
+  with_items:
+    - "{{ dib_home }}/bin"
+    - "{{ dib_home }}/tools"
+    - "{{ dib_home }}/trove"
+    - "{{ dib_home }}/elements"
+    - "{{ dib_home }}/dibuser"
+    - "{{ dib_home }}/img"
+    - "{{ dib_home }}/log"
+    - "{{ dib_home }}/pkg"
+    - "{{ dib_home }}/trove-guestagent.conf"
+
+- name: Copy files from deployer to user {{ dibUser }}'s home directory in the dibvm
+  copy:
+    src: "{{ item.src }}"
+    dest: "{{ dib_home }}"
+    mode: "{{ item.mode }}"
+  with_items:
+    - { src: "{{ src_trove }}/trove-guestagent.conf", mode: "0644" }
+    - { src: "{{ src_home }}/bin", mode: "0755" }
+    - { src: "{{ baseDir }}/elements", mode: "0755" }
+
+- name: Create log directory for diskimage-builder
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: 0755
+  with_items:
+    - "{{ dib_home }}/log"
+    - "{{ dib_home }}/img"
+    - "{{ dib_home }}/dibuser"
+    - "{{ dib_home }}/pkg"
+
+- name: Copy user provided package to dibvm
+  copy:
+    src: "{{ pkg }}"
+    dest: "{{ dib_home }}/pkg"
+  when: pkg != ''
+
+- name: Create key for dibUser in alternate location
+  command: "ssh-keygen -t rsa -f ~/dibuser/id_rsa -N ''"
+  args:
+    creates: "{{ dib_home }}/dibuser/id_rsa"
+
+- name: Get key for dibUser
+  slurp:
+    src: "{{ dib_home }}/dibuser/id_rsa.pub"
+  register: dib_pub_key
+
+- name: Set authorized key for dibuser in alternate location
+  authorized_key:
+    user: "{{ dibUser }}"
+    state: present
+    key: "{{ dib_pub_key.content | b64decode }}"
+    path: "{{ dib_home }}/dibuser/authorized_keys"
+    manage_dir: false
+
+- name: Set authorized key for deployer in alternate location
+  authorized_key:
+    user: "{{ dibUser }}"
+    state: present
+    key: "{{ hostvars[groups['deployer'][0]].deployer_pub_key }}"
+    path: "{{ dib_home }}/dibuser/authorized_keys"
+    manage_dir: false
+  when: hostvars[groups['deployer'][0]].deployer_pub_key
+
+- name: Set authorized key for controller in alternate location
+  authorized_key:
+    user: "{{ dibUser }}"
+    state: present
+    key: "{{ hostvars[groups['controller'][0]].controller_pub_key }}"
+    path: "{{ dib_home }}/dibuser/authorized_keys"
+    manage_dir: false
+  when: hostvars[ groups['controller'][0]].controller_pub_key
+
+- name: Set authorized key for {{ cloudKey | quote }} in alternate location
+  authorized_key:
+    user: "{{ dibUser }}"
+    state: present
+    key: "{{ hostvars[groups['controller'][0]].cloud_pub_key }}"
+    path: "{{ dib_home }}/dibuser/authorized_keys"
+    manage_dir: false
+  when:
+    - cloudKey != ''
+    - hostvars[groups['controller'][0]].cloud_pub_key is defined
+
+- name: Get diskimage-builder (vers={{ dib_version }})
+  git:
+    repo: https://github.com/openstack/diskimage-builder.git
+    dest: "{{ dib_home }}/tools/diskimage-builder"
+    version: "{{ dib_version }}"
+  retries: 3
+  delay: 15
+
+- name: Get trove (vers={{ trove_version }})
+  git:
+    repo: https://github.com/openstack/trove.git
+    dest: "{{ dib_home }}/trove"
+    version: "{{ trove_version }}"
+  retries: 3
+  delay: 15
+
+- name: Apply diskimage-builder patches
+  patch:
+    src: "{{ item }}"
+    basedir: "{{ dib_home }}/tools/diskimage-builder"
+    strip: 1
+  with_items:
+    - "{{ src_dib_diffs }}"
+
+- name: Apply trove integration patches
+  patch:
+    src: "{{ item }}"
+    basedir: "{{ dib_home }}/trove"
+    strip: 1
+  with_items:
+    - "{{ src_trove_integration_diffs }}"
+
+- name: Apply trove guestagent patches
+  patch:
+    src: "{{ item }}"
+    basedir: "{{ dib_home }}/trove"
+    strip: 1
+  with_items:
+    - "{{ src_trove_guestagent_diffs }}"
+
+- name: Apply trove guestagent-debug patches
+  patch:
+    src: "{{ item }}"
+    basedir: "{{ dib_home }}/trove"
+    strip: 1
+  with_items:
+    - "{{ src_trove_guestagent_debug_diffs }}"
+  when: dibDebug == 'true'
+
+- name: Prepare elements that have new files
+  file:
+    path: "{{ dib_home }}/trove/integration/scripts/files/elements/{{ item }}"
+    state: directory
+    mode: "a+x"
+    recurse: yes
+  with_items: "{{ trove_integration_elements_with_new_files }}"
+  when: src_trove_integration_diffs != None
+
+- name: Configure diskimage-builder
+  pip:
+    requirements: "{{ dib_home }}/tools/diskimage-builder/requirements.txt"
+  register: dibrc
+  become: yes

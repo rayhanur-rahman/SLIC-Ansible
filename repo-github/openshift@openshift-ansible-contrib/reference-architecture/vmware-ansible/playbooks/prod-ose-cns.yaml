@@ -1,0 +1,8 @@
+---
+- hosts: localhost
+  connection: local
+  gather_facts: yes
+  become: no
+  roles:
+  # Group systems
+  - create-vm-cns-prod-ose

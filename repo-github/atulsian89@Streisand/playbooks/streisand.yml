@@ -1,0 +1,40 @@
+- name: Prepare the new server for Ansible
+# =========================================
+  hosts: streisand-host
+  gather_facts: no
+
+  remote_user: root
+  become: true
+
+  tasks:
+    - name: Install Python using a raw SSH command to enable the execution of Ansible modules
+      raw: apt update && apt install python -y
+      args:
+        executable: /bin/bash
+
+
+- name: Configure the Server and install required software
+# ========================================================
+  hosts: streisand-host
+
+  remote_user: root
+  become: true
+
+  roles:
+    - common
+    # OpenConnect must be set up before L2TP/IPsec in order to avoid
+    # compilation issues.
+    - openconnect
+    - l2tp-ipsec
+    - openvpn
+    - stunnel
+    - shadowsocks
+    - ssh
+    - tinyproxy
+    - tor-bridge
+    - sslh
+    - monit
+    - ufw
+    - wireguard
+    - streisand-mirror
+    - streisand-gateway

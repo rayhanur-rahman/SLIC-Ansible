@@ -1,0 +1,247 @@
+---
+#
+# edX Configuration
+#
+# github:     https://github.com/edx/configuration
+# wiki:       https://openedx.atlassian.net/wiki/display/OpenOPS
+# code style: https://openedx.atlassian.net/wiki/display/OpenOPS/Ansible+Code+Conventions
+# license:    https://github.com/edx/configuration/blob/master/LICENSE.TXT
+#
+#
+#
+# Tasks for role analytics_pipeline
+#
+# Overview:
+#
+# Prepare the machine to run the edX Analytics Data Pipeline. The pipeline currently "installs itself"
+# via an ansible playbook that is not included in the edx/configuration repo. However, in order to
+# run the pipeline in a devstack environment, some configuration needs to be performed. In a production
+# environment many of these config files are stored on S3.
+#
+# Dependencies:
+#
+# common: some of the variables from the common role are used here
+# hadoop_master: ensures hadoop services are installed
+# hive: the pipeline makes extensive usage of hive, so that needs to be installed as well
+# sqoop: similarly to hive, the pipeline uses this tool extensively
+#
+# Example play:
+#
+# - name: Deploy all dependencies of edx-analytics-pipeline to the node
+#   hosts: all
+#   become: True
+#   gather_facts: True
+#   roles:
+#     - analytics_pipeline
+#
+# ansible-playbook -i 'localhost,' ./analytics_pipeline.yml  -e@/ansible/vars/deployment.yml -e@/ansible/vars/env-deployment.yml
+#
+
+- name: Create config directory
+  file:
+    path: "{{ ANALYTICS_PIPELINE_CONFIG_DIR }}"
+    state: directory
+    owner: "{{ hadoop_common_user }}"
+    group: "{{ hadoop_common_group }}"
+    mode: "0755"
+  tags:
+    - install
+    - install:configuration
+
+- name: Store output database credentials for analytics pipeline
+  copy:
+    content: "{{ ANALYTICS_PIPELINE_OUTPUT_DATABASE | to_json }}"
+    dest: "{{ COMMON_CFG_DIR }}/edx-analytics-pipeline/output.json"
+    owner: "{{ hadoop_common_user }}"
+    group: "{{ hadoop_common_group }}"
+    mode: "0644"
+  tags:
+    - install
+    - install:configuration
+
+- name: Store input database credentials for analytics pipeline
+  copy:
+    content: "{{ ANALYTICS_PIPELINE_INPUT_DATABASE | to_json }}"
+    dest: "{{ COMMON_CFG_DIR }}/edx-analytics-pipeline/input.json"
+    owner: "{{ hadoop_common_user }}"
+    group: "{{ hadoop_common_group }}"
+    mode: "0644"
+  tags:
+    - install
+    - install:configuration
+
+- name: luigi configuration directory created
+  file:
+    path: /etc/luigi
+    state: directory
+    mode: "0755"
+  tags:
+    - install
+    - install:configuration
+
+- name: luigi configuration file written
+  template:
+    src: client.cfg.j2
+    dest: /etc/luigi/client.cfg
+    mode: "0644"
+  tags:
+    - install
+    - install:configuration
+
+- name: Util library source checked out
+  git:
+    repo: "{{ analytics_pipeline_util_library.repo }}"
+    dest: "{{ analytics_pipeline_util_library.path }}"
+    version: "{{ analytics_pipeline_util_library.version }}"
+  tags:
+    - install
+    - install:code
+
+- name: lib directory created
+  file:
+    path: "{{ HADOOP_COMMON_USER_HOME }}/lib"
+    owner: "{{ hadoop_common_user }}"
+    group: "{{ hadoop_common_group }}"
+    state: directory
+  tags:
+    - install
+    - install:app-requirements
+
+- name: Check if the util library needs to be built
+  stat:
+    path: "{{ HADOOP_COMMON_USER_HOME }}/lib/edx-analytics-hadoop-util.jar"
+  register: util_lib_built
+  tags:
+    - install
+    - install:app-requirements
+
+- name: Util library built
+  shell: >
+    {{ hadoop_common_java_home }}/bin/javac -cp `{{ HADOOP_COMMON_HOME }}/bin/hadoop classpath` org/edx/hadoop/input/ManifestTextInputFormat.java &&
+    {{ hadoop_common_java_home }}/bin/jar cf {{ HADOOP_COMMON_USER_HOME }}/lib/edx-analytics-hadoop-util.jar org/edx/hadoop/input/ManifestTextInputFormat.class &&
+    chown {{ hadoop_common_user }}:{{ hadoop_common_group }} {{ HADOOP_COMMON_USER_HOME }}/lib/edx-analytics-hadoop-util.jar
+  args:
+    chdir: "{{ analytics_pipeline_util_library.path }}"
+  when: not util_lib_built.stat.exists
+  tags:
+    - install
+    - install:app-requirements
+
+- name: reload systemd configuration
+  command: systemctl daemon-reload
+  tags:
+    - install
+    - install:configuration
+
+- name: enable Hadoop services
+  service:
+    name: "{{ item }}"
+    enabled: yes
+  with_items: "{{ hadoop_common_services }}"
+  tags:
+    - install
+    - install:configuration
+
+- name: start Hadoop services
+  service:
+    name: "{{ item }}"
+    state: started
+  with_items: "{{ hadoop_common_services }}"
+  tags:
+    - manage
+    - manage:start
+
+- name: stop Hadoop services
+  service:
+    name: "{{ item }}"
+    state: stopped
+  with_items: "{{ hadoop_common_services }}"
+  tags:
+    - manage:stop
+
+- name: restart Hadoop services
+  service:
+    name: "{{ item }}"
+    state: restarted
+  with_items: "{{ hadoop_common_services }}"
+  tags:
+    - manage:start
+    - manage:restart
+
+- name: Ensure package dir exists in HDFS
+  shell: ". {{ HADOOP_COMMON_CONF_DIR }}/hadoop-env.sh && hdfs dfs -mkdir -p /edx-analytics-pipeline/packages/"
+  become_user: "{{ hadoop_common_user }}"
+  tags:
+    - install
+    - install:app-requirements
+
+- name: Ensure util library is in HDFS
+  shell: ". {{ HADOOP_COMMON_CONF_DIR }}/hadoop-env.sh && hdfs dfs -put -f {{ HADOOP_COMMON_USER_HOME }}/lib/edx-analytics-hadoop-util.jar /edx-analytics-pipeline/packages/"
+  become_user: "{{ hadoop_common_user }}"
+  tags:
+    - install
+    - install:app-requirements
+  register: libcp
+  until: libcp is succeeded
+  retries: 6
+  delay: 10
+
+- name: Ensure the data directory exists
+  shell: ". {{ HADOOP_COMMON_CONF_DIR }}/hadoop-env.sh && hdfs dfs -mkdir -p {{ ANALYTICS_PIPELINE_HDFS_DATA_DIR }}"
+  become_user: "{{ hadoop_common_user }}"
+  tags:
+    - install
+    - install:base
+
+- name: Ensure tracking log file can be read
+  file:
+    path: "{{ COMMON_LOG_DIR }}/tracking/tracking.log"
+    mode: "0644"
+  ignore_errors: yes
+  tags:
+    - install
+    - install:configuration
+
+- name: Cron job syncs tracking log file to hdfs
+  cron:
+    user: "{{ hadoop_common_user }}"
+    name: "Sync tracking log to HDFS"
+    job: "{{ HADOOP_COMMON_HOME }}/bin/hdfs dfs -put -f {{ COMMON_LOG_DIR }}/tracking/tracking.log {{ ANALYTICS_PIPELINE_HDFS_DATA_DIR }}/tracking.log"
+  tags:
+    - install
+    - install:configuration
+
+- name: store configuration for acceptance tests
+  copy:
+    src: acceptance.json
+    dest: /var/tmp/acceptance.json
+    mode: "0644"
+  tags:
+    - install
+    - install:configuration
+
+- name: Grant access to table storing test data in output database
+  mysql_user:
+    user: "{{ ANALYTICS_PIPELINE_OUTPUT_DATABASE.username }}"
+    password: "{{ ANALYTICS_PIPELINE_OUTPUT_DATABASE.password }}"
+    priv: 'acceptance%.*:ALL'
+    append_privs: yes
+  tags:
+    - install
+    - install:configuration
+
+- name: Test if Hive metadata store schema exists
+  shell: ". {{ HADOOP_COMMON_CONF_DIR }}/hadoop-env.sh && {{ HIVE_HOME }}/bin/hive | tr '\n' ' '"
+  become_user: "{{ hadoop_common_user }}"
+  register: hive_metastore_info
+  tags:
+    - install
+    - install:configuration
+
+- name: Initialize Hive metadata store schema
+  shell: ". {{ HADOOP_COMMON_CONF_DIR }}/hadoop-env.sh && {{ HIVE_HOME }}/bin/schematool -dbType mysql -initSchema"
+  become_user: "{{ hadoop_common_user }}"
+  when: "'Version information not found in metastore' in hive_metastore_info.stderr"
+  tags:
+    - install
+    - install:configuration

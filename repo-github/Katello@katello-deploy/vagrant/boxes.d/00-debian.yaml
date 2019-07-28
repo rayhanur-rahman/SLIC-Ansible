@@ -1,0 +1,7 @@
+boxes:
+  debian9:
+    box_name:   'debian/stretch64'
+    image_name: !ruby/regexp '/Debian.*Stretch.*PVHVM/'
+    pty:        true
+    scenarios:
+      - foreman

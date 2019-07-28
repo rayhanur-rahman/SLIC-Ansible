@@ -1,0 +1,42 @@
+---
+# example:
+#   ansible-playbook -i host_file dbimage-upload.yml -u ubuntu -c ssh
+#
+
+- name: Initialize deployer
+  hosts: deployer
+  environment: "{{ deployment_environment | default({}) }}"
+  become: yes
+  vars_files:
+    - vars/dbimage-args.yml
+  tasks:
+    - include: tasks/init-deployer.yml
+    - include: tasks/validate-version.yml
+    - include: tasks/get-external-image-data.yml
+
+- name: Initialize controller
+  hosts: controller
+  environment: "{{ deployment_environment | default({}) }}"
+  become: yes
+  vars_files:
+    - vars/dbimage-args.yml
+  tasks:
+    - include: tasks/init-controller.yml
+
+- name: Process image
+  hosts: deployer
+  environment: "{{ deployment_environment | default({}) }}"
+  vars_files:
+    - vars/dbimage-args.yml
+  tasks:
+    - include: tasks/convert-image.yml
+    - include: tasks/update-image.yml
+
+- name: Upload image to controller
+  hosts: controller
+  environment: "{{ deployment_environment | default({}) }}"
+  become: yes
+  vars_files:
+    - vars/dbimage-args.yml
+  tasks:
+    - include: tasks/upload-image.yml

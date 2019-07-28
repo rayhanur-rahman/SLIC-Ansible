@@ -1,0 +1,42 @@
+---
+# Copyright 2014, Rackspace US, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
+## NOTICE on items in this file:
+##   * If you use anything in the *._git_install_branch field that is not a TAG
+##     make sure to leave an in-line comment as to "why".
+
+## For the sake of anyone else editing this file:
+##   * If you add clients to this file please do so in alphabetical order.
+##   * Every entry should be name spaced with the name of the client followed by an "_"
+##   * All items with this file should be separated by `name_` note that the name of the
+##     package should be one long name with no additional `_` separating it.
+
+
+## Tempest service
+tempest_git_repo: https://git.openstack.org/openstack/tempest
+tempest_git_install_branch: aa166794fe24b1da6a70be51c51f4d7f77e2712f # HEAD of "master" as of 07.12.2015
+tempest_git_install_fragments: "yaprtignorerequirements=true"
+tempest_git_dest: "/opt/tempest_{{ tempest_git_install_branch | replace('/', '_') }}"
+
+# NOVNC from source
+novncproxy_git_repo: https://github.com/kanaka/novnc
+novncproxy_git_install_branch: b2a813dc739c8b41dd647dc01c8f8f11d8996286 # HEAD of "master" as of 07.12.2015
+novncproxy_git_dest: "/opt/novnc_{{ novncproxy_git_install_branch | replace('/', '_') }}"
+
+# spice-html5 from source
+spicehtml5_git_repo: https://github.com/SPICE/spice-html5
+spicehtml5_git_install_branch: ab73d009487c8afd4def39b54a422499b4c13c40 # HEAD of "master" as of 07.12.2015
+spicehtml5_git_dest: "/opt/spicehtml5_{{ spicehtml5_git_install_branch | replace('/', '_') }}"

@@ -1,0 +1,23 @@
+---
+:name: Katello devel
+:description:
+:log_dir: /var/log/foreman-installer
+:log_name: katello-devel.log
+:log_level: DEBUG
+:no_prefix: false
+# Forklift always overwrites the answers so let's not pretend we save them
+:dont_save_answers: true
+:answer_file: /etc/foreman-installer/scenarios.d/katello-devel-answers.yaml
+:installer_dir: /usr/share/foreman-installer/katello
+:module_dirs: /usr/share/foreman-installer/modules
+:parser_cache_path:
+- /usr/share/foreman-installer/parser_cache/foreman.yaml
+- /usr/share/foreman-installer/parser_cache/katello.yaml
+:hiera_config: /usr/share/foreman-installer/config/foreman-hiera.yaml
+:colors: true
+:order:
+- certs
+- foreman_proxy
+- foreman_proxy::plugin::pulp
+- katello_devel
+- foreman_proxy_content

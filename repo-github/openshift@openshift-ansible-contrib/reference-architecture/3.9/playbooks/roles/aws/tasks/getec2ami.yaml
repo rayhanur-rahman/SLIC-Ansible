@@ -1,0 +1,37 @@
+---
+- block:
+    - name: Fetch Red Hat Cloud Access ami
+      shell: aws \
+        --output json \
+        ec2 describe-images \
+        --region "{{ aws_region }}" \
+        --owners 309956199498 | \
+        jq -r '.Images[] | [.Name,.ImageId] | @csv' | \
+        sed -e 's/\"//g' | \
+        grep -v Beta | \
+        grep -i Access2-GP2 | \
+        grep -i "{{ rhel_release }}" | \
+        sort | \
+        tail -1
+      args:
+        executable: /bin/bash
+      register: ec2ami_unformatted
+      changed_when: "'ami-' not in ec2ami_unformatted.stdout"
+
+    - name: 'NOTICE!  Red Hat Cloud Access machine image not found'
+      vars:
+        notice: |
+             NOTICE!  Red Hat Cloud Access machine image not found!
+             Please verify the process has been completed successfully.
+
+             See the following url...
+             https://access.redhat.com/cloude/manager/gold_imports/new
+      debug:
+        msg: "{{ notice.split('\n') }}"
+      when: ec2ami_unformatted.changed
+      failed_when: ( ec2ami.stdout == "" ) or ( "'ami-' not in ec2ami.stdout" )
+
+    - name: 'Set fact: ec2ami'
+      set_fact:
+        ec2ami: "{{ ec2ami_unformatted.stdout.split(',')[1] }}"
+  when: ec2ami is not defined

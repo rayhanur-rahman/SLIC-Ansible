@@ -1,0 +1,16 @@
+---
+- hosts: clients
+  become: true
+  gather_facts: no
+
+  tasks:
+  - name: Mount the volumes, if fstype is CIFS
+    mount: name={{ item.mountpoint }}
+           src="\\\\{{ groups['master'][0]}}\\gluster-{{ volname }}"
+           fstype="cifs"
+           opts="username={{smb_username}},password={{smb_password}}"
+           state=mounted
+    when: item.fstype == 'cifs'
+
+    with_items: "{{ client_mounts }}"
+

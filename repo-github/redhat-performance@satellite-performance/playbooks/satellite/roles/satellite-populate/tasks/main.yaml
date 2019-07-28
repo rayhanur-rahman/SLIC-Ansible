@@ -1,0 +1,67 @@
+---
+  # Upload manifest to the Satellite
+  - name: "Check if manifest is available"
+    stat:
+      path=/root/manifest.zip
+    register: manifesting
+  - name: "Deploy manifest file"
+    copy:
+      src: "{{ sat_manifest }}"
+      dest: /root/manifest.zip
+      force: yes
+    when: "manifesting.stat.exists is not defined or manifesting.stat.exists == false"
+    register: copying
+  - name: "Upload manifest"
+    command:
+      hammer --username '{{ sat_user }}' --password '{{ sat_pass }}' subscription upload --organization '{{ sat_org }}' --file /root/manifest.zip
+    register: uploading
+    # rc==70 is the new manifest data are same as those already present.
+    failed_when: not (uploading.rc == 70 or uploading.rc == 0)
+    until: (uploading.rc == 70) or (uploading.rc == 0)
+    retries: 5
+    delay: 10
+    when: "manifesting.stat.exists is defined or manifesting.stat.exists == true or copying.changed"
+
+  # TODO: We want to be sure manifest is in the Sat before we start trying
+  # to enable repos. There have to be some better way, but for now this
+  # should suffice
+  - name: "Show manifest is there"
+    command:
+      hammer --username '{{ sat_user }}' --password '{{ sat_pass }}' subscription manifest-history --organization '{{ sat_org }}'
+    register: manifest_history
+  - name: "Check that manifest is there"
+    assert:
+      that:
+        - "'SUCCESS' in manifest_history.stdout"
+        - "'file imported successfully' in manifest_history.stdout"
+  # Reload manifest as othervise it fails frequently when listing repos
+  - name: "Refresh manifest"
+    command:
+      hammer --username '{{ sat_user }}' --password '{{ sat_pass }}' subscription refresh-manifest --organization '{{ sat_org }}'
+
+  # Enable repositories
+  - name: "List repositories we already have (not to attempt to enable what we already have)"
+    command:
+      hammer --csv --username '{{ sat_user }}' --password '{{ sat_pass }}' repository list --organization '{{ sat_org }}'
+    register: repository_list
+  - include_tasks: try_enable_repo.yaml
+    when: 'repository_list.stdout.find(",{{ item.repo }},") == -1'
+    with_items:
+      "{{ sat_repos }}"
+
+  # Start async of the repos
+  - name: "Start (asynchronous) sync of repos we have just enabled"
+    command:
+      hammer --username '{{ sat_user }}' --password '{{ sat_pass }}' repository synchronize --product '{{ item.product }}' --name '{{ item.repo }}' --organization '{{ sat_org }}' --async
+    with_items:
+      "{{ sat_repos }}"
+    when: "sat_repos_sync == 'async'"
+
+  # Start sync of the repos
+  - name: "Start (synchronous) sync of repos we have just enabled"
+    command:
+      hammer --username '{{ sat_user }}' --password '{{ sat_pass }}' repository synchronize --product '{{ item.product }}' --name '{{ item.repo }}' --organization '{{ sat_org }}'
+    with_items:
+      "{{ sat_repos }}"
+    when: "sat_repos_sync == 'sync'"
+...

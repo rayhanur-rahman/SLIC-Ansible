@@ -1,0 +1,9 @@
+---
+- name: "Create S3 bucket policy ( hosted registry )"
+  s3_bucket:
+    name: "{{ clusterid }}.{{ dns_domain }}-registry"
+    policy: "{{ lookup('template', playbook_dir + '/roles/aws/templates/s3_bucket_policy_registry.json', convert_data=False) | string }}"
+    region: "{{ aws_region }}"
+    state: "{{ state | default('present') }}"
+  retries: 3
+  delay: 3

@@ -1,0 +1,39 @@
+---
+
+# This task is invoked during the invocation of the playbook below:
+#
+# ansible-playbook -i host_file dbimage-make.yml -u ubuntu -c ssh
+#
+# This is invoked on the dibvm as ubuntu and becomes root as needed below
+
+- name: Update apt cache
+  apt:
+    update_cache: yes
+    cache_valid_time: 600
+  register: apt_update
+  until: apt_update|success
+  become: yes
+  retries: 5
+  delay: 60
+
+- name: Install distro packages
+  apt:
+    pkg: "{{ item }}"
+    state: present
+  register: install_packages
+  until: install_packages|success
+  with_items: "{{ dib_apt_packages }}"
+  become: yes
+  retries: 5
+  delay: 20
+  when: dib_apt_packages
+
+- name: Install pip packages
+  pip:
+    name: "{{ dib_pip_packages | join(' ') }}"
+    state: present
+  register: install_packages
+  until: install_packages|success
+  retries: 5
+  delay: 20
+  when: dib_pip_packages

@@ -1,0 +1,21 @@
+# vim: set filetype=json:
+# This file is also used by bootstrap python script.  Please keep JSON format for this file.
+{
+  "bootstrap_images": {
+    "swarm": "swarm:1.2.8",
+    "rebellion": "rebellion:v2.3.3",
+    "mysql": "mysql-server:5.6.30",
+    "registry": "registry:release-1498029368-2c74d73cef3f020dd1dd6fcf9e1933112a2c67cc",
+    "registry-meta": "registry:meta-1498029368-2c74d73cef3f020dd1dd6fcf9e1933112a2c67cc",
+    "tinydns": "tinydns:release-1497423817-5c5982f1e53476478b74a28877bd878a30605b49",
+    "tinydns-meta": "tinydns:meta-1497423817-5c5982f1e53476478b74a28877bd878a30605b49",
+    "webrouter": "webrouter:release-1497430313-fa743a7d70301660065d6e636a18dab5fda3173c",
+    "webrouter-meta": "webrouter:meta-1497430313-fa743a7d70301660065d6e636a18dab5fda3173c",
+    "console": "console:release-1500017557-5eb4e8b77fa3a7a5545150b4309a37bee3158c33",
+    "console-meta": "console:meta-1500017557-5eb4e8b77fa3a7a5545150b4309a37bee3158c33",
+    "backupctl-meta": "backupctl:meta-1498032948-eb5dc315425981a4ab59e7515627b8b34ef8ed5c",
+    "backupctl": "backupctl:release-1498032948-eb5dc315425981a4ab59e7515627b8b34ef8ed5c",
+    "lvault-meta": "lvault:meta-1485154203-73072c92b1862ab470b8d872b278f734747b0739",
+    "lvault": "lvault:release-1485154203-73072c92b1862ab470b8d872b278f734747b0739"
+  }
+}

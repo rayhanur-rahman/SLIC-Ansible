@@ -1,0 +1,17 @@
+---
+- hosts: myhosts
+  connection: local
+  name: Update user role
+  gather_facts: False
+
+  tasks:
+
+  - name: Update user role
+    redfish_command:
+      category: Accounts
+      command: UpdateUserRole
+      baseuri: "{{ baseuri }}"
+      username: "{{ username }}"
+      password: "{{ password }}"
+      id: "{{ id }}"
+      roleid: "{{ roleid }}"

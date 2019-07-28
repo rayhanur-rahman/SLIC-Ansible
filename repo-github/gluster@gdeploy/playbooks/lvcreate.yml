@@ -1,0 +1,13 @@
+---
+- hosts: gluster_servers
+  become: true
+  gather_facts: no
+
+  tasks:
+      - name: Create LVs with specified size for the VGs
+        lv: action=create lvtype="{{ lvtype }}" lvname={{ item.lv }}
+            size={{ item.size }} vgname={{ item.vg }} extent={{ item.extent }}
+            chunksize="{{ chunksize }}" poolmetadatasize="{{ poolmetadatasize }}"
+            poolname={{ item.lv }}
+            pvname="{{ pvname }}"
+        with_items: "{{ lvnamelist }}"

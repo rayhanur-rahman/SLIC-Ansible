@@ -1,0 +1,16 @@
+---
+- name: Change node-selector on default
+  oc_edit:
+    kind: namespace
+    name: "{{ item }}"
+    separator: ":"
+    content:
+      'metadata:annotations:openshift.io/node-selector': 'type=infra'
+  with_items:
+  - default
+  - openshift-infra
+  register: l_default_ns
+  retries: 10
+  delay: 5
+  until: ('failed' not in l_default_ns) or (not l_default_ns.failed)
+

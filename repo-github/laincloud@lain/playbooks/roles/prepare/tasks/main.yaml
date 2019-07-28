@@ -1,0 +1,48 @@
+- name: ensure epel exists
+  yum: pkg=epel-release
+  when: ansible_distribution == "CentOS"
+
+- name: create data dir
+  file: path={{ lain_data_dir }} state=directory
+
+- yum: pkg=libselinux-python
+  when: ansible_distribution == "CentOS"
+
+- name: enable selinux
+  selinux: policy=targeted state=permissive
+  when: ansible_distribution == "CentOS"
+
+- name: get stat of nscd.service
+  stat: path=/etc/systemd/system/nscd.service
+  register: nscd
+  ignore_errors: yes
+
+- name: disable nscd
+  service: name=nscd enabled=no state=stopped
+  when: nscd.stat.exists
+
+- name: load node info from etcd
+  command: etcdctl get /lain/nodes/nodes/{{ node_name }}:{{ node_ip }}:{{ ssh_port }}
+  register: result
+  ignore_errors: yes
+
+- name: config default domains
+  command: etcdctl set /lain/config/domains/{{ item }} '{"ips":[],"type":"node"}'
+  with_items:
+    - etcd.lain
+    - consul.lain
+    - docker.lain
+    - lainlet.lain
+    - metric.lain
+
+- name: config *.lain.local resolved to webrouter vips
+  command: etcdctl set /lain/config/domains/*.lain.local '{"ips":[],"type":"webrouter"}'
+
+- name: delete any interface calico created previously
+  command: for interface in $(ip link show | grep cali | awk '{print $2}' | awk -F':' '{print $1}'); do ip link delete ${interface}; done
+  ignore_errors: yes
+
+- set_fact:
+    node_info: "{{result.stdout|from_json}}"
+  when: result|success and result.stdout != ""
+  ignore_errors: yes

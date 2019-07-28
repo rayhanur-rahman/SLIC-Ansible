@@ -1,0 +1,13 @@
+---
+- hosts: gluster_servers
+  become: true
+  gather_facts: no
+
+  tasks:
+  # Shrink pv on all the disks to the specified size,
+  # Partitions will not be shrinked.
+  - name: Shrink the Physical Volumes on all the nodes.
+    pv: action=resize disks={{ item.disk }}
+        options=" --setphysicalvolumesize {{ item.size }}"
+    when: pvshrink is defined
+    with_items: "{{ pvshrink }}"

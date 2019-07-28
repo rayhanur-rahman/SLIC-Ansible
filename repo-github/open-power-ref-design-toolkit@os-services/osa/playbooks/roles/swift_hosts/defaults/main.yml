@@ -1,0 +1,52 @@
+---
+# Copyright 2016 IBM Corp.
+#
+# All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
+# Directory where executables and temporary files will reside
+# on the deployer and swift hosts.
+execute_dir: /tmp/swiftdiscovery
+
+# Mount options for the xfs filesystems.
+mount_options: 'xfs noatime,nodiratime,nobarrier,logbufs=8 0 0'
+
+# If 'report_only' is set to true, all destructive operations
+# in the playbook (e.g. cleaning disks, creating filesystems,
+# updating the inventory on the deployer) are skipped.
+report_only: false
+
+# Timestamp on the deployer node.
+# You should never need to adjust this.
+date: "{{ lookup('pipe', 'date +%Y%m%d-%H%M') }}"
+
+# Set to true by the playbook when the specified account, container,
+# and object device lists match one another.  If this is true, all
+# filesystem labels will use the 'disk' prefix (e.g. /srv/node/disk1,
+# /srv/node/disk2, etc).  If this is false, account and container
+# filesystem labels will use the 'meta' prefix (e.g. /srv/node/meta1,
+# /srv/node/meta2, etc).
+#
+# You should never need to adjust this.
+account_matches_object: false
+
+# The swift_do_setup, swift_do_inventory, and swift_do_cleanup values
+# control which tasks within the role get run.  These are set by the
+# calling playbook.
+#
+# You should never need to adjust these.
+swift_do_setup: False
+swift_do_inventory: False
+swift_do_cleanup: False

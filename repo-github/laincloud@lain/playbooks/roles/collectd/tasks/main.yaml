@@ -1,0 +1,65 @@
+- set_fact: collectd_version="5.5.1"
+
+- name: install collectd(CentOS)
+  yum: pkg=collectd-{{ collectd_version }}
+  when: ansible_distribution=="CentOS"
+
+- name: install collectd(Ubuntu)
+  apt: name=collectd=5.5.1-1build2 state=installed
+  when: ansible_distribution=="Ubuntu"
+
+- name: install collectd plugins and dependencies
+  yum: pkg={{ item }}
+  with_items:
+    - collectd-ping-{{ collectd_version }}
+    - gcc
+    - python-devel
+    - python-pip
+  when: ansible_distribution=="CentOS"
+
+- name: install python libs
+  command: pip install docker-py psutil==4.1.0
+  environment:
+    http_proxy: "{{ http_proxy }}"
+    https_proxy: "{{ https_proxy }}"
+
+# lastest collectd without disk pkg
+- name: install collectd plugins
+  yum: pkg={{ item }}
+  with_items:
+    - collectd-disk-{{ collectd_version }}
+  ignore_errors: yes
+  when: ansible_distribution=="CentOS"
+
+- name: create collectd user
+  user: name=collectd createhome=no append=yes groups=docker system=yes
+
+- name: deploy collectd main config
+  template: src=collectd.conf.j2 dest={{ collectd_conf_path}}
+  notify: restart collectd
+
+- name: ensure plugins dir
+  file: path=/var/lib/collectd/plugins state=directory
+
+- name: deploy collectd types
+  copy: src=types dest=/var/lib/collectd/
+  notify: restart collectd
+
+- name: deploy collectd lain plugins
+  copy: src=plugins dest=/var/lib/collectd/ mode=0755
+  notify: restart collectd
+
+- name: ensure conf dir
+  file: path={{collectd_conf_dir}} state=directory
+
+- name: deploy collectd plugins config
+  template: src={{ item }}.j2 dest={{collectd_conf_dir}}/{{ item }}
+  with_items:
+    - docker_daemon_monitor.conf
+    - lain.conf
+    - node_monitor.conf
+    - rebellion_monitor.conf
+  notify: restart collectd
+
+- name: ensure collectd running
+  service: name=collectd enabled=yes state=started

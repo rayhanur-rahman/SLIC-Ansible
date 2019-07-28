@@ -1,0 +1,24 @@
+---
+- hosts: gluster_servers
+  become: true
+  gather_facts: no
+
+  tasks:
+  - name: Create/Enabling yum repos
+    template: src=yum.repos.d
+            dest=/etc/yum.repos.d/{{ item.name }}.repo
+    when: repolist is defined and repolist|length > 0
+    with_items: "{{ repolist | default('') }}"
+
+  - name: Clean up the metadata
+    shell: /usr/bin/yum clean all
+    when: meatadata_clean is defined and meatadata_clean == 'yes'
+
+  - name: Yum update
+    yum: name=* state=latest
+    when: update is defined and update == 'yes'
+
+  - name: Installs/Removes a package using yum
+    yum: name="{{ name }}" state="{{ yum_state }}"
+    when: name is defined and yum_state is defined
+

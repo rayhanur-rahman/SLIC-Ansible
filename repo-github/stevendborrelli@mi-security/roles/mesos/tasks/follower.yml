@@ -1,0 +1,78 @@
+---
+- name: disable mesos leader
+  sudo: yes
+  service:
+    name: mesos-master
+    enabled: no 
+  when: mesos_mode == "follower" 
+  tags:
+    - mesos
+
+- name: set containerizers
+  sudo: yes
+  copy: 
+    content: "docker,mesos" 
+    dest: /etc/mesos-slave/containerizers
+  notify: restart mesos follower
+  tags:
+    - mesos  
+
+- name: write credential
+  when: mesos_authenticate_followers|bool
+  sudo: yes
+  copy:
+    dest: /etc/mesos/follower-credential
+    content: "{{ mesos_follower_principal }} {{ mesos_follower_secret }}"
+    mode: 0600
+  notify: restart mesos follower
+  tags:
+    - mesos
+
+- name: delete credential
+  when: not mesos_authenticate_followers|bool
+  sudo: yes
+  file:
+    dest: /etc/mesos/follower-credential
+    state: absent
+  notify: restart mesos follower
+  tags:
+    - mesos
+
+- name: enable credential option
+  when: mesos_authenticate_followers|bool
+  sudo: yes
+  copy:
+    dest: /etc/mesos-slave/credential
+    content: /etc/mesos/follower-credential
+  notify: restart mesos follower
+  tags:
+    - mesos
+
+- name: disable credential option
+  when: not mesos_authenticate_followers|bool
+  sudo: yes
+  file:
+    dest: /etc/mesos-slave/credential
+    state: absent
+  notify: restart mesos follower
+  tags:
+    - mesos
+    
+- name: set executor registration timeout 
+  sudo: yes
+  copy: 
+    dest: /etc/mesos-slave/executor_registration_timeout
+    content: "{{ mesos_executor_registration_timeout }}"
+  notify: restart mesos follower
+  tags:
+    - mesos
+
+- name: set follower node id
+  sudo: yes
+  copy: 
+    dest: /etc/mesos-slave/attributes
+    content: "node_id:{{ inventory_hostname }}"
+  notify: remove mesos follower metadata 
+  tags:
+    - mesos
+

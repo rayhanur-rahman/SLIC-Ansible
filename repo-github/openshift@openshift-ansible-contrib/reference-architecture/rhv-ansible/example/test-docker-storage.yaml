@@ -1,0 +1,15 @@
+---
+- hosts: localhost
+  gather_facts: yes
+  roles:
+    - instance-groups
+  tags:
+    - always
+
+- hosts: nodes
+  roles:
+    - role: docker-storage-setup
+      docker_dev: '/dev/vdb'
+  tags:
+    - pre
+    - storage

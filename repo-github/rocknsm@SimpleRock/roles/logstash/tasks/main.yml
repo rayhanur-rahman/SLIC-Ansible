@@ -1,0 +1,42 @@
+---
+
+- name: Install packages
+  yum:
+    name:
+      - java-11-openjdk-headless
+      - logstash
+    state: present
+
+- name: Add sysconfig file
+  template:
+    src: logstash_sysconfig.j2
+    dest: /etc/sysconfig/logstash
+  notify: Restart logstash
+
+- name: Add pipeline configs
+  template:
+    src: "{{ item.src }}"
+    dest: "/etc/logstash/conf.d/{{ item.dest }}"
+    owner: "{{ logstash_user }}"
+    group: "{{ logstash_group }}"
+    mode: 0640
+  notify: Restart logstash
+  when: logstash_configs is defined
+  with_items: "{{ logstash_configs }}"
+
+- name: Add parse failure output for Logstash
+  template:
+    src: "{{ item }}.j2"
+    dest: "/etc/logstash/conf.d/{{ item }}.conf"
+    owner: "{{ logstash_user }}"
+    group: "{{ logstash_group }}"
+    mode: 0640
+  notify: Restart logstash
+  loop:
+    - 999-output-parsefailures
+
+- name: Enable and start Logstash
+  service:
+    name: logstash
+    state: "started"
+    enabled: "{{ 'True' if 'logstash' in enabled_services else 'False' }}"

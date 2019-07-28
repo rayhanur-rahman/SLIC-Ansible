@@ -1,0 +1,29 @@
+---
+# write_interfaces_file is intended for utilizing base logic to write
+# a debian style interfaces file into the configuration drive file
+# such that cirros will receive basic network configuration when
+# performing basic testing.
+write_interfaces_file: false
+http_boot_folder: /httpboot
+# Default location to the ssh public key for the user operating Bifrost.
+ssh_public_key_path: "{{ lookup('env', 'HOME') }}/.ssh/id_rsa.pub"
+
+# Default interface name
+# TODO(TheJulia): Remove this default.
+node_default_network_interface: eth0
+
+# Basic networking defaults
+# TODO(TheJulia): Require these to be supplied some other way.
+ipv4_subnet_mask: 255.255.255.0
+ipv4_gateway: 192.168.1.1
+ipv4_nameserver: 8.8.8.8
+network_mtu: 1500
+
+# Default URL to Ironic
+ironic_url: "http://localhost:6385/"
+
+# Default ISO generation utility
+iso_gen_utility: "mkisofs"
+
+# Deprecated, remove in Queens release
+node_network_info: {}

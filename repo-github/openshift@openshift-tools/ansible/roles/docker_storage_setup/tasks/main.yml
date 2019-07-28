@@ -1,0 +1,26 @@
+---
+- name: Ensure docker is installed
+  package:
+    name: "{{ dss_docker_package }}"
+    state: present
+
+- name: Copy the docker-storage-setup config file
+  template:
+    src: "{{ dss_docker_storage_driver }}_dss.j2"
+    dest: /etc/sysconfig/docker-storage-setup
+    owner: root
+    group: root
+    mode: 0664
+
+- name: Ensure docker is started
+  service:
+    name: docker
+    state: started
+    enabled: true
+
+- name: docker info
+  command: docker info
+  register: dockerinfo
+
+- debug:
+    msg: "{{ dockerinfo }}"

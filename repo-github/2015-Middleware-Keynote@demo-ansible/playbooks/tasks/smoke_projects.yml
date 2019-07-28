@@ -1,0 +1,24 @@
+# vim: set ft=ansible:
+---
+- name: Find current projects list
+  command: oc get projects
+  register: projects
+
+# Set up the smoke project and app
+- name: Create user smoke test projects
+  command: "oadm new-project {{ item }}-smoke --display-name='Smoke Test' --admin={{ item }}"
+  when: item not in projects.stdout
+  with_sequence: start=0 end={{ num_smoke_test_users }} format=user%02d
+
+- name: Execute build script for each project
+  script: files/smoke_project.sh {{ item }}
+  with_sequence: start=0 end={{ num_smoke_test_users }} format=user%02d
+
+- name: Expose smoke project service
+  command: "oc expose service smoke -n {{ item }}-smoke"
+  when: item not in projects.stdout
+  with_sequence: start=0 end={{ num_smoke_test_users }} format=user%02d
+
+- name: Scale smoke app
+  command: "oc scale dc/smoke --replicas=2 -n {{ item }}-smoke"
+  with_sequence: start=0 end={{ num_smoke_test_users }} format=user%02d

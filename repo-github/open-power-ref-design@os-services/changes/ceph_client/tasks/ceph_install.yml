@@ -1,0 +1,83 @@
+---
+# Copyright 2015, Serge van Ginderachter <serge@vanginderachter.be>
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Try installing ceph packages. If this fails, retry after
+# updating apt
+- name: Install ceph packages
+  package:
+    name: '{{ item.1 }}'
+    state: "{{ ceph_client_package_state }}"
+    update_cache: "{{ (ansible_pkg_mgr == 'apt') | ternary('yes', omit) }}"
+    cache_valid_time: "{{ (ansible_pkg_mgr == 'apt') | ternary(cache_timeout, omit) }}"
+  register: install_pkgs_result
+  ignore_errors: yes
+  with_subelements:
+    - "{{ ceph_components }}"
+    - package
+  when:
+    - inventory_hostname in groups[item.0.component]
+  notify:
+    - Restart os services
+
+# This tries to reload the UCA since it maybe corrupt and the source of the errors
+- name: Reload UCA
+  shell: |
+    # Loop until these three files are present:
+    # ubuntu-cloud.archive.canonical.com_ubuntu_dists_xenial-updates_newton_main_binary-ppc64el_Packages
+    # ubuntu-cloud.archive.canonical.com_ubuntu_dists_xenial-updates_newton_Release
+    # ubuntu-cloud.archive.canonical.com_ubuntu_dists_xenial-updates_newton_Release.gpg
+
+    APT_DIR='/var/lib/apt/lists'
+    UCA_FILES_PAT='ubuntu-cloud.archive.canonical.com_ubuntu_dists_*-updates_*_*'
+    FIND_CMD="find $APT_DIR -name $UCA_FILES_PAT"
+
+    FILE_COUNT=$($FIND_CMD | wc -w)
+    if [ $FILE_COUNT -gt 0 ]; then
+      while [ $FILE_COUNT -lt 3 ]; do
+        echo "Sleep"
+        sleep 120
+        echo "Remove existing files."
+        rm $APT_DIR/$UCA_FILES_PAT
+        echo "Update apt."
+        apt-get update
+        FILE_COUNT=$($FIND_CMD | wc -w)
+      done
+    fi
+  args:
+    executable: /bin/bash
+  when:
+    - install_pkgs_result is defined
+    - install_pkgs_result|failed
+
+# If installing ceph packages failed earlier, retry after
+# updating apt cache
+- name: Retry installing ceph packages, if failed earlier
+  package:
+    name: '{{ item.1 }}'
+    state: "{{ ceph_client_package_state }}"
+    update_cache: "{{ (ansible_pkg_mgr == 'apt') | ternary('yes', omit) }}"
+    cache_valid_time: "{{ (ansible_pkg_mgr == 'apt') | ternary(cache_timeout, omit) }}"
+  register: install_packages
+  until: install_packages|success
+  retries: 5
+  delay: 2
+  with_subelements:
+    - "{{ ceph_components }}"
+    - package
+  when:
+    - inventory_hostname in groups[item.0.component]
+    - install_pkgs_result|failed
+  notify:
+    - Restart os services

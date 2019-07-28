@@ -1,0 +1,21 @@
+# Copyright (c) 2015 Hewlett-Packard Development Company, L.P.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+# implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+---
+- name: "Download via GIT"
+  include: git_download.yaml
+  when: ci_testing_zuul | bool == false and copy_from_local_path | bool == false
+- name: "Copy from local path"
+  include: local_path.yaml
+  when: ci_testing_zuul | bool or copy_from_local_path | bool

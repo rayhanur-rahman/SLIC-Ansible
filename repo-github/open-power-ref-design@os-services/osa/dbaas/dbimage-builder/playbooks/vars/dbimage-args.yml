@@ -1,0 +1,131 @@
+---
+# command arguments from dbimage-make.sh and dbimage-upload.sh
+
+ipAddrDib: "{{ lookup('env', 'DBIMAGE_IPADDR') }}"
+dbName: "{{ lookup('env', 'DBIMAGE_DBNAME') }}"
+dbVersion: "{{ lookup('env', 'DBIMAGE_DBVERSION') }}"
+pkg: "{{ lookup('env', 'DBIMAGE_PKG') }}"
+pkgType: "{{ lookup('env', 'DBIMAGE_PKGTYPE') }}"
+installScript: "{{ lookup('env', 'DBIMAGE_INSTALLSCRIPT') }}"
+chrootCmd: "{{ lookup('env', 'DBIMAGE_CHROOT_CMD') }}"
+cloudKey: "{{ lookup('env', 'DBIMAGE_CLOUD_KEY') }}"
+baseDir: "{{ lookup('env', 'DBIMAGE_DIR') }}"
+ipAddrController: "{{ lookup('env', 'DBIMAGE_CONTROLLER_IP') }}"
+dibUser: "{{ lookup('env', 'DBIMAGE_DIBUSER') }}"
+dbimageHome: "{{ lookup('env', 'DBIMAGE_HOME') }}"
+communityEdition: "{{ lookup('env', 'DBIMAGE_COMMUNITY_EDITION') | bool }}"
+enterpriseEdition: "{{ lookup('env', 'DBIMAGE_ENTERPRISE_EDITION') | bool }}"
+uploadImage: "{{ lookup('env', 'DBIMAGE_UPLOAD_IMAGE') | bool }}"
+imageName: "{{ lookup('env', 'DBIMAGE_IMAGE_NAME') | default('') }}"
+dbimageCmd: "{{ lookup('env', 'DBIMAGE_CMD') }}"
+dbimageMyElements: "{{ lookup('env', 'DBIMAGE_MYELEMENTS') }}"
+isJujuCharm: "{{ lookup('env', 'DBIMAGE_CHARM') | bool }}"
+
+# Environment variables set by the user directed at diskimage-builder
+
+distroName: "{{ lookup('env', 'DISTRO_NAME') | default('') }}"
+dibRelease: "{{ lookup('env', 'DIB_RELEASE') | default('') }}"
+dibDebug: "{{ lookup('env', 'DIB_MYDEBUG') | default('') }}"
+
+# Environment variables set by the user directed at Trove
+
+imageSource: "{{ lookup('env', 'DBIMAGE_SOURCE') | default ('') }}"
+
+# Environment variables from the inventory file produced by cluster genesis
+
+deployment_environment:
+  https_proxy: "{{ lookup('env', 'https_proxy') | default ('') }}"
+  http_proxy: "{{ lookup('env', 'http_proxy') | default ('') }}"
+  no_proxy: "{{ lookup('env', 'no_proxy') | default ('') }}"
+
+# pip packages needed by dbimage-builder.  This is localhost which may be the first controller
+
+dbimage_apt_packages:
+  - qemu-utils
+
+dbimage_pip_packages:
+
+# Apt packages needed by dibvm
+
+dib_apt_packages:
+  - git
+  - kpartx
+  - vlan
+  - htop
+  - aptitude
+  - curl
+  - build-essential
+  - ntp
+  - ntpdate
+  - python-dev
+  - python-pip
+  - libssl-dev
+  - libxml2-dev
+  - libxslt-dev
+  - pkg-config
+  - libffi-dev
+  - libpq-dev
+  - libmysqlclient-dev
+  - graphviz
+  - libsqlite3-dev
+  - gettext
+  - screen
+  - bridge-utils
+  - unzip
+  - grub2
+  - qemu-utils
+
+# pip packages needed by dibvm beyond dib requirements.txt
+
+dib_pip_packages:
+
+# versions for git cloned projects in dibvm
+
+dib_version: 1.28.0
+trove_version: stable/ocata
+
+# dibvm install options
+
+clean_environment: true
+
+# Source locations in dbimage-builder
+
+src_home: "{{ baseDir }}/dibvm/home"
+
+src_trove: "{{ baseDir }}/etc/trove"
+
+src_ssh: "{{ baseDir }}/etc/ssh"
+
+src_dib_diffs: []
+
+src_trove_integration_diffs:
+  - "{{ baseDir }}/diffs/trove/integration/15-reddwarf-dep.patch"
+  - "{{ baseDir }}/diffs/trove/integration/element-guestagent.patch"
+  - "{{ baseDir }}/diffs/trove/integration/element-mariadb.patch"
+  - "{{ baseDir }}/diffs/trove/integration/element-mysql.patch"
+  - "{{ baseDir }}/diffs/trove/integration/element-redis.patch"
+  - "{{ baseDir }}/diffs/trove/integration/element-postgresql.patch"
+  - "{{ baseDir }}/diffs/trove/integration/element-mongodb.patch"
+
+trove_integration_elements_with_new_files:
+  - ubuntu-xenial-guest/
+  - ubuntu-trusty-guest/
+  - ubuntu-guest/
+  - ubuntu-postgresql/
+  - ubuntu-xenial-mariadb/
+  - ubuntu-xenial-mongodb/
+
+src_trove_guestagent_diffs:
+  - "{{ baseDir }}/diffs/trove/guestagent/postgres-config.patch"
+  - "{{ baseDir }}/diffs/trove/guestagent/mongodb-database-user.patch"
+  - "{{ baseDir }}/diffs/trove/guestagent/mysql-restore.patch"
+  - "{{ baseDir }}/diffs/trove/guestagent/mariadb-mysql.patch"
+
+src_trove_guestagent_debug_diffs:
+  - "{{ baseDir }}/diffs/trove/guestagent-debug/debug-common.patch"
+  - "{{ baseDir }}/diffs/trove/guestagent-debug/debug-mariadb.patch"
+
+# Target locations in dibvm
+
+dib_home: "/home/{{ dibUser }}"
+

@@ -1,0 +1,15 @@
+---
+- hosts: clients
+  become: true
+  gather_facts: no
+
+  tasks:
+  - name: Mount the volumes, if fstype is glusterfs
+    mount: name={{ item.mountpoint }}
+           src="{{ groups['master'][0]}}:{{ volname }}"
+           fstype="glusterfs"
+           state=mounted
+    when: item.fstype == 'fuse'
+
+    with_items: "{{ client_mounts }}"
+

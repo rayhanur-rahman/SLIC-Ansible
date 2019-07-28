@@ -1,0 +1,42 @@
+---
+- name: Gather facts
+  setup:
+    gather_subset: min
+
+- name: Get filename from software-vars.yml
+  set_fact:
+    file: "{{ content_files['anaconda'].split('/', 3)[-1] }}"
+
+- name: Get filename from software-vars.yml
+  set_fact:
+    file: "{{ content_files['anaconda'] | basename }}"
+  when: public
+
+- name: Get route to client
+  command: "{{ python_executable_local }} \
+  {{ scripts_path_local }}/python/ip_route_get_to.py \
+  {{ inventory_hostname }}"
+  delegate_to: localhost
+  register: host_ip
+  when: not public
+
+- name: Download Anaconda
+  get_url:
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: 0744
+    checksum: md5:510c8d6f10f2ffad0b185adbbdddf7f9
+    url: "http://{{ host_ip.stdout }}/{{ file }}"
+    dest: "{{ ansible_remote_dir }}"
+    timeout: 300
+  become: yes
+  when: not public
+
+- name: Download Anaconda
+  get_url:
+    mode: 0777
+    url: "https://repo.continuum.io/archive/{{ file }}"
+    dest: "{{ ansible_remote_dir }}"
+    timeout: 300
+  become: yes
+  when:  public

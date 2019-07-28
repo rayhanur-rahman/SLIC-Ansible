@@ -1,0 +1,250 @@
+---
+# Copyright 2017, Rackspace US, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- name: Check for RPC-OpenStack product_release variable
+  hosts: localhost
+  environment: "{{ deployment_environment_variables | default({}) }}"
+  connection: local
+  user: root
+  gather_facts: true
+  pre_tasks:
+    - name: Refresh local facts
+      setup:
+        filter: ansible_local
+        gather_subset: "!all"
+      tags:
+        - always
+
+    - name: Ensure local facts directory exists
+      file:
+        dest: "/etc/ansible/facts.d"
+        state: directory
+        group: "root"
+        owner: "root"
+        mode:  "0755"
+        recurse: no
+
+    - name: initialize local facts
+      ini_file:
+        dest: "/etc/ansible/facts.d/rpc_openstack.fact"
+        section: "rpc_product"
+        option: initialized
+        value: true
+
+    - name: Refresh local facts
+      setup:
+        filter: ansible_local
+        gather_subset: "!all"
+      tags:
+        - always
+
+    - name: Set the rpc-openstack variables
+      set_fact:
+        rpc_openstack: "{{ ansible_local['rpc_openstack']['rpc_product'] }}"
+
+    - name: Set the rpc-release variables
+      set_fact:
+        rpc_product_release: "{{ rpc_openstack['rpc_product_release'] }}"
+      when:
+        - rpc_openstack['rpc_product_release'] is defined
+        - rpc_product_release is undefined or
+          rpc_product_release == 'undefined'
+
+  tasks:
+    - name: Ensure root has a .ssh directory
+      file:
+        path: /root/.ssh
+        state: directory
+        owner: root
+        group: root
+        mode: "0700"
+
+    - name: Create ssh key pair for root
+      user:
+        name: root
+        generate_ssh_key: yes
+        ssh_key_bits: 2048
+        ssh_key_file: /root/.ssh/id_rsa
+
+    - name: Store id_rsa.pub
+      slurp:
+        src: "/root/.ssh/id_rsa.pub"
+      register: _root_id_rsa_pub
+
+    - name: Ensure root can ssh to localhost
+      authorized_key:
+        user: "root"
+        key: "{{ _root_id_rsa_pub.content | b64decode }}"
+
+    - name: Check for product_release variable
+      fail:
+        msg: >-
+          RPC product [{{ rpc_product_release }}] is unknown. Available options
+          are {{ rpc_product_releases.keys() }}. Set the environment variable
+          RPC_PRODUCT_RELEASE to the product release required or use the
+          ansible override [rpc_product_release] when running this play.
+      when:
+        - rpc_product_release is undefined or
+          rpc_product_release == 'undefined' or
+          not rpc_product_releases[rpc_product_release] is defined
+
+    - name: Set OpenStack-Ansible release option
+      set_fact:
+        osa_release: "{{ rpc_product_releases[rpc_product_release]['osa_release'] }}"
+        osa_force_clone: true
+      when:
+        - osa_release is undefined
+
+    - name: Set MaaS release option
+      set_fact:
+        maas_release: "{{ rpc_product_releases[rpc_product_release]['maas_release'] }}"
+      when:
+        - maas_release is undefined
+
+    - name: Set the rpc-product bootstrapped variables
+      set_fact:
+        rpc_product_bootstrapped: "{{ rpc_openstack['rpc_product_bootstrapped'] | default('undefined') }}"
+        rpc_product_new_bootstrap: "rpc-{{ rpc_product_release }}-{{ osa_release }}"
+
+    - name: Clone / Checkout OpenStack-Ansible
+      git:
+        repo: "https://git.openstack.org/openstack/openstack-ansible"
+        dest: "/opt/openstack-ansible"
+        version: "{{ osa_release }}"
+        force: "{{ osa_force_clone | default(false) }}"
+
+    - name: Copy basic files into place
+      shell: |
+        rsync -av \
+              --include='*.yml' --include='*/' --exclude='*' \
+              "/opt/openstack-ansible/etc/openstack_deploy/" \
+              /etc/openstack_deploy/
+      args:
+        executable: /bin/bash
+        creates: /etc/openstack_deploy
+      tags:
+        - skip_ansible_lint
+
+    - name: Sync configuration for RPC-OpenStack files
+      shell: |
+        rsync -av \
+              --include='*.yml' --include='*/' --exclude='*' \
+              "{{ playbook_dir }}/../etc/openstack_deploy/" \
+              /etc/openstack_deploy/
+      args:
+        executable: /bin/bash
+      when:
+        - rpc_product_bootstrapped != rpc_product_new_bootstrap
+      tags:
+        - skip_ansible_lint
+
+    - name: Set the product release
+      lineinfile:
+        dest: /etc/openstack_deploy/group_vars/all/release.yml
+        state: present
+        regexp: "^{{ item.key }}:"
+        line: '{{ item.key }}: "{{ item.value }}"'
+      with_dict: "{{ rpc_product_releases[rpc_product_release] }}"
+
+    - name: Remove any existing roles
+      file:
+        path: "{{ item.path | default(role_path_default) }}/{{ item.name | default(item.src | basename) }}"
+        state: absent
+      when:
+        - item.scm == "git" or item.scm is undefined
+        - rpc_product_bootstrapped != rpc_product_new_bootstrap
+      with_items:
+        - "{{ rpco_required_roles }}"
+        - "{{ osa_required_roles }}"
+
+    - name: Ensure the default roles directory exists
+      file:
+        path: "{{ role_path_default }}"
+        state: directory
+
+    - name: Clone OSA and RPC-O roles from git
+      git:
+        repo: "{{ item.src }}"
+        dest: "{{ item.path | default(role_path_default) }}/{{ item.name | default(item.src | basename) }}"
+        version: "{{ item.version | default('master') }}"
+        refspec: "{{ item.refspec | default(omit) }}"
+        depth: "{{ item.depth | default('10') }}"
+        update: true
+        force: true
+      when:
+        - item.scm == "git" or item.scm is undefined
+        - rpc_product_bootstrapped != rpc_product_new_bootstrap
+      with_items:
+        - "{{ osa_required_roles }}"
+        - "{{ rpco_required_roles }}"
+      register: git_clone
+      until: git_clone is succeeded
+      retries: "{{ git_clone_retries }}"
+      delay: "{{ git_clone_retry_delay }}"
+      tags:
+        - skip_ansible_lint
+
+  post_tasks:
+    - name: Remove legacy user variable files
+      file:
+        dest: "/etc/openstack_deploy/{{ item }}"
+        state: absent
+      with_items:
+        - "user_extras_variables.yml"
+        - "user_liberty_vars.yml"
+        - "user_master_vars.yml"
+        - "user_newton_vars.yml"
+        - "user_osa_variables_defaults.yml"
+        - "user_osa_varibles_defaults.yml"
+        - "user_rpc_maas_variables.yml"
+        - "user_rpcm_default_variables.yml"
+        - "user_rpcm_variables_defaults.yml"
+        - "user_rpco_user_variables_defaults.yml"
+        - "user_rpco_variables_defaults.yml"
+
+    - name: Set product release local fact
+      ini_file:
+        dest: "/etc/ansible/facts.d/rpc_openstack.fact"
+        section: "rpc_product"
+        option: "{{ item.option }}"
+        value: "{{ item.value }}"
+      with_items:
+        - { option: "rpc_product_release", value: "{{ rpc_product_release }}" }
+        - { option: "rpc_product_bootstrapped", value: "{{ rpc_product_new_bootstrap }}" }
+
+    - name: Set the product release local facts
+      ini_file:
+        dest: "/etc/ansible/facts.d/rpc_openstack.fact"
+        section: "rpc_product"
+        option: "{{ item.key }}"
+        value: "{{ item.value }}"
+      with_dict: "{{ rpc_product_releases[rpc_product_release] }}"
+
+  vars:
+    ansible_python_interpreter: "/usr/bin/python"
+    rpc_product_release: "{{ lookup('env', 'RPC_PRODUCT_RELEASE') | default('undefined', true) }}"
+    osa_required_roles: "{{ lookup('file', osa_role_file) | from_yaml }}"
+    rpco_required_roles: "{{ lookup('file', rpco_role_file) | from_yaml }}"
+    osa_role_file: "/opt/openstack-ansible/ansible-role-requirements.yml"
+    rpco_role_file: "{{ playbook_dir }}/../ansible-role-{{ rpc_product_release }}-requirements.yml"
+    role_path_default: '/etc/ansible/roles'
+    git_clone_retries: 2
+    git_clone_retry_delay: 5
+
+  vars_files:
+    - vars/rpc-release.yml
+
+  tags:
+    - rpc

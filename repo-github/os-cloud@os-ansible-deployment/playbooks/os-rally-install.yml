@@ -1,0 +1,30 @@
+---
+# Copyright 2016, Comcast Corp.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- name: Installation and setup of Rally
+  hosts: utility_all
+  gather_facts: "{{ gather_facts | default(True) }}"
+  user: root
+  pre_tasks:
+    - include: common-tasks/mysql-db-user.yml
+      static: no
+      vars:
+        user_name: "{{ rally_galera_user }}"
+        password: "{{ rally_galera_password }}"
+        login_host: "{{ rally_galera_address }}"
+        db_name: "{{ rally_galera_database_name }}"
+      when: inventory_hostname == groups['utility_all'][0]
+  roles:
+    - role: "os_rally"

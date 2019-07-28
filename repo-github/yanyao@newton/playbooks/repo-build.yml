@@ -1,0 +1,135 @@
+---
+# Copyright 2015, Rackspace US, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- name: Group repo servers by architecture
+  hosts: repo_all
+  tasks:
+    - name: Group repo servers by architecture
+      group_by:
+        key: repo_servers_{{ ansible_architecture }}
+      tags:
+        - always
+
+    # Use the 'add_host' module to create the repo_nodes group. The add_hosts module
+    # bypasses the play host loop of ansible and runs only once referencing the first
+    # host.  To run it on each host we have to use with_items.  Also note, we have
+    # to manually lookup the ansible_architecture for the 'item' host.
+    - name: Prepare group of master repo servers
+      local_action:
+        module: "add_host"
+        name: "{{ groups['repo_servers_' + hostvars[item].ansible_architecture][0] }}"
+        groups: "repo_nodes"
+      # Process all nodes that don't match the architecture of repo_all[0]
+      when:
+        - hostvars[item].ansible_architecture != hostvars[groups['repo_all'][0]].ansible_architecture
+      with_items:
+        - "{{ groups['repo_all'][1:] }}"
+  tags:
+    - repo-build
+
+# repo_all[0] is built last to ensure it has all build artifacts for final indexing
+#  The repo_nodes group will be populated with the first node of any other system running
+#  different architectures. This group is a meta group created in the previous play and
+#  will not be found within inventory.
+- name: Build new repo packages for a given release
+  hosts: repo_nodes, repo_all[0]
+  gather_facts: "{{ gather_facts | default(True) }}"
+  user: root
+  serial: 1
+  pre_tasks:
+
+    - include: common-tasks/set-upper-constraints.yml
+    - include: common-tasks/set-pip-upstream-url.yml
+
+    - name: Load local packages
+      debug:
+        msg: "Loading Packages"
+      with_py_pkgs: "{{ pkg_locations }}"
+      register: local_packages
+      tags:
+        - always
+
+    - name: Check if the git cache exists on deployment host
+      local_action:
+        module: stat
+        path: "{{ repo_build_git_cache }}"
+      register: _local_git_cache
+      when: repo_build_git_cache is defined
+
+    - name: Check if deployment host has the bind mount for the master repo container
+      local_action:
+        module: stat
+        path: "{{ repo_build_git_bind_mount }}"
+      register: _local_repo_bind_mount
+      when:
+        - inventory_hostname == groups['repo_all'][0]
+        - _local_git_cache.stat is defined
+        - _local_git_cache.stat.exists
+
+    - name: Check if the repo container bind mount is empty
+      local_action: shell
+        ls -1A {{ repo_build_git_bind_mount }}
+      register: _local_repo_bind_mount_contents
+      when:
+        - _local_repo_bind_mount.stat is defined
+        - _local_repo_bind_mount.stat.exists
+        - not _local_repo_bind_mount.stat.islnk
+
+    - name: Remove the bind mounted git directory so we can symlink the cache folder to replace it
+      local_action:
+        module: file
+        path: "{{ repo_build_git_bind_mount }}"
+        state: absent
+      register: _local_repo_bind_mount_dir_remove
+      when:
+        - _local_repo_bind_mount.stat is defined
+        - _local_repo_bind_mount.stat.exists
+        - not _local_repo_bind_mount.stat.islnk
+        - _local_repo_bind_mount_contents.stdout_lines | length == 0
+
+    - name: Symlink the git cache into the repo container bind mount
+      local_action:
+        module: file
+        src: "{{ repo_build_git_cache }}"
+        dest: "{{ repo_build_git_bind_mount }}"
+        state: link
+      when:
+        - _local_git_cache.stat is defined
+        - _local_git_cache.stat.exists
+        - _local_repo_bind_mount.stat is defined
+        - _local_repo_bind_mount.stat.exists
+
+    - name: Synchronise the contents of the git cache to the repo server
+      synchronize:
+        src: "{{ repo_build_git_cache }}"
+        dest: "{{ repo_build_git_dir }}"
+      when:
+        - _local_git_cache.stat is defined
+        - _local_git_cache.stat.exists
+        - _local_repo_bind_mount.stat is defined
+        - not _local_repo_bind_mount.stat.exists
+
+  roles:
+    - role: "repo_build"
+      repo_build_release_tag: "{{ openstack_release }}"
+  vars_files:
+    - defaults/repo_packages/openstack_services.yml
+  vars:
+    pkg_locations:
+      - ../
+      - /etc/ansible/roles
+      - /etc/openstack_deploy
+  tags:
+    - repo-build

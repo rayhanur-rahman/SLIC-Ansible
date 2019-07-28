@@ -1,0 +1,12 @@
+---
+- hosts: gluster_servers
+  become: true
+  gather_facts: no
+
+  tasks:
+  - name: Run a shell script
+    script: "{{ item }}"
+    register: result
+    failed_when: result.rc != 0
+    with_items: "{{ script }}"
+

@@ -1,0 +1,35 @@
+- name: Configure instance(s)
+  hosts: all
+  sudo: True
+  gather_facts: True
+  serial: 10
+  vars:
+    migrate_db: "yes"
+    openid_workaround: True
+  roles:
+    - aws
+    - role: nginx
+      nginx_sites:
+      - cms
+      - lms
+      - ora
+      - xqueue
+      - xserver
+      nginx_default_sites:
+      - lms
+    - edxlocal
+    - mongo
+    - { role: 'edxapp', celery_worker: True }
+    - edxapp
+    - role: demo
+      tags: ['demo']
+    - { role: 'rabbitmq', rabbitmq_ip: '127.0.0.1' }
+    - oraclejdk
+    - elasticsearch
+    - forum
+    - { role: "xqueue", update_users: True }
+    - xserver
+    - ora
+    - discern
+    - certs
+    - edx_ansible

@@ -1,0 +1,54 @@
+---
+# Copyright 2017, IBM US, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Copy the images files from the local host to the horizon host
+- name: Copy ui images to Horizon img directory
+  copy:
+    src: "{{ top_level_os_services_dir }}/osa/dbaas_ui/IDL-Images/"
+    dest: "{{ ui_artwork }}"
+
+# Copy the enabling files from the local host to the horizon host
+- name: Copy ui Horizon  enabling code into enabled
+  copy:
+    src: "{{ top_level_os_services_dir }}/osa/dbaas_ui/enabled_ui/"
+    dest: "{{ ui_enabled }}"
+
+# Create a temp directory for the pip install code
+- name: create tmp directory
+  file:
+    path: "{{ tmp_dir }}"
+    state: directory
+    mode: 0755
+
+# Copy the pip code to the temp directory
+- name: copy pip install code to server
+  copy:
+    src: "{{ top_level_os_services_dir }}/osa/dbaas_ui/"
+    dest: "{{ tmp_dir }}"
+
+# Install the core DBaaS UI code
+- name: Install core DBaaS UI code
+  pip:
+    name: "./."
+    chdir: "{{ tmp_dir }}"
+    state: present
+    virtualenv: "{{ horizon_bin | dirname }}"
+    virtualenv_site_packages: "no"
+
+# Remove the files and temp dir
+- name: Remove tmp directory from horizon container
+  file:
+    path: "{{ tmp_dir }}"
+    state: absent

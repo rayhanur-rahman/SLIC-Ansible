@@ -1,0 +1,31 @@
+---
+- hosts: localhost
+  become: False
+  vars_files:
+    - vars/main.yaml
+  tasks:
+    - import_tasks: roles/aws/tasks/getcreds.yaml
+    - import_tasks: roles/aws/tasks/getazs.yaml
+    - import_tasks: roles/aws/tasks/getec2ami.yaml
+    - import_tasks: roles/aws/tasks/sshkeys.yaml
+    - import_tasks: roles/aws/tasks/ec2keypair.yaml
+    - import_tasks: roles/aws/tasks/iam.yaml
+    - import_tasks: roles/aws/tasks/s3.yaml
+    - import_tasks: roles/aws/tasks/s3policy.yaml
+    - import_tasks: roles/aws/tasks/vpcdhcpopts.yaml
+    - import_tasks: roles/aws/tasks/vpc.yaml
+    - import_tasks: roles/aws/tasks/route53.yaml
+    - import_tasks: roles/aws/tasks/igw.yaml
+    - import_tasks: roles/aws/tasks/subnet.yaml
+    - import_tasks: roles/aws/tasks/natgw.yaml
+    - import_tasks: roles/aws/tasks/routetable.yaml
+    - import_tasks: roles/aws/tasks/routetablerule.yaml
+    - import_tasks: roles/aws/tasks/securitygroup.yaml
+    - import_tasks: roles/aws/tasks/securitygrouprule.yaml
+    - import_tasks: roles/aws/tasks/elb.yaml
+    - import_tasks: roles/aws/tasks/ec2.yaml
+    - import_tasks: roles/aws/tasks/eip.yaml
+    - import_tasks: roles/aws/tasks/ec2elb.yaml
+    - import_tasks: roles/aws/tasks/route53record.yaml
+    - import_tasks: roles/aws/tasks/configfiles.yaml
+    - import_tasks: roles/aws/tasks/configfilesdata.yaml

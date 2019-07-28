@@ -1,0 +1,39 @@
+---
+# Copyright 2016 IBM Corp.
+#
+# All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- name: get the public key associated with the inventory field ["{{ key }}"] for all nodes
+  shell: ssh-keyscan -H -t ssh-rsa "{{ hostvars[item][key] }}"
+  register: ssh_hostkeys
+  ignore_errors: true
+  with_inventory_hostnames: all
+  when: "{{ key in hostvars[item] }}"
+
+#- debug: var=ssh_hostkeys
+
+- name: Add keys to known_hosts file
+  known_hosts:
+    path: "/root/.ssh/known_hosts"
+    name: "{{ item.stderr.split(' ')[1].split(':')[0] }}"
+    # stderr looks like '# ipaddr/hostname:22 SSH-2.0-...'
+    key: "{{ item.stdout }}"
+  when:
+    - "{{ item.rc is defined }}"
+    - item.rc == 0
+    - "{{ item.stdout is defined }}"
+    - item.stdout
+  with_items:
+    - "{{ ssh_hostkeys.results }}"

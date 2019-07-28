@@ -1,0 +1,84 @@
+---
+# Copyright 2016 IBM Corp.
+#
+# All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+  - name: Display current date.
+    debug:
+      msg: "Current timestamp is {{ date }}."
+    run_once: true
+
+  - name: Backup /var/oprc/inventory.yml.
+    copy:
+      src: /var/oprc/inventory.yml
+      dest: "/var/oprc/inventory.yml.{{ date }}"
+    delegate_to: localhost
+    run_once: true
+    when: not report_only|bool
+
+  - name: Create tmp copy of genesis inventory.
+    copy:
+      src: /var/oprc/inventory.yml
+      dest: "/var/oprc/inventory.yml.updating"
+    delegate_to: localhost
+    run_once: true
+
+  # The next three tasks (account, container, and object)
+  # all look quite similar but need to be subtly different
+  # and cannot be combined since they require different
+  # conditionals.  Each is optional for a given host, since
+  # some hosts may contain only metadata, some only userdata,
+  # and others may contain both metadata and userdata.
+
+  - name: Update genesis inventory with account disk list.
+    command: >
+      {{ role_path }}/files/swift_update_disk_lists.py
+      -n {{ inventory_hostname }}
+      -i /var/oprc/inventory.yml.updating
+      -o /var/oprc/inventory.yml.updating
+      -d {{ execute_dir }}/output.account.diskprep.{{ inventory_hostname }}
+      -t account
+    when: account_devices|length > 0
+    delegate_to: localhost
+
+  - name: Update genesis inventory with container disk list.
+    command: >
+      {{ role_path }}/files/swift_update_disk_lists.py
+      -n {{ inventory_hostname }}
+      -i /var/oprc/inventory.yml.updating
+      -o /var/oprc/inventory.yml.updating
+      -d {{ execute_dir }}/output.container.diskprep.{{ inventory_hostname }}
+      -t container
+    when: container_devices|length > 0
+    delegate_to: localhost
+
+  - name: Update genesis inventory with object disk list.
+    command: >
+      {{ role_path }}/files/swift_update_disk_lists.py
+      -n {{ inventory_hostname }}
+      -i /var/oprc/inventory.yml.updating
+      -o /var/oprc/inventory.yml.updating
+      -d {{ execute_dir }}/output.object.diskprep.{{ inventory_hostname }}
+      -t object
+    when: object_devices|length > 0
+    delegate_to: localhost
+
+  - name: Modify /var/oprc/inventory.yml.
+    command: >
+      mv /var/oprc/inventory.yml.updating /var/oprc/inventory.yml
+    when: not report_only|bool
+    run_once: True
+    delegate_to: localhost
+

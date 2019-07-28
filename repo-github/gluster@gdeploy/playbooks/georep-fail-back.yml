@@ -1,0 +1,23 @@
+---
+- hosts: master
+  become: true
+  gather_facts: no
+
+  tasks:
+  - name: Stop the geo-rep session
+    geo_rep: action=stop
+            mastervol="{{ slavevolname }}"
+            slavevol="{{ mastervol }}"
+            force="{{ force }}"
+
+  - name: Delete the geo-rep session
+    geo_rep: action=delete
+            mastervol="{{ slavevolname }}"
+            slavevol="{{ mastervol }}"
+
+  - name: Sets options for volume
+    volume_set: action=reset
+                volume="{{ volname }}"
+                key={{ item }}
+                force="{{force}}"
+    with_items: "{{ key }}"

@@ -1,0 +1,7 @@
+- name: Deploy xqueue
+  hosts: all
+  become: True
+  gather_facts: True
+  roles:
+    - common
+    - xqueue

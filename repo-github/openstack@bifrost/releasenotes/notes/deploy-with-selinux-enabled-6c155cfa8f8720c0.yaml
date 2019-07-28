@@ -1,0 +1,7 @@
+---
+features:
+  - Previously bifrost deployments on RedHat/Suse systems
+    had to be performed with selinux at least in
+    permissive mode. This patch adds the necessary policies
+    to allow the components to operate with selinux in
+    enforcing mode.

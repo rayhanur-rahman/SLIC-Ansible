@@ -1,0 +1,14 @@
+---
+- name: Ensure that we have a rw etcd
+  hosts: etcd-sec[0]
+  tasks:
+    - name: Get the number of alive nodes
+      shell: 'etcdctl -C https://{{ ansible_default_ipv4.address }}:2379 --cert-file /etc/etcd/peer.crt --key-file /etc/etcd/peer.key --ca-file /etc/etcd/ca.crt cluster-health | grep "^member [a-f0-9]* is healthy:" | wc -l'
+      become: True
+      register: etcd_healthy_nodes
+
+- name: Ensure that all nodes are up and running
+  hosts: etcd-pri
+  serial: 1
+  roles:
+    - etcd_fallback

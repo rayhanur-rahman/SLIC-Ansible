@@ -1,0 +1,18 @@
+---
+- hosts: gluster_servers
+  become: true
+  gather_facts: no
+
+  tasks:
+  - name: Copy the public key to remote nodes
+    copy: src={{ item }}/var/lib/glusterd/nfs/secret.pem.pub
+          dest=/var/lib/glusterd/nfs/secret.pem.pub mode=600
+    with_items: "{{ master_node }}"
+
+  - name: Copy the private key to remote node
+    copy: src={{ item }}/var/lib/glusterd/nfs/secret.pem
+          dest=/var/lib/glusterd/nfs/secret.pem mode=0600
+    with_items: "{{ master_node }}"
+
+  - name: Deploy the pubkey ~/root/.ssh/authorized_keys on all nodes
+    shell: cat /var/lib/glusterd/nfs/secret.pem.pub >> ~/.ssh/authorized_keys

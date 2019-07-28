@@ -1,0 +1,143 @@
+---
+#
+# edX Configuration
+#
+# github:     https://github.com/edx/configuration
+# wiki:       https://openedx.atlassian.net/wiki/display/OpenOPS
+# code style: https://openedx.atlassian.net/wiki/display/OpenOPS/Ansible+Code+Conventions
+# license:    https://github.com/edx/configuration/blob/master/LICENSE.TXT
+#
+#
+#
+# Tasks for role splunk
+#
+# Overview:
+#
+#
+# Dependencies:
+#
+#
+# Example play:
+#
+#
+
+# Install Splunk Forwarder
+- name: Install splunkforwarder specific system packages
+  apt:
+    name: "{{ item }}"
+    state: present
+  with_items: "{{ splunk_debian_pkgs }}"
+  tags:
+    - splunk
+    - install
+    - update
+
+- name: Download the splunk deb
+  get_url:
+    dest: "/tmp/{{ SPLUNKFORWARDER_DEB }}"
+    url: "{{ SPLUNKFORWARDER_PACKAGE_URL }}"
+  register: download_deb
+  until: download_deb|succeeded
+  retries: 5
+
+- name: Install splunk forwarder
+  shell: "gdebi -nq /tmp/{{ SPLUNKFORWARDER_DEB }}"
+  when: download_deb.changed
+
+- name: Create splunk user
+  user:
+    name: splunk
+    createhome: no
+    state: present
+    append: yes
+    groups: syslog,adm
+  when: download_deb.changed
+
+# Need to start splunk manually so that it can create various files
+# and directories that aren't created till the first run and are needed
+# to run some of the below commands.
+- name: Start splunk manually
+  shell: "{{ splunkforwarder_output_dir }}/bin/splunk start --accept-license --answer-yes --no-prompt"
+  args:
+    creates: "{{ splunkforwarder_output_dir }}/var/lib/splunk"
+  when: download_deb.changed
+  register: started_manually
+
+- name: Stop splunk manually
+  shell: "{{ splunkforwarder_output_dir }}/bin/splunk stop --accept-license --answer-yes --no-prompt"
+  when: download_deb.changed and started_manually.changed
+
+- name: Create boot script
+  shell: "{{ splunkforwarder_output_dir }}/bin/splunk enable boot-start -user splunk --accept-license --answer-yes --no-prompt"
+  args:
+    creates: /etc/init.d/splunk
+  register: create_boot_script
+  when: download_deb.changed
+  notify: restart splunkforwarder
+
+- name: Ensure splunk forder permissions
+  file:
+    path: "{{ splunkforwarder_output_dir }}"
+    state: directory
+    recurse: yes
+    owner: splunk
+    group: splunk
+  when: download_deb.changed
+  notify: restart splunkforwarder
+
+- name: Update admin pasword
+  shell: "{{ splunkforwarder_output_dir }}/bin/splunk edit user admin -password '{{ SPLUNKFORWARDER_PASSWORD }}' -auth admin:changeme --accept-license --answer-yes --no-prompt"
+  when: download_deb.changed
+  notify: restart splunkforwarder
+
+- name: Add chkconfig to init script
+  lineinfile:
+    dest: /etc/init.d/splunk
+    regexp: "^# chkconfig: 235 98 55"
+    line: "# chkconfig: 235 98 55"
+    insertafter: "#!/bin/sh"
+    state: present
+  when: download_deb.changed and create_boot_script.changed
+  notify: restart splunkforwarder
+
+- name: Make sure necessary dirs exist
+  file:
+    path: "{{ item }}"
+    owner: splunk
+    group: splunk
+    state: directory
+  with_items:
+    - "{{ splunkforwarder_output_dir }}/{{ splunkforwarder_ssl_cert_path }}"
+    - /opt/splunkforwarder/etc/system/local
+
+- name: Write SSL certs to disk
+  copy:
+    dest: "{{ splunkforwarder_output_dir }}/{{ splunkforwarder_ssl_cert_path }}/{{ item.target_group }}.pem"
+    content: "{{ item.ssl_cert }}"
+    owner: splunk
+    group: splunk
+    mode: "0400"
+  when: item.ssl_cert is defined
+  with_items: "{{ SPLUNKFORWARDER_SERVERS }}"
+
+- name: Write root CA to disk
+  copy:
+    dest: "{{ splunkforwarder_output_dir }}/{{ splunkforwarder_ssl_cert_path }}/{{ item.target_group }}-rootca.pem"
+    content: "{{ item.ssl_root_ca }}"
+    owner: splunk
+    group: splunk
+    mode: "0400"
+  when: item.ssl_cert is defined
+  with_items: "{{ SPLUNKFORWARDER_SERVERS }}"
+
+- name: Create inputs and outputs configuration
+  template:
+    src: "opt/splunkforwarder/etc/system/local/{{ item }}.conf.j2"
+    dest: "/opt/splunkforwarder/etc/system/local/{{ item }}.conf"
+    owner: splunk
+    group: splunk
+    mode: "0644"
+  with_items:
+    - inputs
+    - outputs
+  notify: restart splunkforwarder

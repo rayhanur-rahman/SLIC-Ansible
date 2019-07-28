@@ -1,0 +1,38 @@
+---
+- name: 'Check if foreman_installer_options is a string'
+  fail:
+    msg: 'foreman_installer_options must be an array'
+  when: foreman_installer_options is string
+
+- name: 'Read installer version'
+  slurp:
+    src: /usr/share/foreman-installer/VERSION
+  register: foreman_installer_version_file
+
+- debug:
+    msg: "Foreman installer version {{ foreman_installer_version_file['content'] | b64decode }}"
+
+- name: 'Join options'
+  set_fact:
+    foreman_installer_options_joined: "{{ foreman_installer_options | join(' ') }} {{ foreman_installer_options_internal_use_only | join(' ') }}"
+
+- name: 'Replace certs-tar and --inital-admin parms with legacy options'
+  set_fact:
+    foreman_installer_options_joined: "{{ foreman_installer_options_joined | replace(item.new, item.old) }}"
+  when: foreman_installer_version_file['content'] | b64decode is version('1.21', '<')
+  with_items:
+    - { new: '--certs-tar-file', old: '--foreman-proxy-content-certs-tar' }
+    - { new: '--foreman-initial-admin-email', old: '--foreman-admin-email' }
+    - { new: '--foreman-initial-admin-first-name', old: '--foreman-admin-first-name' }
+    - { new: '--foreman-initial-admin-last-name', old: '--foreman-admin-last-name' }
+    - { new: '--foreman-initial-admin-password', old: '--foreman-admin-password' }
+    - { new: '--foreman-initial-admin-username', old: '--foreman-admin-username' }
+
+- name: 'Run installer'
+  shell: >
+      {{ foreman_installer_command }} {{ (foreman_installer_verbose == True) | ternary("-v", "") }}
+      {{ foreman_installer_scenario_flag }} {{ foreman_installer_scenario }}
+      {{ foreman_installer_options_joined }}
+  when: not foreman_installer_skip_installer
+  tags:
+    - installation

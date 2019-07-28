@@ -1,0 +1,85 @@
+---
+# Copyright 2014, Rackspace US, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- name: Galera container config
+  hosts: galera_all
+  max_fail_percentage: 0
+  tasks:
+    - name: Use the lxc-openstack aa profile
+      lxc_container:
+        name: "{{ container_name }}"
+        container_config:
+          - "lxc.aa_profile=lxc-openstack"
+      delegate_to: "{{ physical_host }}"
+      when: not is_metal | bool
+      register: container_config
+      tags:
+        - lxc-aa-profile
+    - name: Galera extra lxc config
+      lxc_container:
+        name: "{{ container_name }}"
+        container_command: |
+          [[ ! -d "/var/lib/mysql" ]] && mkdir -p "/var/lib/mysql"
+        container_config:
+          - "lxc.mount.entry=/openstack/{{ container_name }} var/lib/mysql none bind 0 0"
+      delegate_to: "{{ physical_host }}"
+      when: not is_metal | bool
+      register: container_extra_config
+      tags:
+        - galera-mysql-dir
+    - name: Wait for container ssh
+      wait_for:
+        port: "22"
+        delay: "{{ ssh_delay }}"
+        search_regex: "OpenSSH"
+        host: "{{ ansible_ssh_host }}"
+      delegate_to: "{{ physical_host }}"
+      when: >
+            (container_config is defined and container_config | changed) or
+            (container_extra_config is defined and container_extra_config | changed)
+      tags:
+        - galera-ssh-wait
+  vars:
+    is_metal: "{{ properties.is_metal|default(false) }}"
+  tags:
+    - galera-lxc-container-setup
+
+- name: Install galera server
+  hosts: galera_all
+  serial: 1
+  max_fail_percentage: 20
+  user: root
+  roles:
+    - { role: "galera_server", tags: [ "galera-server" ] }
+    - role: "rsyslog_client"
+      rsyslog_client_log_rotate_file: galera_log_rotate
+      rsyslog_client_log_dir: "/var/log/mysql_logs"
+      rsyslog_client_log_files:
+        - /var/log/mysql.log
+        - /var/log/mysql.err
+      rsyslog_client_config_name: "99-galera-rsyslog-client.conf"
+      tags:
+        - "galera-rsyslog-client"
+        - "rsyslog-client"
+    - role: "system_crontab_coordination"
+      tags:
+        - "system-crontab-coordination"
+  vars:
+    galera_server_id: "{{ inventory_hostname | string_2_int }}"
+    galera_wsrep_node_name: "{{ container_name }}"
+    galera_lb_address: "{{ internal_lb_vip_address }}"
+    ansible_hostname: "{{ container_name }}"
+  tags:
+    - galera-install-cluster

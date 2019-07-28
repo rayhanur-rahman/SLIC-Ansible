@@ -1,0 +1,9 @@
+---
+- name: create instance groups
+  hosts: localhost
+  roles:
+  - instance-groups
+
+- include: ../../../../playbooks/prerequisite.yaml
+- include: ../../../../../openshift-ansible/playbooks/byo/config.yml
+- include: openshift-post.yaml

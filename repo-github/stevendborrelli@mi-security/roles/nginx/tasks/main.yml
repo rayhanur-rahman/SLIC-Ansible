@@ -1,0 +1,33 @@
+---
+- name: create tls directory structure
+  sudo: yes
+  file:
+    path: /etc/nginx/ssl
+    state: directory
+    mode: 0700
+  tags:
+    - nginx
+
+- name: deploy tls files
+  sudo: yes
+  copy:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    mode: u=r
+  with_items:
+    - src: ssl/certs/nginx.cert.pem
+      dest: /etc/nginx/ssl/nginx.cert
+    - src: ssl/private/nginx.key.pem
+      dest: /etc/nginx/ssl/nginx.key
+  tags:
+    - nginx
+
+- name: encrypt admin password
+  sudo: yes
+  shell: htpasswd -Bnb admin {{ nginx_admin_password }} | cut -f 2 -d ':'
+  register: nginx_admin_password_encrypted
+  changed_when: no
+
+- name: set admin password variable
+  set_fact:
+    nginx_admin_password_encrypted: "{{ nginx_admin_password_encrypted.stdout }}"

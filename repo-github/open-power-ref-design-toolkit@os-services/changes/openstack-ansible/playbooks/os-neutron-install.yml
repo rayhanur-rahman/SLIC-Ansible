@@ -1,0 +1,124 @@
+---
+# Copyright 2014, Rackspace US, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- name: Configure Neutron dynamic host groupings
+  hosts: localhost
+  gather_facts: no
+  tags:
+    - neutron
+  tasks:
+    - include: common-tasks/dynamic-grouping.yml
+      vars:
+        src_group: "nova_compute"
+        dest_group: "neutron_l3_agent, neutron_metadata_agent"
+      when:
+        - "neutron_plugin_type == 'ml2.ovs.dvr'"
+
+
+
+- name: Prepare MQ/DB services
+  hosts: neutron_all
+  gather_facts: no
+  user: root
+  environment: "{{ deployment_environment_variables | default({}) }}"
+  tags:
+    - neutron
+  tasks:
+
+    - name: Configure rabbitmq vhost/user
+      include: common-tasks/rabbitmq-vhost-user.yml
+      vars:
+        user: "{{ neutron_rabbitmq_userid }}"
+        password: "{{ neutron_rabbitmq_password }}"
+        vhost: "{{ neutron_rabbitmq_vhost }}"
+        _rabbitmq_host_group: "{{ neutron_rabbitmq_host_group }}"
+      when:
+        - groups[neutron_rabbitmq_host_group] | length > 0
+      run_once: yes
+
+    - name: Configure rabbitmq vhost/user (telemetry)
+      include: common-tasks/rabbitmq-vhost-user.yml
+      vars:
+        user: "{{ neutron_rabbitmq_telemetry_userid }}"
+        password: "{{ neutron_rabbitmq_telemetry_password }}"
+        vhost: "{{ neutron_rabbitmq_telemetry_vhost }}"
+        _rabbitmq_host_group: "{{ neutron_rabbitmq_telemetry_host_group }}"
+      when:
+        - neutron_ceilometer_enabled | bool
+        - groups[neutron_rabbitmq_telemetry_host_group] is defined
+        - groups[neutron_rabbitmq_telemetry_host_group] | length > 0
+        - groups[neutron_rabbitmq_telemetry_host_group] != groups[neutron_rabbitmq_host_group]
+      run_once: yes
+
+    - name: Configure MySQL user
+      include: common-tasks/mysql-db-user.yml
+      static: no
+      vars:
+        user_name: "{{ neutron_galera_user }}"
+        password: "{{ neutron_container_mysql_password }}"
+        login_host: "{{ neutron_galera_address }}"
+        db_name: "{{ neutron_galera_database }}"
+      run_once: yes
+
+    - name: Update the sysctl conf to disable ipv6
+      sysctl:
+        name: "{{ item.key }}"
+        value: "{{ item.value }}"
+        sysctl_set: "{{ item.set|default('yes') }}"
+        state: "{{ item.state|default('present') }}"
+        reload: "{{ item.reload|default('yes') }}"
+      with_items:
+        - { key: 'net.ipv6.conf.all.disable_ipv6', value: 1 }
+        - { key: 'net.ipv6.conf.default.disable_ipv6', value: 1 }
+        - { key: 'net.ipv6.conf.lo.disable_ipv6', value: 1 }
+      tags:
+        - disable_ipv6
+    # Add a startup script for neutron related containers so that
+    # ipv6 gets disabled even after restart of containers
+    - name: Script to reload sysctl configuration in container
+      copy:
+        content: |
+          #!/usr/bin/env bash
+          set -e -x
+          sysctl -p
+        dest: "/usr/local/bin/reload-sysctl-conf.sh"
+        mode: "0755"
+      when:
+        - not is_metal | bool
+      tags:
+        - disable_ipv6
+
+
+- name: Install neutron server
+  include: common-playbooks/neutron.yml
+  vars:
+    neutron_hosts: "neutron_server"
+    neutron_serial: "{{ neutron_server_serial | default('100%') }}"
+
+
+
+- name: Install neutron L2 agents
+  include: common-playbooks/neutron.yml
+  vars:
+    neutron_hosts: "neutron_linuxbridge_agent:neutron_openvswitch_agent:!neutron_server"
+    neutron_serial: "{{ neutron_agent_serial | default('50%') }}"
+
+
+
+- name: Install all other neutron agents
+  include: common-playbooks/neutron.yml
+  vars:
+    neutron_hosts: "neutron_all:!neutron_linuxbridge_agent:!neutron_openvswitch_agent:!neutron_server"
+    neutron_serial: "{{ neutron_other_serial | default('20%') }}"

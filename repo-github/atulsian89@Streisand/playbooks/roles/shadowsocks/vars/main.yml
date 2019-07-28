@@ -1,0 +1,10 @@
+---
+shadowsocks_location: "/etc/shadowsocks-libev"
+shadowsocks_password_file: "{{ shadowsocks_location }}/shadowsocks-password.txt"
+
+shadowsocks_gateway_location: "{{ streisand_gateway_location }}/shadowsocks"
+
+shadowsocks_markdown_instructions: "{{ shadowsocks_gateway_location }}/index.md"
+shadowsocks_html_instructions: "{{ shadowsocks_gateway_location }}/index.html"
+
+shadowsocks_qr_code: "{{ shadowsocks_gateway_location }}/shadowsocks-qr-code.png"

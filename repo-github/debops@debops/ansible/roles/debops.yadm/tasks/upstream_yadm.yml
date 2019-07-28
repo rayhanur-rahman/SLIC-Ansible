@@ -1,0 +1,14 @@
+---
+
+- name: Clone the yadm upstream repository
+  git:
+    repo: '{{ yadm__upstream_repo }}'
+    dest: '{{ yadm__upstream_dest }}'
+    version: '{{ yadm__upstream_version }}'
+    verify_commit: True
+
+- name: Symlink the upstream yadm binary in $PATH
+  file:
+    dest: '{{ yadm__upstream_link }}'
+    src: '{{ yadm__upstream_dest + "/yadm" }}'
+    state: 'link'

@@ -1,0 +1,10 @@
+---
+- hosts: localhost
+  connection: local
+  name: "Remove the master_images folder and deployment kernel/ramdisk for clean redeployments when testing."
+  become: yes
+  gather_facts: yes
+  tasks:
+    - file: path="{{ironic_tftp_master_path}}" state=absent
+    - file: path="{{ipa_kernel}}" state=absent
+    - file: path="{{ipa_ramdisk}}" state=absent

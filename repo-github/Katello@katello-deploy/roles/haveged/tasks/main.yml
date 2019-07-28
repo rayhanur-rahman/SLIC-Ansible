@@ -1,0 +1,9 @@
+- name: 'Install Haveged (faster population of PRNG)'
+  package:
+    name: haveged
+    state: present
+
+- name: 'Start Haveged'
+  service:
+    name: haveged
+    state: started

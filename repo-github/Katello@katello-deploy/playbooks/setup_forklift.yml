@@ -1,0 +1,30 @@
+---
+- hosts: all
+  become: true
+  vars:
+    vagrant_libvirt: true
+    vagrant_version: 2.1.1
+  roles:
+    - role: libvirt
+    - role: vagrant
+    - role: epel_repositories
+
+- hosts: all
+  become: true
+  vars:
+    forklift_url: "https://github.com/theforeman/forklift"
+    forklift_version: master
+  tasks:
+    - name: 'Install Forklift dependencies'
+      package:
+        name:
+          - ansible
+          - git
+          - rubygem-deep_merge
+        state: 'present'
+
+    - name: 'Clone Forklift'
+      git:
+        repo: "{{ forklift_url }}"
+        version: "{{ forklift_version }}"
+        dest: './forklift'

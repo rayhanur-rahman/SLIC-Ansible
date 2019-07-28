@@ -1,0 +1,111 @@
+---
+  # Check variables
+  - assert:
+      that: "sat_install_source == 'repo' or sat_install_source == 'cdn'"
+      msg: "Satellite install source (sat_install_source) have to be either 'repo' or 'cdn' (current value is '{{ sat_install_source }}')"
+
+  # We will need base RHEL and Software Collections for sure,
+  # repo with Satellite packages (either custom repo or CDN repo
+  # will be configured lower)
+  - name: "Determine pool we are going to attach to"
+    command:
+      subscription-manager list --available --all --matches "{{ sat_install_pool }}" --pool-only
+    register: querying
+    until: "querying.rc == 0"
+    retries: 5
+    delay: 10
+  - debug:
+      var: querying
+  - name: "Attach to the pool"
+    command:
+      subscription-manager attach --pool "{{ querying.stdout_lines|first }}"
+    when: querying.stdout!=""
+    register: attaching
+    until: "attaching.rc == 0"
+    retries: 5
+    delay: 10
+    failed_when: "attaching.rc != 0 and 'This unit has already had the subscription matching pool ID' not in attaching.stdout"
+  - name: "Disable all RHSM repos"
+    shell:
+      subscription-manager repos --disable '*'
+  - name: "Enable all SM repos required for installation"
+    shell:
+      subscription-manager repos --enable "{{ item }}"
+    with_items: "{{ sat_installation_repos }}"
+
+  # Setup repo when installing from custom repository
+
+  # Get repofile from http[s]/ftp[s] URL if the file is remote
+  - name: "Custom Satellite repo configured"
+    get_url:
+      url: "{{ sat_repo_file }}"
+      dest: /etc/yum.repos.d/satellite.repo
+      force: yes
+    when:
+      - sat_install_source is match("repo")
+      - sat_repo_file is search("^(https?|s?ftps?):\/\/")
+
+  # Get repofile from a local source
+  - name: "Custom Satellite repo configured"
+    copy:
+      src: "{{ sat_repo_file }}"
+      dest: /etc/yum.repos.d/satellite.repo
+      force: yes
+    when:
+      - sat_install_source is match("repo")
+      - sat_repo_file is search("^(?!(https?|s?ftps?):\/\/)")
+
+  # Get potential additional repo files from a remote URL
+  - name: "Install additional repo files if defined"
+    get_url:
+      url: '{{ item.repo_file_url }}'
+      dest: '/etc/yum.repos.d/{{ item.target_repo_filename }}'
+    when:
+      - additional_repo_files is defined
+      - additional_repo_files
+      - item.repo_file_url is search("^(https?|s?ftps?):\/\/")
+    with_items: '{{ additional_repo_files }}'
+
+  # Get potential additional repo files from a local filepath
+  - name: "Install additional repo files if defined"
+    copy:
+      src: '{{ item.repo_file_url }}'
+      dest: '/etc/yum.repos.d/{{ item.target_repo_filename }}'
+    when:
+      - additional_repo_files is defined
+      - additional_repo_files
+      - item.repo_file_url is search("^(?!(https?|s?ftps?):\/\/)")
+    with_items: '{{ additional_repo_files }}'
+
+  # Setup repos when installing from CDN
+  - name: "CDN Satellite repo configured"
+    shell: |
+      subscription-manager repos --enable "{{ sat_cdn_reponame }}"
+    when: "sat_install_source == 'cdn'"
+
+  # Now, finally install required packages and install the Satellite
+  - name: "Cleanup yum cache"
+    shell:
+      rm -rf /var/cache/yum/*
+  - name: "Package satellite installed"
+    yum:
+      name: "{{ sat_installer_pkg }}"
+      state: present
+    register: installing
+  - name: "Determine installer options for <=6.5"
+    set_fact:
+      sat_installer_options: "--foreman-admin-email {{ sat_email }} --foreman-admin-username {{ sat_user }} --foreman-admin-password {{ sat_pass }}"
+    when: "sat_version is version('6.5', '<=')"
+  - name: "Determine installer options for >=6.6"
+    set_fact:
+      sat_installer_options: "--foreman-initial-admin-email {{ sat_email }} --foreman-initial-admin-username {{ sat_user }} --foreman-initial-admin-password {{ sat_pass }}"
+    when: "sat_version is version('6.6', '>=')"
+  - name: "Satellite configured"
+    command:
+      "{{ sat_installer_cmd }} {{ sat_installer_options }}"
+    when: installing.changed
+  - name: "Install the katello-client-bootstrap package"
+    yum:
+      name: katello-client-bootstrap
+      state: present
+...

@@ -1,0 +1,6 @@
+parameters:
+    loadbalancer_type: 'external'
+
+resource_registry:
+    OOShift::LoadBalancer: loadbalancer_external.yaml
+    OOShift::IPFailover: ipfailover_none.yaml

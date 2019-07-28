@@ -1,0 +1,140 @@
+---
+# Copyright 2018 IBM Corp.
+#
+# All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+version: v2.0
+
+globals:
+    introspection: False
+    switch_mode_mgmt: active
+
+location:
+    racks:
+        - label: rack1
+
+deployer:
+    networks:
+        mgmt:
+            - device: enP10p1s0f0
+              interface_ipaddr: 192.168.5.2
+              netmask: 255.255.255.0
+              vlan: 5
+        client:
+            - device: enP10p1s0f0
+              type: ipmi
+              container_ipaddr: 192.168.30.2
+              bridge_ipaddr: 192.168.30.3
+              netmask: 255.255.255.0
+              vlan: 30
+            - device: enP10p1s0f0
+              type: pxe
+              container_ipaddr: 192.168.40.2
+              bridge_ipaddr: 192.168.40.3
+              netmask: 255.255.255.0
+              vlan: 40
+
+switches:
+    mgmt:
+        - label: mgmt1
+          class: lenovo
+          userid: admin
+          password: passw0rd
+          interfaces:
+              - type: outband
+                ipaddr: 192.168.5.10
+                port: 1
+          links:
+              - target: deployer
+                ports: 2
+
+    # Note that there must be a data switch defined in the config file. In this
+    # case the data and mgmt switch are the same physical switch
+    data:
+        - label: data1
+          class: lenovo
+          userid: admin
+          password: passw0rd
+          interfaces:
+              - type: outband
+                ipaddr: 192.168.5.10
+                port: 1
+          links:
+              - target: deployer
+                ports: 2
+
+interfaces:
+    - label: pxe-ifc
+      description: pxe interface
+      DEVICE: eth0
+      TYPE: Ethernet
+      BOOTPROTO: dhcp
+      ONBOOT: yes
+      NM_CONTROLLED: no
+
+    - label: static_1
+      description: static interface 1
+      DEVICE: eth1
+      TYPE: Ethernet
+      BOOTPROTO: none
+      ONBOOT: yes
+      IPADDR_list:
+          - 192.168.1.10-192.168.1.12  # address range
+      NETMASK: 255.255.255.0
+      BROADCAST: 192.168.1.255
+      GATEWAY: 192.168.1.1
+      NM_CONTROLLED: no
+
+networks:
+    - label: static-ifc1
+      interfaces:
+          - static_1
+
+node_templates:
+    - label: rhel72-node
+      ipmi:
+          userid: ADMIN
+          password: admin
+      os:
+          profile: RHEL-7.3-20161019.0-Server-ppc64le-dvd1.iso
+          hostname_prefix: rhel72
+          users:
+              - name: user1
+                password: $6$Utk.IILMG9.$EepS/sIgD4aA.qYQ3voZL9yI3/5Q4vv.p2s4sSmfCLAJlLAuaEmXDizDaBmJYGqHpobwpU2l4rJW.uUY4WNyv.
+                groups: sudo
+          install_device: /dev/sda
+      physical_interfaces:
+          ipmi:
+              - switch: mgmt1
+                ports:
+                    - 16
+                    - 18
+                    - 20
+          pxe:
+              - switch: mgmt1
+                interface: pxe-ifc
+                rename: true
+                ports:
+                    - 17
+                    - 19
+                    - 21
+          data:
+              - switch: mgmt1
+                interface: static_1
+                rename: true
+                ports:
+                    - 24
+                    - 26
+                    - 28

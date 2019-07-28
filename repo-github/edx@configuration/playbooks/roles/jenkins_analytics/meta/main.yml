@@ -1,0 +1,3 @@
+dependencies:
+  - role: jenkins_master
+    jenkins_plugins: "{{ jenkins_analytics_plugins }}"

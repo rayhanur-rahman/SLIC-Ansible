@@ -1,0 +1,5 @@
+---
+- hosts: server foreman-proxy-content
+  roles:
+    - role: robottelo
+      become: true

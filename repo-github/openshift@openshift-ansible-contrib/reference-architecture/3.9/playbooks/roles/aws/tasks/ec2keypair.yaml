@@ -1,0 +1,7 @@
+---
+- name: "{{ 'Create' if (state is undefined or 'absent' not in state) else 'Terminate' }} EC2 KeyPair"
+  ec2_key:
+    key_material: "{{ lookup('file', '~/.ssh/' + clusterid + '.' + dns_domain + '.pub') | expanduser if (state is undefined or 'absent' not in state) else '' }}"
+    name: "{{ clusterid }}.{{ dns_domain }}"
+    region: "{{ aws_region }}"
+    state: "{{ state | default('present') }}"

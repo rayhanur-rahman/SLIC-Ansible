@@ -1,0 +1,74 @@
+---
+# Copyright 2014, Rackspace US, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- name: Installation and setup of Swift
+  hosts: swift_all:swift_remote_all
+  gather_facts: "{{ gather_facts | default(True) }}"
+  max_fail_percentage: 20
+  user: root
+  pre_tasks:
+    - include: common-tasks/os-lxc-container-setup.yml
+      vars:
+        extra_container_config_no_restart:
+          - "lxc.start.order=79"
+    - include: common-tasks/os-log-dir-setup.yml
+      vars:
+        log_dirs:
+          - src: "/openstack/log/{{ inventory_hostname }}-swift"
+            dest: "/var/log/swift"
+            owner: "syslog"
+            group: "syslog"
+    - include: common-tasks/package-cache-proxy.yml
+
+    # If we're using ceilometer then swift needs a rabbitmq/vhost & usera
+    - include: common-tasks/rabbitmq-vhost-user.yml
+      static: no
+      vars:
+        user: "{{ swift_rabbitmq_telemetry_userid }}"
+        password: "{{ swift_rabbitmq_telemetry_password }}"
+        vhost: "{{ swift_rabbitmq_telemetry_vhost }}"
+        _rabbitmq_host_group: "{{ swift_rabbitmq_telemetry_host_group }}"
+      when:
+        - swift_ceilometer_enabled | bool
+        - inventory_hostname == groups['swift_all'][0]
+      tags:
+        - always
+  roles:
+    - role: "os_swift"
+      swift_do_setup: True
+      swift_do_sync: True
+  vars:
+    is_metal: "{{ properties.is_metal|default(false) }}"
+  tags:
+    - swift
+
+- name: Installation and setup of Swift
+  hosts: swift_all
+  max_fail_percentage: 20
+  user: root
+  roles:
+    - role: "rsyslog_client"
+      rsyslog_client_log_rotate_file: swift_log_rotate
+      rsyslog_client_log_dir: "/var/log/swift"
+      rsyslog_client_config_name: "99-swift-rsyslog-client.conf"
+      rsyslog_client_log_files:
+        - /var/log/rsyncd.log
+      tags:
+        - rsyslog
+    - role: "system_crontab_coordination"
+      tags:
+        - crontab
+  tags:
+    - swift

@@ -1,0 +1,49 @@
+---
+# Copyright 2016 IBM Corp.
+#
+# All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+  - name: Set starting values for device lists and mount points.
+    set_fact:
+      account_devices: {}
+      container_devices: {}
+      object_devices: {}
+      metadata_mount_point: {}
+      object_mount_point: {}
+
+  - name: Set domain-settings shortcuts.
+    set_fact:
+      template_ds: "{{ node_templates[template]['domain-settings'] | default({}) }}"
+      host_ds: "{{ hostvars[inventory_hostname]['domain_settings'] | default({}) }}"
+
+  - name: Set Swift host device lists and mountpoint.
+    set_fact:
+      account_devices: "{{ host_ds['account-ring-devices'] | default(template_ds['account-ring-devices']) | default({}) }}"
+      container_devices: "{{ host_ds['container-ring-devices'] | default(template_ds['container-ring-devices']) | default({}) }}"
+      metadata_mount_point: "{{ host_ds['mount-point'] | default(template_ds['mount-point']) | default('/srv/node') }}"
+      object_devices: "{{ host_ds['object-ring-devices'] | default(template_ds['object-ring-devices']) | default({}) }}"
+      object_mount_point: "{{ host_ds['mount-point'] | default(template_ds['mount-point']) | default('/srv/node') }}"
+
+  - name: Print device list settings.
+    debug:
+      msg: "{{ item }}"
+    with_items:
+      - "account_devices={{ account_devices }}"
+      - "container_devices={{ container_devices }}"
+      - "metadata_mount_point={{ metadata_mount_point }}"
+      - "object_devices={{ object_devices }}"
+      - "object_mount_point={{ object_mount_point }}"
+      - "group_names={{ group_names }}"
+

@@ -1,0 +1,99 @@
+---
+- debug: var=obg_named_certificates
+- debug: var=obg_custom_cors_origin
+
+- name: Set common vars
+  fail:
+    msg: "Please define {{ item }}"
+  when: "{{ item }} is undefined"
+  with_items:
+  - obg_clusterid
+  - obg_registry_template
+  - obg_inventory_sdn
+  - obg_named_certificates
+  - obg_install_examples
+  - obg_always_show_provider_selection
+  - obg_location
+  - obg_sublocation
+  - obg_cloud_provider
+  - obg_masters
+  - obg_etcd_hosts
+  - obg_infra_nodes
+  - obg_compute_nodes
+  - obg_router_domain
+  - obg_install_version
+  - obg_registry_host
+
+- name: Set AWS vars
+  fail:
+    msg: "Please define {{ item }}"
+  when: "{{ item }} is undefined and obg_cloud_provider == 'aws'"
+  with_items:
+  - obg_aws_provider_access_key
+  - obg_aws_provider_secret_key
+
+- name: Set GCE vars
+  fail:
+    msg: "Please define {{ item }}"
+  when: "{{ item }} is undefined and obg_cloud_provider == 'gce'"
+  with_items:
+  - obg_openshift_gcp_project
+  - obg_openshift_gcp_prefix
+  - obg_gcp_user_gcsdockerregistry_file
+
+- name: Set custom Web UI vars
+  fail:
+    msg: "Please define {{ item }}"
+  when: "{{ item }} is undefined and obg_customize_webui == true"
+  with_items:
+  - obg_ui_scripts
+  - obg_ui_stylesheets
+
+- name: Set new infra and compute node vars
+  fail:
+    msg: "Please define {{ item }}"
+  when: "{{ item }} is undefined and obg_new_nodes == true"
+  with_items:
+  - obg_new_infra_nodes
+  - obg_new_compute_nodes
+
+- name: Set hawkular vars
+  fail:
+    msg: "Please define {{ item }}"
+  with_items:
+  - obg_metrics_hawkular_cert
+  - obg_metrics_hawkular_key
+  - obg_metrics_hawkular_ca
+  when: "{{ item }} is undefined and obg_install_metrics == true"
+
+- name: Set kibana vars
+  fail:
+    msg: "Please define {{ item }}"
+  with_items:
+  - obg_logging_kibana_cert
+  - obg_logging_kibana_key
+  - obg_logging_kibana_ca
+  when: "{{ item }} is undefined and obg_install_logging == true"
+
+- set_fact:
+    obg_new_nodes: false
+  when: obg_new_nodes is not defined
+
+- set_fact:
+    obg_ip_choice: oo_private_ip
+  when: obg_use_private_ips
+
+- set_fact:
+    obg_install_version_short: "{{ obg_install_version[0:3] }}"
+
+- name: Create output directory structure
+  file:
+    path: "{{ obg_output_path }}"
+    state: directory
+    recurse: True
+
+- name: create the byo
+  template:
+    src: byo.yml.j2
+    dest: "{{ obg_output_path }}/{{ obg_clusterid }}-byo-inventory"
+

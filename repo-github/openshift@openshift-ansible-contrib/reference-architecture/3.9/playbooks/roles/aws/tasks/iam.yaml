@@ -1,0 +1,97 @@
+---
+- name: Fetch IAM idenity
+  set_fact:
+    iam_identity: "{{ lookup('iam_identity') | replace (',', '') }}"
+  when:
+    - ( state is not defined ) or ( 'absent' not in state )
+
+- name: "{{ 'Create' if (state is undefined or 'absent' not in state) else 'Terminate' }} IAM user ( cloudprovider_kind )"
+  iam:
+    iam_type: user
+    name: "{{ clusterid }}.{{ dns_domain }}-admin"
+    state: "{{ state | default('present') }}"
+    access_key_state: create
+  register: cpkuser
+
+- name: "Pause for 15s to allow for IAM to instantiate"
+  pause:
+    seconds: 15
+  when:
+    - ( state is not defined ) or ( 'absent' not in state )
+    - cpkuser.changed
+
+- name: "{{ 'Create' if (state is undefined or 'absent' not in state) else 'Terminate' }} IAM user access key file ( cloudprovider_kind )"
+  file:
+    path: "~/.ssh/config-{{ clusterid }}.{{ dns_domain }}-cpkuser_access_key"
+    state: "{{ state | default('present') }}"
+  when:
+    - ( state is defined ) and ( 'absent' in state )
+    - cpkuser.changed
+
+- name: IAM cloudprovider_kind access key content
+  blockinfile:
+    path: "~/.ssh/config-{{ clusterid }}.{{ dns_domain }}-cpkuser_access_key"
+    create: yes
+    marker: "<!-- {mark} OUTPUT -->"
+    state: "{{ state | default('present') }}"
+    content: |
+      openshift_cloudprovider_aws_access_key={{ cpkuser.user_meta.access_keys[0].access_key_id }}
+      openshift_cloudprovider_aws_secret_key={{ cpkuser.user_meta.access_keys[0].secret_access_key }}
+  when:
+    - ( state is not defined ) or ( 'absent' not in state )
+    - cpkuser.changed
+
+- name: "{{ 'Create' if (state is undefined or 'absent' not in state) else 'Terminate' }} IAM user policy ( cloudprovider_kind )"
+  iam_policy:
+    iam_type: user
+    iam_name: "{{ clusterid }}.{{ dns_domain }}-admin"
+    policy_name: "Admin"
+    state: "{{ state | default('present') }}"
+    policy_json: "{{ lookup('template', playbook_dir + '/roles/aws/templates/iam_policy_cpkuser.json.j2') }}"
+  when:
+    - ( state is not defined ) or ( 'absent' not in state )
+
+- name: "{{ 'Create' if (state is undefined or 'absent' not in state) else 'Terminate' }} IAM user ( hosted registry )"
+  iam:
+    iam_type: user
+    name: "{{ clusterid }}.{{ dns_domain }}-registry"
+    state: "{{ state | default('present') }}"
+    access_key_state: create
+  register: s3user
+
+- name: "Pause for 15s to allow for IAM to instantiate"
+  pause:
+    seconds: 15
+  when:
+    - ( state is not defined ) or ( 'absent' not in state )
+    - s3user.changed
+
+- name: "{{ 'Create' if (state is undefined or 'absent' not in state) else 'Terminate' }} IAM user access key file ( hosted registry )"
+  file:
+    path: "~/.ssh/config-{{ clusterid }}.{{ dns_domain }}-s3user_access_key"
+    state: "{{ state | default('present') }}"
+  when:
+    - ( state is defined ) and ( 'absent' in state )
+    - s3user.changed
+
+- name: IAM s3user access key into content
+  blockinfile:
+    path: "~/.ssh/config-{{ clusterid }}.{{ dns_domain }}-s3user_access_key"
+    create: yes
+    marker: "<!-- {mark} OUTPUT -->"
+    content: |
+      openshift_hosted_registry_storage_s3_accesskey={{ s3user.user_meta.access_keys[0].access_key_id }}
+      openshift_hosted_registry_storage_s3_secretkey={{ s3user.user_meta.access_keys[0].secret_access_key }}
+  when:
+    - ( state is not defined ) or ( 'absent' not in state )
+    - s3user.changed
+
+- name: "{{ 'Create' if (state is undefined or 'absent' not in state) else 'Terminate' }} IAM user policy ( hosted registry )"
+  iam_policy:
+    iam_type: user
+    iam_name: "{{ clusterid }}.{{ dns_domain }}-registry"
+    policy_name: "S3"
+    state: "{{ state | default('present') }}"
+    policy_json: "{{ lookup('template', playbook_dir + '/roles/aws/templates/iam_policy_s3user.json.j2') }}"
+  when:
+    - ( state is undefined ) or ( 'absent' not in state )

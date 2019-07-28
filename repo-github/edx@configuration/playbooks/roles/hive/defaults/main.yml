@@ -1,0 +1,75 @@
+---
+#
+# edX Configuration
+#
+# github:     https://github.com/edx/configuration
+# wiki:       https://openedx.atlassian.net/wiki/display/OpenOPS
+# code style: https://openedx.atlassian.net/wiki/display/OpenOPS/Ansible+Code+Conventions
+# license:    https://github.com/edx/configuration/blob/master/LICENSE.TXT
+#
+##
+# Defaults for role hive
+# 
+
+HIVE_VERSION: 2.1.1
+# This should match the value for SQOOP_MYSQL_CONNECTOR_VERSION in sqoop role.
+HIVE_MYSQL_CONNECTOR_VERSION: 5.1.29
+HIVE_HOME: "{{ HADOOP_COMMON_USER_HOME }}/hive"
+HIVE_CONF: "{{ HIVE_HOME }}/conf"
+HIVE_LIB: "{{ HIVE_HOME }}/lib"
+
+HIVE_METASTORE_DATABASE_NAME: edx_hive_metastore
+HIVE_METASTORE_DATABASE_USER: edx_hive
+HIVE_METASTORE_DATABASE_PASSWORD: edx
+HIVE_METASTORE_DATABASE_HOST: 127.0.0.1
+HIVE_METASTORE_DATABASE_PORT: 3306
+
+HIVE_METASTORE_DATABASE:
+  user: "{{ HIVE_METASTORE_DATABASE_USER }}"
+  password: "{{ HIVE_METASTORE_DATABASE_PASSWORD }}"
+  name: "{{ HIVE_METASTORE_DATABASE_NAME }}"
+  host: "{{ HIVE_METASTORE_DATABASE_HOST }}"
+  port: "{{ HIVE_METASTORE_DATABASE_PORT }}"
+
+#
+# Vars are used to fill in the hive-site.xml file
+#
+HIVE_SITE_DEFAULT_CONFIG:
+  javax.jdo.option.ConnectionURL: "jdbc:mysql://{{ HIVE_METASTORE_DATABASE.host }}:{{ HIVE_METASTORE_DATABASE.port }}/{{ HIVE_METASTORE_DATABASE.name }}"
+  javax.jdo.option.ConnectionDriverName: "com.mysql.jdbc.Driver"
+  javax.jdo.option.ConnectionUserName: "{{ HIVE_METASTORE_DATABASE.user }}"
+  javax.jdo.option.ConnectionPassword: "{{ HIVE_METASTORE_DATABASE.password }}"
+  datanucleus.autoCreateSchema: "false"
+  hive.metastore.schema.verification: "true"
+
+#
+# Variables override the stock configuration for entry into
+# the hive-site.xml file. Ensure that you use unambiguous
+# string literals to avoid any confusion.
+#
+HIVE_SITE_EXTRA_CONFIG: {}
+
+#
+# vars are namespace with the module name.
+#
+hive_role_name: hive
+hive_temporary_dir: /var/tmp
+hive_dist:
+  filename: "apache-hive-{{ HIVE_VERSION }}-bin.tar.gz"
+  url: "https://archive.apache.org/dist/hive/hive-{{ HIVE_VERSION }}/apache-hive-{{ HIVE_VERSION }}-bin.tar.gz"
+  sha256sum: c945dfc39f6489a098507fffa8fe78d8bd41de64887439b024c163ba1d958edc
+  untarred_filename: "apache-hive-{{ HIVE_VERSION }}-bin"
+hive_mysql_connector_dist:
+  filename: "mysql-connector-java-{{ HIVE_MYSQL_CONNECTOR_VERSION }}.tar.gz"
+  url: "http://dev.mysql.com/get/Downloads/Connector-J/mysql-connector-java-{{ HIVE_MYSQL_CONNECTOR_VERSION }}.tar.gz"
+  sha256sum: 04ad83b655066b626daaabb9676a00f6b4bc43f0c234cbafafac1209dcf1be73
+  untarred_filename: "mysql-connector-java-{{ HIVE_MYSQL_CONNECTOR_VERSION }}"
+  jarfilename: "mysql-connector-java-{{ HIVE_MYSQL_CONNECTOR_VERSION }}-bin.jar"
+
+#
+# OS packages
+#
+
+hive_debian_pkgs: []
+
+hive_redhat_pkgs: []

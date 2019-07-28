@@ -1,0 +1,21 @@
+---
+
+#
+# Post-installation configuration for Lmod
+#
+
+# these directories are referenced in Lmod's default "profile" script;
+# although Lmod runs fine even if they're non-existent, ensuring they
+# are means that we can just drop files in there from other
+# roles/playbooks
+- name: Ensure modulefiles directories exist
+  file:
+    dest: '{{item}}'
+    state: directory
+  loop:
+    - '/etc/modulefiles'
+    - '{{ modules_root }}'
+
+
+- name: Perform OS-specific post-installation
+  include_tasks: 'postinst-{{ ansible_os_family }}.yml'

@@ -1,0 +1,6 @@
+---
+- name: run pre-reqs
+  import_playbook: /root/git/openshift-ansible-contrib-stretch/reference-architecture/vmware-ansible/openshift-ansible/playbooks/prerequisites.yml
+
+- name: call openshift includes for installer
+  import_playbook: /root/git/openshift-ansible-contrib-stretch/reference-architecture/vmware-ansible/openshift-ansible/playbooks/deploy_cluster.yml

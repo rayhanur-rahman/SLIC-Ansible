@@ -1,0 +1,56 @@
+---
+- name: Get filename from software-vars.yml
+  set_fact:
+    file: "{{ content_files['spectrum-conductor'].split('/', 3)[-1] }}"
+
+- name: Get route to client
+  command: "{{ python_executable_local }} \
+  {{ scripts_path_local }}/python/ip_route_get_to.py \
+  {{ inventory_hostname }}"
+  delegate_to: localhost
+  register: host_ip
+
+- name: Download installer binary to remote hosts
+  get_url:
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: 0744
+    url: "http://{{ host_ip.stdout }}/{{ file }}"
+    dest: "{{ ansible_remote_dir }}"
+    timeout: 300
+  when: hostvars['localhost']['ansible_fqdn'] != ansible_host
+  become: yes
+
+- name: Include configuration environment variables
+  include_vars:
+    file: envs_spectrum_conductor.yml
+    name: envs
+
+- name: Get enterprise license filename from software-vars.yml
+  set_fact:
+    filename: "{{ content_files['spectrum-conductor'].split('/')[-1] }}"
+
+- name: Set local conductor path if installer is part of cluster
+  set_fact:
+    conductor_dir: "{{ root_dir }}spectrum-conductor"
+  when: hostvars['localhost']['ansible_fqdn'] == ansible_host
+
+- name: Add execute permission to local conductor path
+  file:
+    path: "{{ conductor_dir }}/{{ filename }}"
+    state: touch
+    mode: u+x
+  when: hostvars['localhost']['ansible_fqdn'] == ansible_host
+  become: yes
+
+- name: Set conductor path for non-local clients
+  set_fact:
+    conductor_dir: "{{ ansible_remote_dir }}"
+  when: hostvars['localhost']['ansible_fqdn'] != ansible_host
+
+- name: Install IBM Spectrum Conductor
+  shell: "{{ conductor_dir }}/{{ filename }} --quiet"
+  environment: "{{ envs }}"
+  args:
+    executable: /bin/bash
+  become: yes

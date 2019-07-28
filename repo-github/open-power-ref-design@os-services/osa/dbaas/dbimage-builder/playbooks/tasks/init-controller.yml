@@ -1,0 +1,92 @@
+---
+
+# This task is invoked during the invocation of the playbook below:
+#
+# ansible-playbook -i host_file dbimage-make.yml -u ubuntu -c ssh
+#
+# This is invoked on a controller node as ubuntu and then
+# becomes root before any of these tasks are run
+
+- name: Get trove container name
+  shell: /usr/bin/lxc-ls --filter trove_taskmanager_container
+  register: trove_container
+
+- name: fetch trove files
+  fetch:
+    src: "/var/lib/lxc/{{ trove_container.stdout }}/rootfs/etc/trove/trove-guestagent.conf"
+    dest: "{{ src_trove }}/trove-guestagent.conf"
+    flat: yes
+
+- name: Get openstack venv from trove container
+  find:
+    paths: "/var/lib/lxc/{{ trove_container.stdout }}/rootfs/openstack/venvs"
+    file_type: directory
+    patterns: "trove-*"
+    use_regex: false
+  register: findrc
+
+- name: Set trove venv token
+  set_fact:
+    trove_venv: "{{ findrc['files'][0]['path'] | basename }}"
+  when: findrc['files']
+
+- debug: var=trove_venv
+
+- name: Get controller's public key
+  slurp:
+    src: "~/.ssh/id_rsa.pub"
+  register: public_key
+  failed_when: false
+
+- name: Set controller's public key
+  set_fact:
+    controller_pub_key: "{{ public_key.content | b64decode }}"
+  when: public_key | success
+
+# Get user specified public key from Nova that will be placed inside the guest image
+
+- block:
+  - name: Get utility container name
+    shell: /usr/bin/lxc-ls --filter utility_container
+    register: utility_container
+
+  - name: Get public key named {{ cloudKey }}
+    shell: >-
+      /usr/bin/lxc-attach -n '{{ utility_container.stdout }}' -e --
+      /bin/bash -c '
+      source /root/openrc;
+      nova keypair-show {{ cloudKey }}'
+    register: keypair_show
+    failed_when: false
+
+  when: cloudKey != ''
+
+- block:
+  - name: Get list of registered ssh keys
+    shell: >-
+      /usr/bin/lxc-attach -n '{{ utility_container.stdout }}' -e --
+      /bin/bash -c '
+      source /root/openrc;
+      nova keypair-list'
+    register: keypair_list
+    failed_when: false
+
+  - name: List registered key pairs
+    debug: var=keypair_list['stdout_lines']
+
+  - name: Halt on invalid argument -k <key-name>.  Valid key pairs are listed above
+    fail:
+      msg: "Invalid user specified key-pair name is {{ cloudKey }}"
+
+  when:
+    - cloudKey != ''
+    - keypair_show['rc']
+
+- name: Set cloud public key
+  set_fact:
+    cloud_pub_key: "{{ item.split('Public key: ', 1)[-1] }}"
+  with_items: "{{ keypair_show['stdout_lines'] | default([]) }}"
+  when:
+    - cloudKey != ''
+    - cloud_pub_key is not defined
+    - "'Public key: ' in item"

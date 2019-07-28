@@ -1,0 +1,8 @@
+---
+- hosts: all
+  become: true
+  roles:
+    - etc_hosts
+    - epel_repositories
+    - haveged
+    - freeipa_server

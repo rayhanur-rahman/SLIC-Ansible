@@ -1,0 +1,2 @@
+---
+- include: provision-hosts.yml nova_compute_state=absent

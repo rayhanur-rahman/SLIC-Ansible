@@ -1,0 +1,68 @@
+---
+
+# Create a virtualenv for edx-platform by installing the requirements
+# and packaging the virtualenv.
+# A shallow clone is created off of master. The depth setting
+# refers to the --depth-setting of git clone. A value of 1
+# will truncate all history prior to the last revision.
+- name: Create shallow clone of edx-platform
+  git:
+    repo: https://github.com/edx/edx-platform.git
+    dest: "{{ jenkins_home }}/shallow-clone"
+    version: "{{ jenkins_edx_platform_version }}"
+    depth: 1
+  become_user: "{{ jenkins_user }}"
+
+# Install the platform requirements using pip.
+- name: Install edx-platform requirements using pip
+  pip:
+    chdir: "{{ jenkins_home }}/shallow-clone"
+    requirements: "{{ jenkins_home }}/shallow-clone/requirements/edx/{{ item }}"
+    extra_args: "--exists-action=w"
+    virtualenv: "{{ jenkins_home }}/edx-venv"
+    virtualenv_command: virtualenv
+  with_items:
+    - django.txt
+    - testing.txt
+  become_user: "{{ jenkins_user }}"
+
+# Archive the current state of the virtualenv
+# as a starting point for new builds.
+# The edx-venv directory is deleted and then recreated
+# cleanly from the archive by the jenkins build scripts.
+- name: Create a clean virtualenv archive
+  command: "tar -cpzf edx-venv_clean.tar.gz edx-venv"
+  args:
+    chdir: "{{ jenkins_home }}"
+  become_user: "{{ jenkins_user }}"
+
+- name: Add script to set install node packages
+  template:
+    src: jenkins_nodeenv.j2
+    dest: "{{ jenkins_home }}/jenkins_nodeenv"
+    owner: "{{ jenkins_user }}"
+    group: "{{ jenkins_group }}"
+    mode: "0500"
+  when: platform_worker is defined
+
+# Using the nodeenv package, install the version of node used in
+# the platform CI tests, then install the platform npm packages.
+- name: Install node packages for caching
+  command: "bash {{ jenkins_home }}/jenkins_nodeenv"
+  become_user: "{{ jenkins_user }}"
+
+# Archive the current state of the npm cache as a starting
+# point for new builds. Most builds don't introduce package
+# changes, so npm won't need to fetch anything from a remote
+# registry. This should reduce the frequency of hanging
+# npm installs (see https://openedx.atlassian.net/browse/TE-2732)
+- name: Create a clean npm cache archive
+  command: "tar -cpzf edx-npm-cache_clean.tar.gz .npm"
+  args:
+    chdir: "{{ jenkins_home }}"
+  become_user: "{{ jenkins_user }}"
+
+# Remove the shallow-clone directory now that we are
+# done with it
+- name: Remove shallow-clone
+  file: path={{ jenkins_home }}/shallow-clone state=absent

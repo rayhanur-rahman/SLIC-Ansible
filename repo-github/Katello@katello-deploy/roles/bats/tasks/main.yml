@@ -1,0 +1,79 @@
+---
+- name: "Load OS variables"
+  include_vars: "{{ ansible_os_family }}.yml"
+
+- name: "install required packages"
+  package:
+    name: "{{ bats_packages }}"
+    state: present
+
+- name: "Install bats from package"
+  package:
+    name: "bats"
+    state: present
+  ignore_errors: yes
+
+- name: "Get /usr/bin/bats stat"
+  stat:
+    path: "/usr/bin/bats"
+  register: bats_bin
+
+- name: "Clone bats"
+  git:
+    repo: "https://github.com/sstephenson/bats.git"
+    dest: "{{ bats_git_dir }}"
+  when: bats_bin.stat.exists == False
+
+- name: "Install bats"
+  shell: "{{ bats_git_dir }}/install.sh /usr"
+  args:
+    creates: "/usr/bin/bats"
+
+- name: "Clone forklift"
+  git:
+    repo: "{{ bats_forklift_repo }}"
+    dest: "{{ bats_forklift_dir }}"
+    update: "{{ bats_update_forklift }}"
+    version: "{{ bats_forklift_version }}"
+
+- name: "Bats output directory"
+  file:
+    state: "directory"
+    path: "{{ bats_output_dir }}"
+
+- block:
+    - name: "Run bats"
+      shell: "bats --tap {{ item }} > {{ bats_output_dir }}/{{ item }}.tap"
+      args:
+        chdir: "{{ bats_forklift_dir }}/bats"
+      with_items:
+        - "{{ bats_setup }}"
+        - "{{ bats_tests }}"
+        - "{{ bats_tests_additional }}"
+        - "{{ bats_teardown }}"
+      register: "test_output"
+      ignore_errors: true
+      environment: "{{ bats_environment }}"
+
+    - name: "Read results"
+      shell: "cat {{ bats_output_dir }}/{{ item }}.tap"
+      register: "test_results"
+      with_items:
+        - "{{ bats_setup }}"
+        - "{{ bats_tests }}"
+        - "{{ bats_tests_additional }}"
+        - "{{ bats_teardown }}"
+
+    - name: "Output test results"
+      debug:
+        msg: "{{ test_results.results | join('\n', attribute='stdout') }}"
+
+    - include_tasks: 'bats_fetch_results.yml'
+      when: bats_fetch_results
+
+    - name: "Fail if tests didn't pass"
+      fail:
+        msg: "Test failed, please see {{ bats_output_dir }}/ for more information"
+      when: item.rc != 0
+      with_items: "{{ test_output.results }}"
+  when: bats_run

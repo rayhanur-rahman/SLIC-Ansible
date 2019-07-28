@@ -1,0 +1,4 @@
+---
+features:
+  - Now leverages stable Ansible version (2.4).
+

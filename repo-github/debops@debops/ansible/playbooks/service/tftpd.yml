@@ -1,0 +1,24 @@
+---
+
+- name: Manage TFTP service
+  hosts: [ 'debops_service_tftpd', 'debops_tftpd' ]
+  become: True
+
+  environment: '{{ inventory__environment | d({})
+                   | combine(inventory__group_environment | d({}))
+                   | combine(inventory__host_environment  | d({})) }}'
+
+  roles:
+
+    - role: debops.ferm
+      tags: [ 'role::ferm', 'skip::ferm' ]
+      ferm__dependent_rules:
+        - '{{ tftpd__ferm__dependent_rules }}'
+
+    - role: debops.tcpwrappers
+      tags: [ 'role::tcpwrappers', 'skip::tcpwrappers' ]
+      tcpwrappers__dependent_allow:
+        - '{{ tftpd__tcpwrappers__dependent_allow }}'
+
+    - role: debops.tftpd
+      tags: [ 'role::tftpd', 'skip::tftpd' ]

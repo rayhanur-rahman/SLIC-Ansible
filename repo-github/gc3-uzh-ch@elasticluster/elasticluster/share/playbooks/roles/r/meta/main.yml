@@ -1,0 +1,7 @@
+# r/meta/main.yml
+---
+
+dependencies:
+  # install a `module` to manage "environment module" files
+  # (needed by `tasks/rmpi.yml`)
+  - role: modules-tool

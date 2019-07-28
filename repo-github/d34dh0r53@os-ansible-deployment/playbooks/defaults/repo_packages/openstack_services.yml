@@ -1,0 +1,94 @@
+---
+# Copyright 2014, Rackspace US, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
+## NOTICE on items in this file:
+##   * If you use anything in the *._git_install_branch field that is not a TAG
+##     make sure to leave an in-line comment as to "why".
+
+## For the sake of anyone else editing this file:
+##   * If you add services to this file please do so in alphabetical order.
+##   * Every entry should be name spaced with the name of the client followed by an "_"
+##   * All items with this file should be separated by `name_` note that the name of the
+##     package should be one long name with no additional `_` separating it.
+
+
+### Before this is shipped all of these services should have a tag set as the branch,
+### or have a comment / reason attached to them as to why a tag can not work.
+
+## Cinder service
+cinder_git_repo: https://github.com/openstack/cinder
+cinder_git_install_branch: fce961e8c8081b804f25786935e4026a87abf9dd # HEAD of "master" as of 08.06.2015
+cinder_git_dest: "/opt/cinder_{{ cinder_git_install_branch | replace('/', '_') }}"
+
+
+## Glance service
+glance_git_repo: https://github.com/openstack/glance
+glance_git_install_branch: be8c464c8e986fc6ca064b42d475c805aac9062d # HEAD of "master" as of 08.06.2015
+glance_git_dest: "/opt/glance_{{ glance_git_install_branch | replace('/', '_') }}"
+
+
+## Heat service
+heat_git_repo: https://github.com/openstack/heat
+heat_git_install_branch: 8fe06151c1691d2246dcec3e6dcae7c204908df2 # HEAD of "master" as of 08.06.2015
+heat_git_dest: "/opt/heat_{{ heat_git_install_branch | replace('/', '_') }}"
+
+
+## Horizon service
+horizon_git_repo: https://github.com/openstack/horizon
+horizon_git_install_branch: b11d49891c6c8e8cdbc3a09f538d13596fe10b8e # HEAD of "master" as of 08.06.2015
+horizon_git_dest: "/opt/horizon_{{ horizon_git_install_branch | replace('/', '_') }}"
+
+
+## Keystone service
+keystone_git_repo: https://github.com/openstack/keystone
+keystone_git_install_branch: 7f76f23bccd772df35da63584685584576289255 # HEAD of "master" as of 08.06.2015
+keystone_git_dest: "/opt/keystone_{{ keystone_git_install_branch | replace('/', '_') }}"
+
+
+## Neutron service
+neutron_git_repo: https://github.com/openstack/neutron
+neutron_git_install_branch: 692da2b7c70dd57c692a36f7a6d8f55fc1fa2a44 # HEAD of "master" as of 08.06.2015
+neutron_git_dest: "/opt/neutron_{{ neutron_git_install_branch | replace('/', '_') }}"
+
+neutron_lbaas_git_repo: https://github.com/openstack/neutron-lbaas
+neutron_lbaas_git_install_branch: 397585792ce363a4d894136186a7aa51f39c726b # HEAD of "master" as of 08.06.2015
+neutron_lbaas_git_dest: "/opt/neutron_lbaas_{{ neutron_lbaas_git_install_branch | replace('/', '_') }}"
+
+neutron_vpnaas_git_repo: https://github.com/openstack/neutron-vpnaas
+neutron_vpnaas_git_install_branch: 17b7f1989a3864cd1d742d58ad9696c21f90563a # HEAD of "master" as of 08.06.2015
+neutron_vpnaas_git_dest: "/opt/neutron_vpnaas_{{ neutron_vpnaas_git_install_branch | replace('/', '_') }}"
+
+neutron_fwaas_git_repo: https://github.com/openstack/neutron-fwaas
+neutron_fwaas_git_install_branch: 76c2a4e4124b62fec9236927f9122e1f696cc9ce # HEAD of "master" as of 08.06.2015
+neutron_fwaas_git_dest: "/opt/neutron_fwaas_{{ neutron_fwaas_git_install_branch | replace('/', '_') }}"
+
+
+## Nova service
+nova_git_repo: https://github.com/openstack/nova
+nova_git_install_branch: 770a897179f09546b32763697319d49be1697be1 # HEAD of "master" as of 08.06.2015
+nova_git_dest: "/opt/nova_{{ nova_git_install_branch | replace('/', '_') }}"
+
+
+## Swift service
+swift_git_repo: https://github.com/openstack/swift
+swift_git_install_branch: 0cf95b055549fd76aba38ea682ad4cc0a74de7fa # HEAD of "master" as of 08.06.2015
+swift_git_dest: "/opt/swift_{{ swift_git_install_branch | replace('/', '_') }}"
+
+
+## Tempest service
+tempest_git_repo: https://github.com/openstack/tempest
+tempest_git_install_branch: 9927d643c7340cc55a351cc8ed159d7dd3ba0c54 # HEAD of "master" as of 08.06.2015
+tempest_git_dest: "/opt/tempest_{{ tempest_git_install_branch | replace('/', '_') }}"

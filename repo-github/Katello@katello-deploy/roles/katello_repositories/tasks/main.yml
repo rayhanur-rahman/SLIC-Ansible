@@ -1,0 +1,7 @@
+---
+- name: "Set up {{ katello_repositories_environment }} repositories"
+  include_tasks: "{{ katello_repositories_environment }}_repos.yml"
+
+  # Required for el6 clients
+- include_tasks: qpid.yml
+  when: ansible_distribution_major_version == "6"

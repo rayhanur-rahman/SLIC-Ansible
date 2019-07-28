@@ -1,0 +1,7 @@
+- name: Deploy rabbitmq
+  hosts: all
+  sudo: True
+  gather_facts: False
+  roles:
+    - aws
+    - rabbitmq

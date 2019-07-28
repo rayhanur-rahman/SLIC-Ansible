@@ -1,0 +1,141 @@
+---
+# Copyright 2014, Rackspace US, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- name: Update apt sources
+  apt:
+    update_cache: yes
+    cache_valid_time: 600
+  register: apt_update
+  until: apt_update|success
+  retries: 5
+  delay: 2
+  tags:
+    - heat-apt-packages
+
+- name: Install apt packages
+  apt:
+    pkg: "{{ item }}"
+    state: latest
+  register: install_packages
+  until: install_packages|success
+  retries: 5
+  delay: 2
+  with_items: heat_apt_packages
+  tags:
+    - heat-install
+    - heat-apt-packages
+
+- name: Install requires pip packages
+  pip:
+    name: "{{ item }}"
+    state: present
+    extra_args: "{{ pip_install_options|default('') }}"
+  register: install_packages
+  until: install_packages|success
+  retries: 5
+  delay: 2
+  with_items:
+    - "{{ heat_requires_pip_packages }}"
+  tags:
+    - heat-install
+    - heat-pip-packages
+
+- name: Attempt venv download
+  get_url:
+    url: "{{ heat_venv_download_url }}"
+    dest: "/var/cache/{{ heat_venv_download_url | basename }}"
+  ignore_errors: true
+  register: get_venv
+  when: heat_venv_enabled | bool
+  tags:
+    - heat-install
+    - heat-pip-packages
+
+- name: Set heat get_venv fact
+  set_fact:
+    heat_get_venv: "{{ get_venv }}"
+  when: heat_venv_enabled | bool
+  tags:
+    - heat-install
+    - heat-pip-packages
+
+- name: Create heat venv dir
+  file:
+    path: "{{ heat_venv_bin | dirname }}"
+    state: directory
+  when:
+    - heat_venv_enabled | bool
+    - heat_get_venv | success
+  tags:
+    - heat-install
+    - heat-pip-packages
+
+- name: Unarchive pre-built venv
+  unarchive:
+    src: "/var/cache/{{ heat_venv_download_url | basename }}"
+    dest: "{{ heat_venv_bin | dirname }}"
+    copy: "no"
+  when:
+    - heat_venv_enabled | bool
+    - heat_get_venv | success
+  tags:
+    - heat-install
+    - heat-pip-packages
+
+- name: Update virtualenv path
+  command: >
+    virtualenv-tools --update-path=auto {{ heat_venv_bin | dirname }}
+  when:
+    - heat_venv_enabled | bool
+    - heat_get_venv | success
+  tags:
+    - heat-install
+    - heat-pip-packages
+
+- name: Install pip packages (venv)
+  pip:
+    name: "{{ item }}"
+    state: present
+    virtualenv: "{{ heat_venv_bin | dirname }}"
+    virtualenv_site_packages: "no"
+    extra_args: "{{ pip_install_options|default('') }}"
+  register: install_packages
+  until: install_packages|success
+  retries: 5
+  delay: 2
+  with_items:
+    - "{{ heat_pip_packages }}"
+  when:
+    - heat_venv_enabled | bool
+    - heat_get_venv | failed
+  tags:
+    - heat-install
+    - heat-pip-packages
+
+- name: Install pip packages (no venv)
+  pip:
+    name: "{{ item }}"
+    state: present
+    extra_args: "{{ pip_install_options|default('') }}"
+  register: install_packages
+  until: install_packages|success
+  retries: 5
+  delay: 2
+  with_items:
+    - "{{ heat_pip_packages }}"
+  when: not heat_venv_enabled | bool
+  tags:
+    - heat-install
+    - heat-pip-packages

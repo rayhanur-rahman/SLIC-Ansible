@@ -1,0 +1,438 @@
+---
+# Copyright 2014, Rackspace US, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+component_skel:
+  cinder_api:
+    belongs_to:
+      - cinder_all
+  cinder_scheduler:
+    belongs_to:
+      - cinder_all
+  cinder_volume:
+    belongs_to:
+      - cinder_all
+  galera:
+    belongs_to:
+      - galera_all
+  glance_api:
+    belongs_to:
+      - glance_all
+  glance_registry:
+    belongs_to:
+      - glance_all
+  heat_api:
+    belongs_to:
+      - heat_all
+  heat_api_cfn:
+    belongs_to:
+      - heat_all
+  heat_api_cloudwatch:
+    belongs_to:
+      - heat_all
+  heat_engine:
+    belongs_to:
+      - heat_all
+  horizon:
+    belongs_to:
+      - horizon_all
+  keystone:
+    belongs_to:
+      - keystone_all
+  memcached:
+    belongs_to:
+      - memcached_all
+  neutron_agent:
+    belongs_to:
+      - neutron_all
+  neutron_dhcp_agent:
+    belongs_to:
+      - neutron_all
+  neutron_linuxbridge_agent:
+    belongs_to:
+      - neutron_all
+  neutron_metering_agent:
+    belongs_to:
+      - neutron_all
+  neutron_l3_agent:
+    belongs_to:
+      - neutron_all
+  neutron_metadata_agent:
+    belongs_to:
+      - neutron_all
+  neutron_server:
+    belongs_to:
+      - neutron_all
+  nova_api_metadata:
+    belongs_to:
+      - nova_all
+  nova_api_os_compute:
+    belongs_to:
+      - nova_all
+  nova_cert:
+    belongs_to:
+      - nova_all
+  nova_compute:
+    belongs_to:
+      - nova_all
+  nova_conductor:
+    belongs_to:
+      - nova_all
+  nova_scheduler:
+    belongs_to:
+      - nova_all
+  nova_console:
+    belongs_to:
+      - nova_all
+  pkg_repo:
+    belongs_to:
+      - repo_all
+  rabbitmq:
+    belongs_to:
+      - rabbitmq_all
+  rsyslog:
+    belongs_to:
+      - rsyslog_all
+  swift_proxy:
+    belongs_to:
+      - swift_all
+  swift_acc:
+    belongs_to:
+      - swift_all
+  swift_obj:
+    belongs_to:
+      - swift_all
+  swift_cont:
+    belongs_to:
+      - swift_all
+  utility:
+    belongs_to:
+      - utility_all
+
+
+container_skel:
+  cinder_api_container:
+    belongs_to:
+      - infra_containers
+      - storage-infra_containers
+    contains:
+      - cinder_api
+    properties:
+      service_name: cinder
+      container_release: trusty
+  cinder_volumes_container:
+    belongs_to:
+      - storage_containers
+    contains:
+      - cinder_scheduler
+      - cinder_volume
+    properties:
+      service_name: cinder
+      container_release: trusty
+  galera_container:
+    belongs_to:
+      - infra_containers
+      - shared-infra_containers
+    contains:
+      - galera
+    properties:
+      service_name: galera
+      container_release: trusty
+  glance_container:
+    belongs_to:
+      - infra_containers
+      - os-infra_containers
+    contains:
+      - glance_api
+      - glance_registry
+    properties:
+      service_name: glance
+      container_release: trusty
+      container_fs_size: 12G
+  heat_apis_container:
+    belongs_to:
+      - infra_containers
+      - os-infra_containers
+    contains:
+      - heat_api_cloudwatch
+      - heat_api_cfn
+      - heat_api
+    properties:
+      service_name: heat
+      container_release: trusty
+  heat_engine_container:
+    belongs_to:
+      - infra_containers
+      - os-infra_containers
+    contains:
+      - heat_engine
+    properties:
+      service_name: heat
+      container_release: trusty
+  horizon_container:
+    belongs_to:
+      - infra_containers
+      - os-infra_containers
+    contains:
+      - horizon
+    properties:
+      service_name: horizon
+      container_release: trusty
+  keystone_container:
+    belongs_to:
+      - infra_containers
+      - identity_containers
+    contains:
+      - keystone
+    properties:
+      service_name: keystone
+      container_release: trusty
+  memcached_container:
+    belongs_to:
+      - infra_containers
+      - shared-infra_containers
+    contains:
+      - memcached
+    properties:
+      service_name: memcached
+      container_release: trusty
+  neutron_agents_container:
+    belongs_to:
+      - network_containers
+    contains:
+      - neutron_agent
+      - neutron_metadata_agent
+      - neutron_metering_agent
+      - neutron_linuxbridge_agent
+      - neutron_l3_agent
+      - neutron_dhcp_agent
+    properties:
+      service_name: neutron
+      container_release: trusty
+  neutron_server_container:
+    belongs_to:
+      - network_containers
+    contains:
+      - neutron_server
+    properties:
+      service_name: neutron
+      container_release: trusty
+  nova_api_metadata_container:
+    belongs_to:
+      - infra_containers
+      - os-infra_containers
+    contains:
+      - nova_api_metadata
+    properties:
+      service_name: nova
+      container_release: trusty
+  nova_api_os_compute_container:
+    belongs_to:
+      - infra_containers
+      - os-infra_containers
+    contains:
+      - nova_api_os_compute
+    properties:
+      service_name: nova
+      container_release: trusty
+  nova_cert_container:
+    belongs_to:
+      - infra_containers
+      - os-infra_containers
+    contains:
+      - nova_cert
+    properties:
+      service_name: nova
+      container_release: trusty
+  nova_compute_container:
+    belongs_to:
+      - compute_containers
+    contains:
+      - neutron_linuxbridge_agent
+      - nova_compute
+    properties:
+      is_metal: true
+      service_name: nova
+      container_release: trusty
+  nova_conductor_container:
+    belongs_to:
+      - infra_containers
+      - os-infra_containers
+    contains:
+      - nova_conductor
+    properties:
+      service_name: nova
+      container_release: trusty
+  nova_scheduler_container:
+    belongs_to:
+      - infra_containers
+      - os-infra_containers
+    contains:
+      - nova_scheduler
+    properties:
+      service_name: nova
+      container_release: trusty
+  nova_console_container:
+    belongs_to:
+      - infra_containers
+      - os-infra_containers
+    contains:
+      - nova_console
+    properties:
+      service_name: nova
+      container_release: trusty
+  rabbit_mq_container:
+    belongs_to:
+      - infra_containers
+      - shared-infra_containers
+    contains:
+      - rabbitmq
+    properties:
+      service_name: rabbitmq
+      container_release: trusty
+  repo_container:
+    belongs_to:
+      - repo-infra_containers
+    contains:
+      - pkg_repo
+    properties:
+      service_name: repo
+      container_release: trusty
+  rsyslog_container:
+    belongs_to:
+      - log_containers
+    contains:
+      - rsyslog
+    properties:
+      service_name: rsyslog
+      container_release: trusty
+  swift_proxy_container:
+    belongs_to:
+      - swift-proxy_containers
+    contains:
+      - swift_proxy
+    properties:
+      service_name: swift
+      container_release: trusty
+  swift_acc_container:
+    belongs_to:
+      - swift_containers
+    contains:
+      - swift_acc
+    properties:
+      is_metal: true
+      service_name: swift
+      container_release: trusty
+  swift_obj_container:
+    belongs_to:
+      - swift_containers
+    contains:
+      - swift_obj
+    properties:
+      is_metal: true
+      service_name: swift
+      container_release: trusty
+  swift_cont_container:
+    belongs_to:
+      - swift_containers
+    contains:
+      - swift_cont
+    properties:
+      is_metal: true
+      service_name: swift
+      container_release: trusty
+  utility_container:
+    belongs_to:
+      - infra_containers
+      - shared-infra_containers
+    contains:
+      - utility
+    properties:
+      service_name: utility
+      container_release: trusty
+
+
+physical_skel:
+  compute_containers:
+    belongs_to:
+      - all_containers
+  compute_hosts:
+    belongs_to:
+      - hosts
+  infra_containers:
+    belongs_to:
+      - all_containers
+  infra_hosts:
+    belongs_to:
+      - hosts
+  identity_containers:
+    belongs_to:
+      - all_containers
+  identity_hosts:
+    belongs_to:
+      - hosts
+  log_containers:
+    belongs_to:
+      - all_containers
+  log_hosts:
+    belongs_to:
+      - hosts
+  network_containers:
+    belongs_to:
+      - all_containers
+  network_hosts:
+    belongs_to:
+      - hosts
+  os-infra_containers:
+    belongs_to:
+      - all_containers
+  os-infra_hosts:
+    belongs_to:
+      - hosts
+  repo-infra_hosts:
+    belongs_to:
+      - hosts
+  repo-infra_containers:
+    belongs_to:
+      - all_containers
+  shared-infra_containers:
+    belongs_to:
+      - all_containers
+  shared-infra_hosts:
+    belongs_to:
+      - hosts
+  storage-infra_containers:
+    belongs_to:
+      - all_containers
+  storage-infra_hosts:
+    belongs_to:
+      - hosts
+  storage_containers:
+    belongs_to:
+      - all_containers
+  storage_hosts:
+    belongs_to:
+      - hosts
+  swift_containers:
+    belongs_to:
+      - all_containers
+  swift_hosts:
+    belongs_to:
+      - hosts
+  swift-proxy_containers:
+    belongs_to:
+      - all_containers
+  swift-proxy_hosts:
+    belongs_to:
+      - hosts

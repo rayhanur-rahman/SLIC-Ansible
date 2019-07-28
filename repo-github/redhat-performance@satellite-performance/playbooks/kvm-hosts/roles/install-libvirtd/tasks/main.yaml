@@ -1,0 +1,14 @@
+---
+  - name: "Make sure libvirt & comp. is present"
+    yum:
+      name:
+        - libvirt
+        - qemu-kvm
+        - libvirt-python
+        - virt-install
+      state: present
+  - name: "Make sure libvirtd is running"
+    service:
+      name: libvirtd
+      state: started
+...

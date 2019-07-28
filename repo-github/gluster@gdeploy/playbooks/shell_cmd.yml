@@ -1,0 +1,9 @@
+---
+- hosts: gluster_servers
+  become: true
+  gather_facts: no
+
+  tasks:
+  - name: Run a command in the shell
+    shell: "{{ item }}"
+    with_items: "{{ command }}"

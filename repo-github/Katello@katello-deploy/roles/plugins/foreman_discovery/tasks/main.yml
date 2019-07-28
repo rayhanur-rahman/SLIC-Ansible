@@ -1,0 +1,9 @@
+- name: 'Install discovery plugin'
+  include_role:
+    name: plugins/plugin_installer
+  vars:
+    plugin_installer_options: >
+      --enable-foreman-plugin-discovery
+      --enable-foreman-proxy-plugin-discovery
+      --foreman-proxy-plugin-discovery-install-images true
+      {{ foreman_discovery_installer_options }}

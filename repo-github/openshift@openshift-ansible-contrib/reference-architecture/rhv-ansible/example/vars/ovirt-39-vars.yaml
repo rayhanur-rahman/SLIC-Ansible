@@ -1,0 +1,221 @@
+---
+###########################
+# Common
+###########################
+compatibility_version: 4.2
+
+# Data center
+data_center_name: Default
+
+##########################
+# VM infra
+##########################
+template_cluster: "{{ rhv_cluster }}"
+template_memory: 8GiB
+template_cpu: 1
+template_disk_storage: "{{ rhv_data_storage }}"
+template_disk_size: 60GiB
+template_nics:
+  - name: nic1
+    profile_name: ovirtmgmt
+    interface: virtio
+
+##########################
+# Other top scope vars
+##########################
+debug_vm_create: true
+wait_for_ip: true
+vm_infra_wait_for_ip_retries: 10
+vm_infra_wait_for_ip_delay: 40
+
+master_vm:
+  cluster: "{{ rhv_cluster }}"
+  template: "{{ template_name }}"
+  memory: 16GiB
+  cores: 2
+  high_availability: true
+  disks:
+    - size: 15GiB
+      storage_domain: "{{ rhv_data_storage }}"
+      name: docker_disk
+      interface: virtio
+    - size: 30GiB
+      storage_domain: "{{ rhv_data_storage }}"
+      name: localvol_disk
+      interface: virtio
+    - size: 25GiB
+      storage_domain: "{{ rhv_data_storage }}"
+      name: etcd_disk
+      interface: virtio
+  state: running
+
+node_vm:
+  cluster: "{{ rhv_cluster }}"
+  template: "{{ template_name }}"
+  memory: 8GiB
+  cores: 2
+  disks:
+    - size: 15GiB
+      storage_domain: "{{ rhv_data_storage }}"
+      name: docker_disk
+      interface: virtio
+    - size: 30GiB
+      storage_domain: "{{ rhv_data_storage }}"
+      name: localvol_disk
+      interface: virtio
+  state: running
+
+
+##########################
+# Cloud Init Script
+##########################
+# Use the following if RHEL 7.4 or below VMs are being created on a RHV 4.2 or above engine
+#    - sed -i 's@^# device =.*@device = /dev/virtio-ports/ovirt-guest-agent.0@' /etc/ovirt-guest-agent.conf
+#    - sed -i 's@com.redhat.rhevm.vdsm@ovirt-guest-agent.0@' /etc/udev/rules.d/55-ovirt-guest-agent.rules
+#    - 'udevadm trigger --subsystem-match="virtio-ports"'
+
+cloud_init_script_node: |
+  runcmd:
+    - mkdir -p '/var/lib/origin/openshift.local.volumes'
+    - /usr/sbin/mkfs.xfs -L localvol /dev/vdc
+    - sleep "$(($RANDOM % 60))"
+    - sync
+    - reboot
+  mounts:
+    - [ '/dev/vdc', '/var/lib/origin/openshift.local.volumes', 'xfs', 'defaults,gquota' ]
+  rh_subscription:
+    username: {{vault_rhsub_user}}
+    password: {{vault_rhsub_password}}
+    add-pool: [{{vault_rhsub_pool}}]
+    server-hostname: {{vault_rhsub_server}}
+    enable-repo: ['rhel-7-server-rpms', 'rhel-7-server-extras-rpms', 'rhel-7-fast-datapath-rpms', 'rhel-7-server-ose-3.9-rpms']
+    disable-repo: []
+
+cloud_init_script_master: |
+  runcmd:
+    - mkdir -p '/var/lib/origin/openshift.local.volumes'
+    - mkdir -p '/var/lib/etcd'
+    - /usr/sbin/mkfs.xfs -L localvol /dev/vdc
+    - /usr/sbin/mkfs.xfs -L etcd /dev/vdd
+    - sleep "$(($RANDOM % 60))"
+    - sync
+    - reboot
+  mounts:
+    - [ '/dev/vdc', '/var/lib/origin/openshift.local.volumes', 'xfs', 'defaults,gquota' ]
+    - [ '/dev/vdd', '/var/lib/etcd', 'xfs', 'defaults' ]
+  rh_subscription:
+    username: {{vault_rhsub_user}}
+    password: {{vault_rhsub_password}}
+    add-pool: [{{vault_rhsub_pool}}]
+    server-hostname: {{vault_rhsub_server}}
+    enable-repo: ['rhel-7-server-rpms', 'rhel-7-server-extras-rpms', 'rhel-7-fast-datapath-rpms', 'rhel-7-server-ose-3.9-rpms']
+    disable-repo: []
+
+vms:
+  # Master VMs
+  - name: "master0.{{ public_hosted_zone }}"
+    profile: "{{ master_vm }}"
+    tag: openshift_master
+    cloud_init:
+      host_name: "master0.{{ public_hosted_zone }}"
+      authorized_ssh_keys: "{{ root_ssh_key }}"
+      custom_script: "{{ cloud_init_script_master }}"
+  - name: "master1.{{ public_hosted_zone }}"
+    tag: openshift_master
+    profile: "{{ master_vm }}"
+    cloud_init:
+      host_name: "master1.{{ public_hosted_zone }}"
+      authorized_ssh_keys: "{{ root_ssh_key }}"
+      custom_script: "{{ cloud_init_script_master }}"
+  - name: "master2.{{ public_hosted_zone }}"
+    tag: openshift_master
+    profile: "{{ master_vm }}"
+    cloud_init:
+      host_name: "master2.{{ public_hosted_zone }}"
+      authorized_ssh_keys: "{{ root_ssh_key }}"
+      custom_script: "{{ cloud_init_script_master }}"
+
+  # Infra VMs
+  - name: "infra0.{{ public_hosted_zone }}"
+    tag: openshift_infra
+    profile: "{{ node_vm }}"
+    cloud_init:
+      host_name: "infra0.{{ public_hosted_zone }}"
+      authorized_ssh_keys: "{{ root_ssh_key }}"
+      custom_script: "{{ cloud_init_script_node }}"
+  - name: "infra1.{{ public_hosted_zone }}"
+    tag: openshift_infra
+    profile: "{{ node_vm }}"
+    cloud_init:
+      host_name: "infra1.{{ public_hosted_zone }}"
+      authorized_ssh_keys: "{{ root_ssh_key }}"
+      custom_script: "{{ cloud_init_script_node }}"
+  - name: "infra2.{{ public_hosted_zone }}"
+    tag: openshift_infra
+    profile: "{{ node_vm }}"
+    cloud_init:
+      host_name: "infra2.{{ public_hosted_zone }}"
+      authorized_ssh_keys: "{{ root_ssh_key }}"
+      custom_script: "{{ cloud_init_script_node }}"
+
+  # Node VMs
+  - name: "app0.{{ public_hosted_zone }}"
+    tag: openshift_node
+    profile: "{{ node_vm }}"
+    cloud_init:
+      host_name: "app0.{{ public_hosted_zone }}"
+      authorized_ssh_keys: "{{ root_ssh_key }}"
+      custom_script: "{{ cloud_init_script_node }}"
+  - name: "app1.{{ public_hosted_zone }}"
+    tag: openshift_node
+    profile: "{{ node_vm }}"
+    cloud_init:
+      host_name: "app1.{{ public_hosted_zone }}"
+      authorized_ssh_keys: "{{ root_ssh_key }}"
+      custom_script: "{{ cloud_init_script_node }}"
+  - name: "app2.{{ public_hosted_zone }}"
+    tag: openshift_node
+    profile: "{{ node_vm }}"
+    cloud_init:
+      host_name: "app2.{{ public_hosted_zone }}"
+      authorized_ssh_keys: "{{ root_ssh_key }}"
+      custom_script: "{{ cloud_init_script_node }}"
+
+  # Load balancer
+  - name: "lb.{{ public_hosted_zone }}"
+    tag: openshift_lb
+    profile: "{{ node_vm }}"
+    cloud_init:
+      host_name: "lb.{{ public_hosted_zone }}"
+      authorized_ssh_keys: "{{ root_ssh_key }}"
+      custom_script: "{{ cloud_init_script_node }}"
+
+affinity_groups:
+  - name: masters_ag
+    cluster: "{{ rhv_cluster }}"
+    vm_enforcing: false
+    vm_rule: negative
+    vms:
+      - "master0.{{ public_hosted_zone }}"
+      - "master1.{{ public_hosted_zone }}"
+      - "master2.{{ public_hosted_zone }}"
+    wait: true
+  - name: infra_ag
+    cluster: "{{ rhv_cluster }}"
+    vm_enforcing: false
+    vm_rule: negative
+    vms:
+      - "infra0.{{ public_hosted_zone }}"
+      - "infra1.{{ public_hosted_zone }}"
+      - "infra2.{{ public_hosted_zone }}"
+    wait: true
+
+  - name: app_ag
+    cluster: "{{ rhv_cluster }}"
+    vm_enforcing: false
+    vm_rule: negative
+    vms:
+      - "app0.{{ public_hosted_zone }}"
+      - "app1.{{ public_hosted_zone }}"
+      - "app2.{{ public_hosted_zone }}"
+...

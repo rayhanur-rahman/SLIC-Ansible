@@ -1,0 +1,9 @@
+{% raw %}---
+- name: restart Redis
+  service: >
+    name={{redis_service}}
+    state=restarted
+  sudo: True
+  tags:
+    - redis
+{% endraw %}

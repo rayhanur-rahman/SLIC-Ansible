@@ -1,0 +1,10 @@
+---
+- name: "{{ 'Create' if (state is undefined or 'absent' not in state) else 'Terminate' }} S3 bucket ( hosted registry )"
+  s3_bucket:
+    name: "{{ clusterid }}.{{ dns_domain }}-registry"
+    region: "{{ aws_region }}"
+    state: "{{ state | default('present') }}"
+    tags:
+      Clusterid: "{{ clusterid }}"
+  retries: 3
+  delay: 3

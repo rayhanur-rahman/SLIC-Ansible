@@ -1,0 +1,390 @@
+---
+# Copyright 2016, IBM US, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
+# This sample inventory file provides a typical setup for a system with 3
+# controller nodes, 3 Ceph nodes, 2 compute nodes, 1 management switch and 1 data
+# switch in a single rack.
+# This file will be copied to the first controller node as /var/oprc/inventory.yml
+
+hardware-mgmt-network: 192.168.16.0/20   # 4096 addresses
+ip-base-addr-mgmt-switches: 2   # 20 contiguous ip addresses will be reserved
+ip-base-addr-data-switches: 21   # 160 contiguous ip addresses will be reserved
+redundant-network: false
+userid-default: user
+password-default: passw0rd
+userid-mgmt-switch: user        # applied to all mgmt switches
+password-mgmt-switch: passw0rd  # applied to all mgmt switches
+userid-data-switch: user
+password-data-switch: passw0rd
+internal-floating-ipaddr: 1.2.3.4/22
+external-floating-ipaddr: 1.2.3.5/20
+# This is the public key that the initial deployer system will use to contact
+# the controller node that will do the OpenStack Ansible, Ceph Ansible, etc parts of the deployment.
+ssh-public-key: |
+    ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCq9P3i2ohXPjfxn1lk0PaGMtiI4lCwY/n2tZQmgATb2pmQgYyiPZlOCUnEvcW+Nnke+GvHdlqOHpoWXWI9RYKl3uAkibOzyikItgKGVOaxpBaK9QUx/bQAc0hYnGWi/SdHDhauEEuTf7czC9wnlzqjyyeyNVmQhfJpzVpZiL/X1uk4P7tORDtRPMbA5cLAKEJ1nc0ovXhiqsVFqC5FV/XwfXfxs9djvygFB1lPFqw/TN/M+oX4yELbQbgs8/WXveeBFs6b1/Iq2SCT+VtxqJu1waShladLRdGlNZsHiIvc0Um2wIRF7b5XPIj3S7lGUwDfTwid2ErtyIRFaTlbvvC1 admin1@whgvnode000
+networks:
+    external1:
+        description: Organization site or external network
+        addr: 10.0.16.0/22
+        broadcast: 10.0.16.255
+        gateway: 10.0.16.1
+        dns-nameservers: 10.0.16.200
+        dns-search: mycompany.domain.com
+        method: static
+        eth-port: eth10
+    external2:
+        description: Interface for eth11
+        method: manual
+        eth-port: eth11
+    openstack-mgmt:
+       description: OpenStack Management Network
+       bridge: br-mgmt
+       method: static
+       tcp_segmentation_offload: off
+       addr: 172.29.236.0/22 #ipv4 openstack management network
+       vlan: 10
+       eth-port: eth10
+    openstack-stg:
+       description: OpenStack Management Network
+       bridge: br-storage
+       method: static
+       tcp_segmentation_offload: off
+       addr: 172.29.244.0/22  #ipv4 openstack storage network
+       vlan: 20
+       eth-port: eth10
+    openstack-tenant-vxlan:
+       description: OpenStack Tenant vxlan Network
+       bridge: br-vxlan
+       method: static
+       addr: 172.29.240.0/22 #ipv4 openstack tenant network
+       vlan: 30     # vxlan vlan id
+       eth-port: eth11
+    openstack-tenant-vlan:
+       description: OpenStack Tenant vlan Network
+       bridge: br-vlan
+       method: static
+       addr: 0.0.0.0/1 # Nodes do not get IPs assigned in this network
+       eth-port: eth11
+    ceph-replication:
+       addr: 172.29.248.0/22  # ipv4 ceph replication network
+       method: static
+       vlan: 40
+       eth-port: eth11
+    swift-replication:
+       addr: 172.29.252.0/22  # ipv4 ceph replication network
+       method: static
+       vlan: 50
+       eth-port: eth11
+racks:   # This information is optional (not required to be present)
+   - rack-id: rack1
+     data-center: dataeast
+     room: room33
+     row: row1
+switches:
+    mgmt:  #single management switch (single rack) for first release
+       - hostname: mgmtswitch1
+         ipv4-addr: 10.0.16.2
+         userid: joeuser
+         password: letmein
+         rack-id: rack1
+         rack-eia: 39
+         model: G8052
+         serial-number: abc123
+    leaf:    # single leaf switch for first release
+       - hostname: leafswitch1
+         ipv4-addr: 10.0.16.3
+         userid: joeuser
+         password: letmein
+         rack-id: rack1
+         rack-eia: 40
+         model: SX1410
+         serial-number: cde234
+# spine switches not supported in first release
+node_templates:
+    controller:
+        hostname: hostname seed
+        userid-ipmi: userid
+        password-ipmi: password
+        rename-interaces:
+            - p1p4: eth10
+            - p1p6: eth11
+        bond-interfaces: # not used, not implemented
+            - [eth10, eth11]
+        ipmi-ports:
+            rack1: [2, 3, 5]
+        pxe-ports:
+            rack1: [20, 21, 23]
+        eth10-ports:
+            rack1: [11, 12, 13]
+        eth11-ports:
+            rack1: [41, 42, 43]
+        networks:
+            - openstack-mgmt
+            - openstack-stg
+            - openstack-tenant-vlan
+            - openstack-tenant-vxlan
+            - external1
+            - external2
+    compute:
+        hostname: hostname seed
+        userid-ipmi: userid
+        password-ipmi: password
+        rename-interaces:
+            - p1p4: eth10
+            - p1p6: eth11
+        bond-interfaces: # not used, not implemented
+            - [eth10, eth11]
+        ipmi-ports:
+            rack1: [2, 3, 5]
+        pxe-ports:
+            rack1: [20, 21, 23]
+        eth10-ports:
+            rack1: [11, 12, 13]
+        eth11-ports:
+            rack1: [41, 42, 43]
+        networks:
+            - openstack-mgmt
+            - openstack-stg
+            - openstack-tenant-vlan
+            - openstack-tenant-vxlan
+            - external1
+            - external2
+    ceph-osd:
+        hostname: hostname seed
+        userid-ipmi: userid
+        password-ipmi: password
+        rename-interaces:
+            - p1p4: eth10
+            - p1p6: eth11
+        bond-interfaces:  # not used, not implemented
+            - [eth10, eth11]
+        ipmi-ports:
+            rack1: [2, 3, 5]
+        pxe-ports:
+            rack1: [20, 21, 23]
+        eth10-ports:
+            rack1: [11, 12, 13]
+        eth11-ports:
+            rack1: [41, 42, 43]
+        networks:
+            - external1
+            - openstack-stg
+            - ceph-replication
+nodes:
+    controllers:     # OpenStack controller nodes
+        - hostname: controller1  #(associated with external1-addr below)
+          external1-addr: 10.0.16.4  # on the eth10 interface
+          external2-addr: ''
+          template: controller
+          userid: janeuser
+          cobbler-profile: controllerx86     #name of cobbler profile
+          rack-id: rack1
+          rack-eia: 8
+          chassis-part-number: xyz123       # ipmi field value
+          chassis-serial-number: abcd-1234  # ipmi field value
+          model: RD550        # ipmi field value
+          serial-number: abcd1234 # ipmi field value
+          ipv4-ipmi: 192.168.16.200
+          mac-ipmi: 11:22:33:44:55:66 # mac address of the ipmi port
+          userid-ipmi: joeuser   # userid for logging into the ipmi port
+          password-ipmi: joeuserpw # password for logging into the ipmi port
+          switch-port-ipmi: 2
+          ipv4-pxe: 192.168.16.220
+          mac-pxe: 22:33:44:55:66:77
+          switch-port-pxe: 10
+          openstack-mgmt-addr: 172.29.236.2
+          openstack-stg-addr: 172.29.244.2
+          openstack-tenant-vlxan-addr: 172.29.240.2
+          openstack-tenant-vlan-addr: 0.0.0.0
+        - hostname: controller2  #(associated with external1-addr below)
+          external1-addr: 10.0.16.5  # on the eth10 interface
+          external2-addr: ''
+          template: controller
+          userid: janeuser
+          cobbler-profile: controllerx86     #name of cobbler profile
+          rack-id: rack1
+          rack-eia: 9
+          chassis-part-number: xyz123       # ipmi field value
+          chassis-serial-number: abcd-1235  # ipmi field value
+          model: RD550        # ipmi field value
+          serial-number: abcd1235 # ipmi field value
+          ipv4-ipmi: 192.168.16.201
+          mac-ipmi: 11:22:33:44:55:67 # mac address of the ipmi port
+          userid-ipmi: joeuser   # userid for logging into the ipmi port
+          password-ipmi: joeuserpw # password for logging into the ipmi port
+          switch-port-ipmi: 3
+          ipv4-pxe: 192.168.16.220
+          mac-pxe: 22:33:44:55:66:78
+          switch-port-pxe: 11
+          openstack-mgmt-addr: 172.29.236.3
+          openstack-stg-addr: 172.29.244.3
+          openstack-tenant-vlxan-addr: 172.29.240.3
+          openstack-tenant-vlan-addr: 0.0.0.0
+        - hostname: controller3  #(associated with external1-addr below)
+          external1-addr: 10.0.16.5  # on the eth10 interface
+          external2-addr: ''
+          template: controller
+          userid: janeuser
+          cobbler-profile: controllerx86     #name of cobbler profile
+          rack-id: rack1
+          rack-eia: 10
+          chassis-part-number: xyz123       # ipmi field value
+          chassis-serial-number: abcd-1234  # ipmi field value
+          model: RD550        # ipmi field value
+          serial-number: abcd1234 # ipmi field value
+          ipv4-ipmi: 192.168.16.202
+          mac-ipmi: 11:22:33:44:55:66 # mac address of the ipmi port
+          userid-ipmi: joeuser   # userid for logging into the ipmi port
+          password-ipmi: joeuserpw # password for logging into the ipmi port
+          switch-port-ipmi: 4
+          ipv4-pxe: 192.168.16.220
+          mac-pxe: 22:33:44:55:66:79
+          switch-port-pxe: 12
+          openstack-mgmt-addr: 172.29.236.4
+          openstack-stg-addr: 172.29.244.4
+          openstack-tenant-vlxan-addr: 172.29.240.4
+          openstack-tenant-vlan-addr: 0.0.0.0
+    compute:    # OpenStack compute nodes
+        - hostname: compute1
+          external1-addr: 10.0.16.6  # on the eth10 port
+          external2-addr: ''
+          template: compute
+          userid: janeuser
+          cobbler-profile: computeppc64le
+          rack-id: rack1
+          rack-eia: 11
+          chassis-part-number: 8335-GCA # ipmi field value
+          chassis-serial-number: abc124   # ipmi field value
+#          Note: 8335 model and serial-number not present in ipmi
+          ipv4-ipmi: 192.168.16.203
+          mac-ipmi: 11:22:33:44:55:67
+          userid-ipmi:  joeuser
+          password-ipmi:  joeuserpw
+          switch-port-ipmi: 5
+          ipv4-pxe: 192.168.16.223
+          mac-pxe: 11:22:33:44:55:68
+          switch-port-pxe: 13
+          openstack-mgmt-addr: 172.29.236.5 #ipv4 management network
+          openstack-stg-addr: 172.29.244.5  #ipv4 storage network
+          openstack-tenant-vlxan-addr: 172.29.240.5 #ipv4 tenant network
+          openstack-tenant-vlan-addr: 0.0.0.0
+        - hostname: compute2
+          external1-addr: 10.0.16.3  # on the eth10 port
+          external2-addr: ''
+          template: compute
+          userid: janeuser
+          cobbler-profile: computeppc64le
+          rack-id: rack1
+          rack-eia: 13
+          chassis-part-number: 8335-GCA # ipmi field value
+          chassis-serial-number: abc125   # ipmi field value
+          ipv4-ipmi: 192.168.16.204
+          mac-ipmi: 11:22:33:44:55:69
+          userid-ipmi:  joeuser
+          password-ipmi: joeuserpw
+          switch-port-ipmi: 6
+          ipv4-pxe: 192.168.16.224
+          mac-pxe: 11:22:33:44:55:67
+          switch-port-pxe: 14
+          openstack-mgmt-addr: 172.29.236.6 #ipv4 management network
+          openstack-stg-addr: 172.29.244.6  #ipv4 storage network
+          openstack-tenant-vlxan-addr: 172.29.240.6 #ipv4 tenant network
+          openstack-tenant-vlan-addr: 0.0.0.0
+    ceph-osd:
+        - hostname: ceph-osd1   #Linux hostname
+          external1-addr: 10.0.16.4  # on the eth10 interface
+          template: ceph-osd
+          userid: janeuser
+          cobbler-profile: cephppc64le
+          rack-id: rack1
+          rack-eia: 15
+          chassis-part-number: 8348-21C # ipmi field value
+          chassis-serial-number: abc126   # ipmi field value
+          ipv4-ipmi: 192.168.16.205
+          mac-ipmi: 11:22:33:44:55:68
+          userid-ipmi:  joeuser
+          password-ipmi:  joeuserpw
+          switch-port-ipmi: 7
+          ipv4-pxe: 192.168.16.225
+          mac-pxe: 11:22:33:44:55:69
+          switch-port-pxe: 15
+          openstack-stg-addr: 172.29.244.7  #ipv4 storage network
+          ceph-replication-addr: 172.29.240.7 #ipv4 replication network
+          journal-devices:
+             - /dev/sdc
+             - /dev/sdd
+          osd-devices:
+             - /dev/sde
+             - /dev/sdf
+             - /dev/sdg
+             - /dev/sdh
+        - hostname: ceph-osd2
+          external1-addr: 10.0.16.5  # on the eth10 port
+          template: ceph-osd
+          userid: janeuser
+          cobbler-profile: cephppc64le
+          rack-id: rack1
+          rack-eia: 17
+          chassis-part-number: 8348-21C # ipmi field value
+          chassis-serial-number: abc127   # ipmi field value
+          ipv4-ipmi: 192.168.16.206
+          mac-ipmi: 11:22:33:44:55:70
+          userid-ipmi:  joeuser
+          password-ipmi:  joeuserpw
+          switch-port-ipmi: 8
+          ipv4-pxe: 192.168.16.226
+          mac-pxe: 11:22:33:44:55:71
+          switch-port-pxe: 16
+          openstack-stg-addr: 172.29.244.8  #ipv4 storage network
+          ceph-replication-addr: 172.29.240.8 #ipv4 replication network
+          journal-devices:
+             - /dev/sdc
+             - /dev/sdd
+          osd-devices:
+             - /dev/sde
+             - /dev/sdf
+             - /dev/sdg
+             - /dev/sdh
+        - hostname: ceph-osd3
+          external1-addr: 10.0.16.6  # on the eth10 port
+          template: ceph-osd
+          userid: janeuser
+          cobbler-profile: cephppc64le
+          rack-id: rack1
+          rack-eia: 19
+          chassis-part-number: 8348-21C # ipmi field value
+          chassis-serial-number: abc128   # ipmi field value
+          model: system model number    # ipmi field value
+          serial-number: system serial number # ipmi field value
+          ipv4-ipmi: 192.168.16.207
+          mac-ipmi: 11:22:33:44:55:72
+          userid-ipmi:  joeuser
+          password-ipmi:  joeuserpw
+          switch-port-ipmi: 9
+          ipv4-pxe: 192.168.16.227
+          mac-pxe: 11:22:33:44:55:73
+          switch-port-pxe: 17
+          openstack-stg-addr: 172.29.244.9  #ipv4 storage network
+          ceph-replication-addr: 172.29.240.9 #ipv4 replication network
+          journal-devices:
+             - /dev/sdc
+             - /dev/sdd
+          osd-devices:
+             - /dev/sde
+             - /dev/sdf
+             - /dev/sdg
+             - /dev/sdh
+...

@@ -1,0 +1,106 @@
+---
+# to get the storage volume info and set up groups in case this playbook is run by itself
+- include: cloudformation_setup.yml
+- include: group_setup.yml
+
+- name: Unregister host(s)
+  hosts: cluster_hosts
+  serial: 1
+  tasks:
+  - name: Unregister host
+    redhat_subscription:
+      username: "{{ rhsm_user }}"
+      password: "{{ rhsm_pass }}"
+      state: absent
+    when: not (skip_subscription_management | bool)
+
+# We have to clean out the things using volumes before we can
+# delete the volumes
+- name: Clean the OpenShift environment
+  hosts: project_master
+  gather_facts: no
+  vars_files:
+  - vars.yml
+  vars:
+    default_context: 'default/openshift-internal-{{ r53_host_zone  | regex_replace("\.", "-") }}:{{ api_port }}/system:admin'
+  tasks:
+  - name: Change the oc context
+    command: "oc config use-context {{ default_context }}"
+
+  - name: Switch to default project
+    command: oc project default
+
+  # delete the docker registry and then the PV/PVC
+  - name: Remove docker registry
+    command: oc delete all -l docker-registry=default
+    ignore_errors: true
+
+  - name: Remove registry pv and pvc
+    command: oc delete pvc/registry-pvc pv/registry-pv
+    ignore_errors: true
+
+  - name: Remove the logging project
+    command: oc delete project logging
+    ignore_errors: true
+
+  - name: Remove the logging pv
+    command: oc delete pv/logging-pv
+    ignore_errors: true
+
+  - name: Remove everything in the openshift-infra project
+    command: oc delete all --all -n openshift-infra
+    ignore_errors: true
+
+  # I don't know of a good way to determine when the volumes are
+  # un-mounted, so instead we just sleep for 60 seconds
+  - name: Pause to wait for volumes to be unmounted
+    pause:
+      seconds: 90
+
+- name: Delete the EC2 items 
+  hosts: localhost
+  connection: local
+  become: no
+  gather_facts: no
+  vars_files:
+  - vars.yml
+  tasks:
+  - name: Delete the Route53 entry for master
+    route53:
+      command: delete
+      zone: "{{ r53_zone }}"
+      record: "openshift-master.{{ r53_host_zone }}"
+      ttl: 60
+      type: A
+      value: "{{ hostvars[groups['tag_openshift-demo-' ~ cluster_id ~ '-host-type_master'].0]['ec2_ip_address'] }}"
+      overwrite: yes
+    ignore_errors: true
+
+  - name: Detach the registry, metrics, and logging volumes
+    ec2_vol:
+      id: "{{ item }}"
+      instance: None
+      region: "{{ ec2_region }}"
+    with_items:
+    - "{{ hostvars['localhost']['registry_volume'] }}" 
+    - "{{ hostvars['localhost']['metrics_volume'] }}" 
+    - "{{ hostvars['localhost']['logging_volume'] }}" 
+    ignore_errors: true
+
+  - name: Delete the registry, metrics, and logging volumes
+    ec2_vol:
+      id: "{{ item }}"
+      state: absent
+      region: "{{ ec2_region }}"
+    with_items:
+    - "{{ hostvars['localhost']['registry_volume'] }}" 
+    - "{{ hostvars['localhost']['metrics_volume'] }}" 
+    - "{{ hostvars['localhost']['logging_volume'] }}" 
+    ignore_errors: true
+
+  - name: Destroy the CloudFormation Stack
+    cloudformation:
+      region: "{{ ec2_region }}"
+      stack_name: openshift-demo-{{ cluster_id }}
+      state: absent
+      template: files/cloudformation.json

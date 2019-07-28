@@ -1,0 +1,10 @@
+---
+- name: "Set fact: availability_zones"
+  set_fact:
+    vpc_subnet_azs: "{{ lookup('ec2_zones_by_region', creds).split(',') }}"
+
+- debug:
+    msg:
+      - 'Error in env; AWS VPC does NOT contain 3 at least availability zones.  Please pick another region!'
+  when: "( vpc_subnet_azs | length | int ) < 3"
+  failed_when: "(vpc_subnet_azs | length | int ) < 3"

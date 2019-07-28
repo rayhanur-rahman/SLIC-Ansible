@@ -1,0 +1,14 @@
+---
+- hosts: master
+  become: true
+  gather_facts: no
+
+  tasks:
+  - name: Adds a node to the cluster
+    shell: /usr/libexec/ganesha/ganesha-ha.sh --add "{{ ha_base_dir }}" {{ item.host }} {{ item.vip }}
+    with_items: "{{ nodes_list }}"
+    register: result
+
+  - name: Report ganesha add-node status
+    debug: msg={{ result.results[0].stdout_lines }} verbosity=0
+    when: result.results is defined and result.results[0].stdout_lines is defined

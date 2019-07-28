@@ -1,0 +1,13 @@
+---
+  # Add '*' autosign entry to Puppet CA of integrated capsule
+  - name: "Add '*' autosign entry (Satellite 6.3 and below)"
+    lineinfile:
+      path: "/etc/puppet/autosign.conf"
+      line: "*"
+    when: "sat_version is version('6.3', '<=')"
+  - name: "Add '*' autosign entry (Satellite 6.4 and above)"
+    lineinfile:
+      path: "/etc/puppetlabs/puppet/autosign.conf"
+      line: "*"
+    when: "sat_version is version('6.4', '>=')"
+...

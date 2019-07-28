@@ -1,0 +1,20 @@
+---
+# We rely on root LV name always containing string "root"
+# If now, this is not going to work
+  - name: "Extend root LV to all available VG space"
+    lvol:
+      vg: "{{ item.value.vg }}"
+      lv: "{{ item.key }}"
+      size: +100%FREE
+    with_dict: "{{ ansible_lvm.lvs }}"
+    when: item.key in "lv_root"
+
+# Ansible can't loop over block. Argh!! So we have to do the loop twice
+  - name: "Resize the root filesystem"
+    filesystem:
+      dev: "/dev/{{ item.value.vg }}/{{ item.key }}"
+      fstype: xfs
+      resizefs: yes
+    with_dict: "{{ ansible_lvm.lvs }}"
+    when: item.key in "lv_root"
+...

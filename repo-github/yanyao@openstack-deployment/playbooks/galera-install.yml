@@ -1,0 +1,124 @@
+---
+# Copyright 2014, Rackspace US, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- name: Check galera cluster status
+  hosts: galera_all
+  max_fail_percentage: 0
+  tasks:
+    - name: Check if mysql is running
+      command: /usr/bin/mysqladmin --defaults-file=/etc/mysql/debian.cnf ping
+      ignore_errors: true
+      register: mysql_running
+
+    - fail:
+        msg: "The cluster may be broken, mysql is not running but appears to be installed. Fix it before re-running the playbook or override with 'openstack-ansible -e galera_ignore_cluster_state=true galera-install.yml'."
+      when:
+        - not galera_ignore_cluster_state | bool
+        - mysql_running.rc == 1
+        - mysql_running.stderr | search("Check that mysqld is running and that the socket")
+
+    - name: Gather mysql facts
+      mysql_status_facts:
+      ignore_errors: true
+
+    - fail:
+        msg: "The cluster may be broken, mysql is running but unable to gather mysql facts. Fix it before re-running the playbook or override with 'openstack-ansible -e galera_ignore_cluster_state=true galera-install.yml'."
+      when:
+        - not galera_ignore_cluster_state | bool
+        - mysql_running.rc == 0
+        - "{{ 'mysql_status' not in hostvars[inventory_hostname] }}"
+
+    - fail:
+        msg: "wsrep_incoming_addresses does not match across the cluster. Please fix before re-running the playbooks or override with 'openstack-ansible -e galera_ignore_cluster_state=true galera-install.yml'."
+      with_items: play_hosts
+      when:
+        - not galera_ignore_cluster_state | bool
+        - mysql_running.rc == 0
+        - hostvars[item]['mysql_running']['rc'] == 0
+        - hostvars[inventory_hostname]['mysql_status']['wsrep_incoming_addresses'] != hostvars[item]['mysql_status']['wsrep_incoming_addresses']
+
+    - set_fact:
+        galera_existing_cluster: false
+
+    - set_fact:
+        galera_existing_cluster: true
+      with_items: play_hosts
+      when: hostvars[item].mysql_running.rc == 0
+  vars:
+    galera_ignore_cluster_state: false
+  tags:
+    - discover-galera-cluster-state
+
+- name: Install galera server
+  hosts: galera_all
+  serial: 1
+  max_fail_percentage: 20
+  user: root
+  pre_tasks:
+    - name: Use the lxc-openstack aa profile
+      lxc_container:
+        name: "{{ container_name }}"
+        container_config:
+          - "lxc.aa_profile=lxc-openstack"
+      delegate_to: "{{ physical_host }}"
+      when: not is_metal | bool
+      register: container_config
+      tags:
+        - lxc-aa-profile
+    - name: Galera extra lxc config
+      lxc_container:
+        name: "{{ container_name }}"
+        container_command: |
+          [[ ! -d "/var/lib/mysql" ]] && mkdir -p "/var/lib/mysql"
+        container_config:
+          - "lxc.mount.entry=/openstack/{{ container_name }} var/lib/mysql none bind 0 0"
+      delegate_to: "{{ physical_host }}"
+      when: not is_metal | bool
+      register: container_extra_config
+      tags:
+        - galera-mysql-dir
+    - name: Wait for container ssh
+      wait_for:
+        port: "22"
+        delay: "{{ ssh_delay }}"
+        search_regex: "OpenSSH"
+        host: "{{ ansible_ssh_host }}"
+      delegate_to: "{{ physical_host }}"
+      when: >
+            (container_config is defined and container_config | changed) or
+            (container_extra_config is defined and container_extra_config | changed)
+      tags:
+        - galera-ssh-wait
+  roles:
+    - { role: "galera_server", tags: [ "galera-server" ] }
+    - role: "rsyslog_client"
+      rsyslog_client_log_rotate_file: galera_log_rotate
+      rsyslog_client_log_dir: "/var/log/mysql_logs"
+      rsyslog_client_log_files:
+        - /var/log/mysql.log
+        - /var/log/mysql.err
+      rsyslog_client_config_name: "99-galera-rsyslog-client.conf"
+      tags:
+        - "galera-rsyslog-client"
+        - "rsyslog-client"
+    - role: "system_crontab_coordination"
+      tags:
+        - "system-crontab-coordination"
+  vars:
+    galera_server_id: "{{ inventory_hostname | string_2_int }}"
+    galera_wsrep_node_name: "{{ container_name }}"
+    ansible_hostname: "{{ container_name }}"
+    ansible_ssh_host: "{{ container_address }}"
+    is_metal: "{{ properties.is_metal|default(false) }}"

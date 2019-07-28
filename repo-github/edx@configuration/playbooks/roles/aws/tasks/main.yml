@@ -1,0 +1,116 @@
+---
+#
+# edX Configuration
+#
+# github:     https://github.com/edx/configuration
+# wiki:       https://openedx.atlassian.net/wiki/display/OpenOPS
+# code style: https://openedx.atlassian.net/wiki/display/OpenOPS/Ansible+Code+Conventions
+# license:    https://github.com/edx/configuration/blob/master/LICENSE.TXT
+#
+#
+#
+# Tasks for role aws
+#
+# Overview:
+#
+#
+# Dependencies:
+#
+#
+# Example play:
+#
+#
+
+#
+# Start dealing with Jumbo frames issue in mixed MTU deployements in AWS
+#
+- name: Gather ec2 facts for use in other roles
+  action: ec2_metadata_facts
+  no_log: True
+  when: AWS_GATHER_FACTS
+  tags:
+    - deploy
+
+- name: Set the MTU to 1500 temporarily
+  shell: "/sbin/ifconfig {{ ansible_default_ipv4.interface }} mtu 1500 up"
+  when: ansible_distribution in common_debian_variants
+
+- name: Set the MTU to 1500 permanently
+  template:
+    dest: /etc/network/if-up.d/mtu
+    src: mtu.j2
+    mode: 0755
+    owner: root
+    group: root
+  when: ansible_distribution in common_debian_variants
+#
+# End dealing with Jumbo frames issue in mixed MTU deployements in AWS
+#
+
+- name: Install system packages
+  apt:
+    name: "{{ item }}"
+    state: present
+    update_cache: yes
+  with_items: "{{ aws_debian_pkgs }}"
+  when: ansible_distribution in common_debian_variants
+
+- name: Copy the Python requirements file
+  template:
+    src: "requirements.txt.j2"
+    dest: "{{ aws_requirements }}"
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Install aws python packages
+  pip:
+    requirements: "{{ aws_requirements }}"
+    state: present
+    extra_args: "-i {{ COMMON_PYPI_MIRROR_URL }}"
+
+- name: Copy the boto global config file
+  template:
+    src: "boto.cfg.j2"
+    dest: "/etc/boto.cfg"
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Create s3 log sync script
+  template:
+    dest: "{{ aws_s3_sync_script }}"
+    src: send-logs-to-s3.j2
+    mode: 0755
+    owner: root
+    group: root
+  when: COMMON_OBJECT_STORE_LOG_SYNC
+
+- name: Create symlink for s3 log sync script
+  file:
+    state: link
+    src: "{{ aws_s3_sync_script }}"
+    dest: "{{ COMMON_OBJECT_STORE_LOG_SYNC_SCRIPT }}"
+  when: COMMON_OBJECT_STORE_LOG_SYNC
+
+ # update the ssh motd on Ubuntu
+ # Remove some of the default motd display on ubuntu
+ # and add a custom motd.  These do not require an
+ # ssh restart
+ # Only needed for EC2 instances.
+- name: Check if files exist so the next task doesn't fail
+  stat:
+    path: "{{ item }}"
+  register: motd_files_exist
+  with_items:
+    - "/etc/update-motd.d/10-help-text"
+    - "/usr/share/landscape/landscape-sysinfo.wrapper"
+    - "/etc/update-motd.d/51-cloudguest"
+    - "/etc/update-motd.d/91-release-upgrade"
+
+- name: Update the ssh motd on Ubuntu
+  file:
+    path: "{{ item.item }}"
+    mode: "0644"
+  when: vagrant_home_dir.stat.exists == False and ansible_distribution in common_debian_variants and item.stat.exists
+  with_items: "{{ motd_files_exist.results }}"

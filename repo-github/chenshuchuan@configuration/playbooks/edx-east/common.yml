@@ -1,0 +1,13 @@
+- name: Deploy common
+  hosts: all
+  sudo: True
+  gather_facts: True
+  vars:
+    enable_datadog: True
+    enable_splunkforwarder: True
+  roles:
+    - common
+    - role: datadog
+      when: enable_datadog
+    - role: splunkforwarder
+      when: enable_splunkforwarder

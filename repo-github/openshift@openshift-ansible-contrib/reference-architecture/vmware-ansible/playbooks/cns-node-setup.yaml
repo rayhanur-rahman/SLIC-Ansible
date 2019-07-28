@@ -1,0 +1,11 @@
+---
+- hosts: storage
+  gather_facts: yes
+  become: no
+  roles:
+  - rhsm
+  - vmware-guest-setup
+  - cloud-provider-setup
+  - docker-storage-setup
+  - openshift-volume-quota
+  - gluster-ports

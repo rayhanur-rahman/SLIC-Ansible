@@ -1,0 +1,170 @@
+---
+- hosts: all
+  tags:
+    - common
+  pre_tasks:
+    - name: Include user-override vars
+      include_vars: "{{ rock_config }}"
+  become: true
+  roles:
+    - common
+
+- hosts: elasticsearch
+  tags:
+    - elasticsearch
+    - elastic
+    - es_before
+  pre_tasks:
+    - name: Include user-override vars
+      include_vars: "{{ rock_config }}"
+  vars:
+    - es_step: "before"
+  become: true
+  roles:
+    - role: elasticsearch
+      when: "'elasticsearch' in installed_services"
+
+- hosts: elasticsearch
+  tags:
+    - elasticsearch
+    - elastic
+    - es_restart
+  pre_tasks:
+    - name: Include user-override vars
+      include_vars: "{{ rock_config }}"
+  vars:
+    - es_step: "restart"
+  serial: 1
+  become: true
+  roles:
+    - role: elasticsearch
+      when: "'elasticsearch' in installed_services and (es_restart is defined and es_restart)"
+
+- hosts: elasticsearch
+  tags:
+    - elasticsearch
+    - elastic
+    - es_after
+  pre_tasks:
+    - name: Include user-override vars
+      include_vars: "{{ rock_config }}"
+  vars:
+    - es_step: "after"
+  become: true
+  roles:
+    - role: elasticsearch
+      when: "'elasticsearch' in installed_services"
+
+- hosts: zookeeper
+  tags:
+    - zookeeper
+  pre_tasks:
+    - name: Include user-override vars
+      include_vars: "{{ rock_config }}"
+  become: true
+  roles:
+    - role: zookeeper
+      when: "'zookeeper' in installed_services"
+
+- hosts: kafka
+  tags:
+    - kafka
+  pre_tasks:
+    - name: Include user-override vars
+      include_vars: "{{ rock_config }}"
+  become: true
+  roles:
+    - role: kafka
+      when: "'kafka' in installed_services"
+
+- hosts: stenographer
+  tags:
+    - docket
+    - stenographer
+  pre_tasks:
+    - name: Include user-override vars
+      include_vars: "{{ rock_config }}"
+  become: true
+  roles:
+    - role: stenographer
+      when: "'stenographer' in installed_services"
+      stenographer_monitor_interfaces: "{{ rock_monifs }}"
+
+- hosts: bro
+  tags:
+    - bro
+    - sensor
+  pre_tasks:
+    - name: Include user-override vars
+      include_vars: "{{ rock_config }}"
+  become: true
+  roles:
+    - role: bro
+      when: "'bro' in installed_services"
+
+- hosts: suricata
+  tags:
+    - suricata
+    - sensor
+  pre_tasks:
+    - name: Include user-override vars
+      include_vars: "{{ rock_config }}"
+  become: true
+  roles:
+    - role: suricata
+      when: "'suricata' in installed_services"
+
+- hosts: fsf
+  tags:
+    - fsf
+    - sensor
+  pre_tasks:
+    - name: Include user-override vars
+      include_vars: "{{ rock_config }}"
+  become: true
+  roles:
+    - role: fsf
+      when: "'fsf' in installed_services"
+
+- hosts:
+    - docket
+    - kibana
+  tags:
+    - docket
+    - kibana
+    - lighttpd
+    - web
+  pre_tasks:
+    - name: Include user-override vars
+      include_vars: "{{ rock_config }}"
+  become: true
+  roles:
+    - role: lighttpd
+      when: "'lighttpd' in installed_services"
+
+- hosts:
+    - docket
+    - stenographer
+  tags:
+    - docket
+    - stenographer
+  pre_tasks:
+    - name: Include user-override vars
+      include_vars: "{{ rock_config }}"
+  become: true
+  roles:
+    - role: docket
+      when: "'docket' in installed_services"
+      docket_enable: "{{ ('docket' in enabled_services) | bool }}"
+
+- hosts: kibana
+  tags:
+    - kibana
+    - elastic
+  pre_tasks:
+    - name: Include user-override vars
+      include_vars: "{{ rock_config }}"
+  become: true
+  roles:
+    - role: kibana
+      when: "'kibana' in installed_services"

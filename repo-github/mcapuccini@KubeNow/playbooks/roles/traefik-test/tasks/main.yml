@@ -1,0 +1,40 @@
+---
+- name: "get traefik ready count"
+  command: >
+    kubectl get ds traefik-ingress-controller --namespace=kube-system
+    -o jsonpath='{@.status.numberReady}'
+  register: get_ready_count
+
+- name: "match traefik ready count with edge count"
+  fail:
+    msg: >
+      the number of traefik ready count ({{get_ready_count.stdout}})
+      doesn't match the number of edge nodes ({{groups['edge'] | length}})
+  when: "{{get_ready_count.stdout | int}} != {{groups['edge'] | length}}"
+
+- name: set cheese domain name
+  set_fact:
+    cheese_domain_name: "{{domain}}"
+
+- name: deploy cheese helm package
+  command: >
+    helm install --name cheese
+    --set domain={{cheese_domain_name}} kubenow/cheese
+
+- name: "test stilton"
+  include: >
+    test-page.yml
+    cheese=stilton
+    search_for=Stilton
+
+- name: "test wensleydale"
+  include: >
+    test-page.yml
+    cheese=wensleydale
+    search_for=Wensleydale
+
+- name: "test cheddar"
+  include: >
+    test-page.yml
+    cheese=cheddar
+    search_for=Cheddar

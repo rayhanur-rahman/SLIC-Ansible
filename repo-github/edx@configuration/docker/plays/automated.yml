@@ -1,0 +1,7 @@
+- name: Deploy autom
+  hosts: all
+  become: True
+  gather_facts: True
+  roles:
+    - common
+    - automated

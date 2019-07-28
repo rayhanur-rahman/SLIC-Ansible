@@ -1,0 +1,265 @@
+---
+- name: Install jenkins specific system packages
+  apt:
+    name: "{{ item }}"
+    state: present
+    update_cache: yes
+  with_items: "{{ jenkins_debian_pkgs }}"
+  tags:
+    - jenkins
+    - install
+    - install:system-requirements
+
+- name: Install jenkins extra system packages
+  apt:
+    name: "{{ item }}"
+    state: present
+    update_cache: yes
+  with_items: "{{ JENKINS_EXTRA_PKGS }}"
+  tags:
+    - jenkins
+    - install
+    - install:system-requirements
+
+- name: Create jenkins group
+  group:
+    name: "{{ jenkins_group }}"
+    state: present
+  tags:
+    - install
+    - install:system-requirements
+
+- name: Add the jenkins user to the group
+  user:
+    name: "{{ jenkins_user }}"
+    append: yes
+    groups: "{{ jenkins_group }}"
+  tags:
+     - install                      
+     - install:system-requirements
+
+# Should be resolved in the next release, but until then we need to do this
+# https://issues.jenkins-ci.org/browse/JENKINS-20407
+- name: Workaround for JENKINS-20407
+  file:
+    path: "/var/run/jenkins"
+    state: directory
+    owner: "{{ jenkins_user }}"
+    group: "{{ jenkins_group }}"
+  tags:
+    - install
+    - install:system-requirements
+
+# TODO in Ansible 2.1 we can do apt: deb="{{ jenkins_deb_url }}"
+- name: download Jenkins package
+  get_url: url="{{ jenkins_deb_url }}" dest="/tmp/{{ jenkins_deb }}"
+  tags:
+    - install
+    - install:app-requirements
+
+- name: install Jenkins package
+  apt:
+    deb: "/tmp/{{ jenkins_deb }}"
+  tags:
+    - install
+    - install:app-requirements
+
+- name: Stop Jenkins
+  service:
+    name: jenkins
+    state: stopped
+  tags:
+    - manage
+    - manage:stop
+
+- name: Set jvm args
+  lineinfile:
+    backup: yes
+    dest: /etc/default/jenkins
+    regexp: '^JAVA_ARGS='
+    line: 'JAVA_ARGS="{{ jenkins_jvm_args }}"'
+  tags:
+    - java
+    - jenkins
+    - install
+    - install:app-configuration
+
+- name: Set jenkins home
+  lineinfile:
+    backup: yes
+    dest: /etc/default/jenkins
+    regexp: '^JENKINS_HOME='
+    line: 'JENKINS_HOME="{{ jenkins_home }}"'
+  tags:
+    - java
+    - jenkins
+    - install
+    - install:app-configuration
+
+# Move /var/lib/jenkins to Jenkins home (on the EBS)
+- name: Move /var/lib/jenkins
+  command: "mv /var/lib/jenkins {{ jenkins_home }}"
+  args:
+    creates: "{{ jenkins_home }}"
+  tags:
+    - install
+    - install:base
+
+- name: Set owner for Jenkins home
+  file:
+    path: "{{ jenkins_home }}"
+    recurse: yes
+    state: directory
+    owner: "{{ jenkins_user }}"
+    group: "{{ jenkins_group }}"
+  tags:
+    - install
+    - install:app-requirements  
+
+# Symlink /var/lib/jenkins to {{ COMMON_DATA_DIR }}/jenkins
+# since Jenkins will expect its files to be in /var/lib/jenkins
+- name: Symlink /var/lib/jenkins
+  file:
+    src: "{{ jenkins_home }}"
+    dest: /var/lib/jenkins
+    state: link
+    owner: "{{ jenkins_user }}"
+    group: "{{ jenkins_group }}"
+  tags:
+    - install
+    - install:base
+
+# Using this instead of the user module because the user module
+# fails if the directory exists.
+- name: Set home directory for jenkins user
+  shell: "usermod -d {{ jenkins_home }} {{ jenkins_user }}"
+  tags:
+    - install
+    - install:base
+
+- name: Make plugins directory
+  file:
+    path: "{{ jenkins_home }}/plugins"
+    state: directory
+    owner: "{{ jenkins_user }}"
+    group: "{{ jenkins_group }}"
+  tags:
+    - install
+    - install:base
+    - install:plugins
+
+# We first download the plugins to a temp directory and include
+# the version in the file name.  That way, if we increment
+# the version, the plugin will be updated in Jenkins
+- name: Download Jenkins plugins
+  get_url:
+    url: "http://updates.jenkins-ci.org/download/plugins/{{ item.name }}/{{ item.version }}/{{ item.name }}.hpi"
+    dest: "/tmp/{{ item.name }}_{{ item.version }}"
+  with_items: "{{ jenkins_plugins }}"
+  register: jenkins_plugin_downloads
+  tags:
+    - install
+    - install:base
+    - install:plugins
+
+- name: Install Jenkins plugins
+  command: "cp {{ item.dest }} {{ jenkins_home }}/plugins/{{ item.item.name }}.hpi"
+  with_items: "{{ jenkins_plugin_downloads.results }}"
+  when: item.changed
+  tags:
+    - install
+    - install:base
+    - install:plugins
+
+- name: Set Jenkins plugin permissions
+  file:
+    path: "{{ jenkins_home }}/plugins/{{ item.item.name }}.hpi"
+    owner: "{{ jenkins_user }}"
+    group: "{{ jenkins_group }}"
+    mode: "0644"
+  with_items: "{{ jenkins_plugin_downloads.results }}"
+  when: item.changed
+  tags:
+    - install
+    - install:base
+    - install:plugins
+
+# We had to fork some plugins to workaround
+# certain issues.  If these changes get merged
+# upstream, we may be able to use the regular plugin install process.
+# Until then, we compile and install the forks ourselves.
+- name: Checkout custom plugin repo
+  git:
+    repo: "{{ item.repo_url }}"
+    dest: "/tmp/{{ item.repo_name }}"
+    version: "{{ item.version }}"
+    accept_hostkey: yes
+  with_items: "{{ jenkins_custom_plugins }}"
+  register: jenkins_custom_plugins_checkout
+  tags:
+    - install
+    - install:base
+    - install:plugins
+
+- name: Compile custom plugins
+  command: "mvn -Dmaven.test.skip=true install"
+  args:
+    chdir: "/tmp/{{ item.item.repo_name }}"
+  with_items: "{{ jenkins_custom_plugins_checkout.results }}"
+  when: item.changed
+  tags:
+    - install
+    - install:base
+    - install:plugins
+
+- name: Install custom plugins
+  command: mv /tmp/{{ item.item.repo_name }}/target/{{ item.item.package }}
+           {{ jenkins_home }}/plugins/{{ item.item.package }}
+  with_items: "{{ jenkins_custom_plugins_checkout.results }}"
+  when: item.changed
+  tags:
+    - install
+    - install:base
+    - install:plugins
+
+- name: Set custom plugin permissions
+  file:
+    path: "{{ jenkins_home }}/plugins/{{ item.item.package }}"
+    owner: "{{ jenkins_user }}"
+    group: "{{ jenkins_group }}"
+    mode: "0700"
+  with_items: "{{ jenkins_custom_plugins_checkout.results }}"
+  when: item.changed
+  tags:
+    - install
+    - install:base
+    - install:plugins
+
+# Plugins that are bundled with Jenkins are "pinned".
+# Jenkins will overwrite updated plugins with its built-in version
+# unless we create a ".pinned" file for the plugin.
+# See https://issues.jenkins-ci.org/browse/JENKINS-13129
+- name: Create plugin pin files
+  command: "touch {{ jenkins_home }}/plugins/{{ item }}.jpi.pinned"
+  args:
+    creates: "{{ jenkins_home }}/plugins/{{ item }}.jpi.pinned"
+  with_items: "{{ jenkins_bundled_plugins }}"
+  tags:
+    - install
+    - install:base
+    - install:plugins
+
+- include: datadog.yml
+  when: COMMON_ENABLE_DATADOG
+  tags:
+    - datadog
+    - install
+    - install:base
+
+- name: restart Jenkinks
+  service:
+    name: jenkins
+    state: restarted
+  tags:
+    - manage
+    - manage:start  

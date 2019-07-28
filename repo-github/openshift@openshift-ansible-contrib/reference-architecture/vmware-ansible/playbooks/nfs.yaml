@@ -1,0 +1,13 @@
+---
+- hosts: localhost
+  roles:
+    - create-vm-nfs
+
+- name: Deploy NFS server
+  hosts: nfs
+  gather_facts: true
+  roles:
+    - rhsm
+    - vmware-guest-setup
+    - nfs-server
+  ignore_errors: yes

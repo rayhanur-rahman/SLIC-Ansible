@@ -1,0 +1,97 @@
+---
+- set_fact:
+    alive_nodes: "{{ hostvars[groups['etcd-sec'][0]].etcd_healthy_nodes.stdout | int }}"
+- debug:
+    var: alive_nodes
+
+# Minory dead
+- name: If minority died, just restart them
+  service:
+    name: 'etcd'
+    state: started
+    enabled: True
+  become: True
+  when: alive_nodes == '2'
+
+- name: Ensure we have the configuration folder
+  file:
+    name: '/var/lib/etcd/'
+    state: directory
+  become: True
+  when: alive_nodes == '1'
+
+- name: Add the node to the cluster
+  shell: "etcdctl -C https://{{ hostvars[groups['etcd-sec'][0]].ansible_default_ipv4.address }}:2379 --cert-file /etc/etcd/peer.crt --key-file /etc/etcd/peer.key --ca-file /etc/etcd/ca.crt member add {{ ansible_hostname }} https://{{ ansible_default_ipv4.address }}:2380 2>/dev/null | grep '^ETCD_INITIAL_CLUSTER='"
+  register: host_addition
+  delegate_to: "{{ groups['etcd-sec'][0] }}"
+  when: alive_nodes == '1'
+
+- debug:
+    var: host_addition
+  when: alive_nodes == '1'
+
+- name: Remove the configuration lines we will be replacing
+  lineinfile:
+    regexp: '^ETCD_NAME='
+    state: absent
+    path: /etc/etcd/etcd.conf
+  when: alive_nodes == '1'
+
+- name: Add the configuration lines for ETCD_NAME
+  lineinfile:
+    regexp: '^ETCD_NAME'
+    state: present
+    line: 'ETCD_NAME={{ ansible_hostname }}'
+    path: /etc/etcd/etcd.conf
+  when: alive_nodes == '1'
+
+- name: Remove the configuration lines we will be replacing
+  lineinfile:
+    regexp: '^ETCD_INITIAL_CLUSTER='
+    state: absent
+    path: /etc/etcd/etcd.conf
+  when: alive_nodes == '1'
+
+- name: Add the configuration lines for ETCD_INITIAL_CLUSTER
+  lineinfile:
+    regexp: '^ETCD_INITIAL_CLUSTER'
+    state: present
+    line: "{{ host_addition.stdout }}"
+    path: /etc/etcd/etcd.conf
+  when: alive_nodes == '1'
+
+- name: Remove the configuration lines we will be replacing
+  lineinfile:
+    regexp: '^ETCD_INITIAL_CLUSTER_STATE='
+    state: absent
+    path: /etc/etcd/etcd.conf
+  when: alive_nodes == '1'
+
+- name: Add the configuration lines for ETCD_INITIAL_CLUSTER_STATE
+  lineinfile:
+    regexp: '^ETCD_INITIAL_CLUSTER_STATE'
+    state: present
+    line: 'ETCD_INITIAL_CLUSTER_STATE=existing'
+    path: /etc/etcd/etcd.conf
+  when: alive_nodes == '1'
+
+- name: Delete the member information
+  file:
+    path: /var/lib/etcd/member/
+    state: absent
+  when: alive_nodes == '1'
+
+- name: Start the etcd service to join the new cluster
+  systemd:
+    name: 'etcd'
+    state: restarted
+    enabled: True
+    daemon_reload: True
+  become: True
+  register: task_result
+  when: alive_nodes == '1'
+
+- name: Wait 5 seconds for sync between etcd servers
+  pause:
+    seconds: 5
+  when: task_result | changed

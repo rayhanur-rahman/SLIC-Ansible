@@ -1,0 +1,69 @@
+---
+
+- name: Install packages
+  yum:
+    name:
+      - fsf
+    state: present
+
+- name: Create FSF data directory
+  file:
+    path: "{{ fsf_data_dir }}"
+    mode: 0755
+    owner: "{{ fsf_user }}"
+    group: "{{ fsf_group }}"
+    state: directory
+    setype: var_log_t
+
+- name: Create FSF archive directory
+  file:
+    path: "{{ fsf_archive_dir }}"
+    mode: 0755
+    owner: "{{ fsf_user }}"
+    group: "{{ fsf_group }}"
+    state: directory
+
+- name: Configure logrotate for FSF logs
+  template:
+    src: templates/logrotate-fsf.j2
+    dest: /etc/logrotate.d/fsf
+    mode: 0644
+    owner: root
+    group: root
+
+- name: Configure fsf-server
+  template:
+    src: templates/fsf-server-config.j2
+    dest: /opt/fsf/fsf-server/conf/config.py
+    owner: "{{ fsf_user }}"
+    group: "{{ fsf_group }}"
+    mode: 0644
+
+- name: Configure fsf-client
+  template:
+    src: templates/fsf-client-config.j2
+    dest: /opt/fsf/fsf-client/conf/config.py
+    owner: "{{ fsf_user }}"
+    group: "{{ fsf_group }}"
+    mode: 0644
+
+- name: Enable and start FSF
+  service:
+    name: fsf
+    state: "{{ 'started' if 'fsf' in enabled_services else 'stopped' }}"
+    enabled: "{{ 'True' if 'fsf' in enabled_services else 'False' }}"
+
+- name: Apply Logstash role
+  include_role:
+    name: logstash
+    apply:
+      delegate_to: "{{ host }}"
+      vars:
+        logstash_configs:
+          - { src: 'ls-input-fsf.j2', dest: '100-input-fsf.conf' }
+          - { src: 'ls-filter-fsf.j2', dest: '500-filter-fsf.conf' }
+          - { src: 'ls-output-fsf.j2', dest: '999-output-fsf.conf' }
+  loop:
+    "{{ groups['logstash'] }}"
+  loop_control:
+    loop_var: host

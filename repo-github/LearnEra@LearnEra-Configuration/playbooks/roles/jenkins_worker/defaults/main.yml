@@ -1,0 +1,34 @@
+---
+jenkins_user: "jenkins"
+jenkins_group: "jenkins"
+jenkins_home: /home/jenkins
+
+# repo for nodejs
+jenkins_chrislea_ppa: "ppa:chris-lea/node.js"
+
+# System packages
+jenkins_debian_pkgs:
+    - build-essential
+    - gfortran
+    - graphviz
+    - libgraphviz-dev
+    - libopenblas-dev
+    - liblapack-dev
+    - libmysqlclient-dev
+    - libxml2-dev
+    - libgeos-dev
+    - libxslt1-dev
+    - nodejs
+    - pkg-config
+    - gettext
+
+# Ruby Specific Vars
+jenkins_rbenv_root: "{{ jenkins_home }}/.rbenv"
+jenkins_ruby_version: "1.9.3-p374"
+
+# JSCover direct download URL
+jscover_url: "http://files.edx.org/testeng/JSCover-1.0.2.zip"
+jscover_version: "1.0.2"
+
+# packer direct download URL
+packer_url: "https://dl.bintray.com/mitchellh/packer/0.6.1_linux_amd64.zip"

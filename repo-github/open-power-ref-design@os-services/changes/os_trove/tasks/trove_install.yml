@@ -1,0 +1,125 @@
+---
+# Copyright 2016 Internet Solutions (Pty) Ltd
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# (c) 2016 Donovan Francesco <donovan.francesco@is.co.za>
+# (c) 2016 Paul Stevens <paul.stevens@is.co.za>
+
+- name: Install distro packages
+  package:
+    name: "{{ item }}"
+    state: "{{ trove_package_state }}"
+    update_cache: "{{ (ansible_pkg_mgr == 'apt') | ternary('yes', omit) }}"
+    cache_valid_time: "{{ (ansible_pkg_mgr == 'apt') | ternary(cache_timeout, omit) }}"
+  register: install_packages
+  until: install_packages|success
+  retries: 5
+  delay: 2
+  with_items: "{{ trove_distro_packages }}"
+
+- name: Create developer mode constraint file
+  copy:
+    dest: "/opt/developer-pip-constraints.txt"
+    content: |
+      {% for item in trove_developer_constraints %}
+      {{ item }}
+      {% endfor %}
+  when:
+    - trove_developer_mode | bool
+
+- name: Install required pip packages
+  pip:
+    name: "{{ trove_requires_pip_packages | join(' ') }}"
+    state: "{{ trove_pip_package_state }}"
+    extra_args: >-
+      {{ (pip_install_upper_constraints is defined) | ternary('--constraint ' + pip_install_upper_constraints | default(''),'') }}
+      {{ pip_install_options | default('') }}
+  register: install_packages
+  until: install_packages|success
+  retries: 5
+  delay: 2
+
+- name: Retrieve checksum for venv download
+  uri:
+    url: "{{ trove_venv_download_url | replace('tgz', 'checksum') }}"
+    return_content: yes
+  register: trove_venv_checksum
+  when: trove_venv_download | bool
+
+- name: Attempt venv download
+  get_url:
+    url: "{{ trove_venv_download_url }}"
+    dest: "/var/cache/{{ trove_venv_download_url | basename }}"
+    checksum: "sha1:{{ trove_venv_checksum.content | trim }}"
+  register: trove_get_venv
+  when: trove_venv_download | bool
+
+- name: Remove existing venv
+  file:
+    path: "{{ trove_bin | dirname }}"
+    state: absent
+  when: trove_get_venv | changed
+
+- name: Create trove venv dir
+  file:
+    path: "{{ trove_bin | dirname }}"
+    state: directory
+    mode: "0755"
+  register: trove_venv_dir
+  when: trove_get_venv | changed
+
+- name: Unarchive pre-built venv
+  unarchive:
+    src: "/var/cache/{{ trove_venv_download_url | basename }}"
+    dest: "{{ trove_bin | dirname }}"
+    copy: "no"
+  when: trove_get_venv | changed
+  notify:
+    - Restart trove API services
+    - Restart trove conductor service
+    - Restart trove taskmanager service
+    - Restart Apache
+
+- name: Install pip packages
+  pip:
+    name: "{{ trove_pip_packages }}"
+    state: "{{ trove_pip_package_state }}"
+    virtualenv: "{{ trove_bin | dirname }}"
+    virtualenv_site_packages: "no"
+    extra_args: >-
+      {{ trove_developer_mode | ternary('--constraint /opt/developer-pip-constraints.txt', '') }}
+      {{ (pip_install_upper_constraints is defined) | ternary('--constraint ' + pip_install_upper_constraints | default(''),'') }}
+      {{ pip_install_options | default('') }}
+  register: install_packages
+  until: install_packages|success
+  retries: 5
+  delay: 2
+  when: trove_get_venv | failed or trove_get_venv | skipped
+  notify:
+    - Restart trove API services
+    - Restart trove conductor service
+    - Restart trove taskmanager service
+    - Restart Apache
+
+- name: Update virtualenv path
+  command: >
+    virtualenv-tools --update-path=auto --reinitialize {{ trove_bin | dirname }}
+  when: trove_get_venv | changed
+
+- name: Record the venv tag deployed
+  ini_file:
+    dest: "/etc/ansible/facts.d/openstack_ansible.fact"
+    section: trove
+    option: venv_tag
+    value: "{{ trove_venv_tag }}"

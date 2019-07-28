@@ -1,0 +1,108 @@
+---
+- name: "{{ 'Create' if (state is undefined or 'absent' not in state) else 'Terminate' }} ELB ( master external )"
+  ec2_elb_lb:
+    cross_az_load_balancing: "yes"
+    health_check:
+      ping_protocol: https
+      ping_port: 443
+      ping_path: "/api"
+      response_timeout: 2
+      interval: 5
+      unhealthy_threshold: 2
+      healthy_threshold: 3
+    listeners:
+      - protocol: tcp
+        load_balancer_port: 443
+        instance_protocol: tcp
+        instance_port: 443
+    name: "{{ clusterid }}-master-external"
+    region: "{{ aws_region }}"
+    scheme: internet-facing
+    security_group_names:
+      - "master"
+    state: "{{ state | default('present') }}"
+    subnets: "{{ item.subnets }}"
+    tags: "{{ {'kubernetes.io/cluster/' ~ clusterid: clusterid, 'clusterid': clusterid} }}"
+    wait: yes
+  retries: 3
+  delay: 3
+  register: elbextmaster
+  with_items:
+    - subnets: "{{ [
+        subnet_public.results.0.subnet.id,
+        subnet_public.results.1.subnet.id,
+        subnet_public.results.2.subnet.id
+       ] if (state is undefined or 'absent' not in state) else [] }}"
+
+- name: "{{ 'Create' if (state is undefined or 'absent' not in state) else 'Terminate' }} ELB ( master internal )"
+  ec2_elb_lb:
+    cross_az_load_balancing: "yes"
+    health_check:
+      ping_protocol: https
+      ping_port: 443
+      ping_path: "/api"
+      response_timeout: 2
+      interval: 5
+      unhealthy_threshold: 2
+      healthy_threshold: 3
+    listeners:
+      - protocol: tcp
+        load_balancer_port: 443
+        instance_protocol: tcp
+        instance_port: 443
+    name: "{{ clusterid }}-master-internal"
+    region: "{{ aws_region }}"
+    scheme: internal
+    security_group_names:
+      - "master"
+    state: "{{ state | default('present') }}"
+    subnets: "{{ item.subnets }}"
+    tags: "{{ {'kubernetes.io/cluster/' ~ clusterid: clusterid, 'clusterid': clusterid} }}"
+    wait: yes
+  retries: 3
+  delay: 3
+  register: elbintmaster
+  with_items:
+    - subnets: "{{ [
+        subnet_private.results.0.subnet.id,
+        subnet_private.results.1.subnet.id,
+        subnet_private.results.2.subnet.id
+       ] if (state is undefined or 'absent' not in state) else [] }}"
+
+- name: "{{ 'Create' if (state is undefined or 'absent' not in state) else 'Terminate' }} ELB ( infra public )"
+  ec2_elb_lb:
+    cross_az_load_balancing: "yes"
+    health_check:
+      ping_protocol: tcp
+      ping_port: 443
+      response_timeout: 2
+      interval: 5
+      unhealthy_threshold: 2
+      healthy_threshold: 2
+    listeners:
+      - protocol: tcp
+        load_balancer_port: 80
+        instance_protocol: tcp
+        instance_port: 80
+      - protocol: tcp
+        load_balancer_port: 443
+        instance_protocol: tcp
+        instance_port: 443
+    name: "{{ clusterid }}-infra"
+    region: "{{ aws_region }}"
+    scheme: internet-facing
+    security_group_names:
+      - "infra"
+    state: "{{ state | default('present') }}"
+    subnets: "{{ item.subnets }}"
+    tags: "{{ {'kubernetes.io/cluster/' ~ clusterid: clusterid, 'clusterid': clusterid} }}"
+    wait: yes
+  retries: 3
+  delay: 3
+  register: elbextinfra
+  with_items:
+    - subnets: "{{ [
+        subnet_public.results.0.subnet.id,
+        subnet_public.results.1.subnet.id,
+        subnet_public.results.2.subnet.id
+       ] if (state is undefined or 'absent' not in state) else [] }}"

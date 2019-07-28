@@ -1,0 +1,21 @@
+---
+
+- name: Manage local host and network database
+  hosts: [ 'debops_all_hosts', 'debops_service_netbase' ]
+  become: True
+
+  environment: '{{ inventory__environment | d({})
+                   | combine(inventory__group_environment | d({}))
+                   | combine(inventory__host_environment  | d({})) }}'
+
+  roles:
+
+    - role: debops.python
+      tags: [ 'role::python', 'skip::python', 'role::netbase' ]
+      python__dependent_packages3:
+        - '{{ netbase__python__dependent_packages3 }}'
+      python__dependent_packages2:
+        - '{{ netbase__python__dependent_packages2 }}'
+
+    - role: debops.netbase
+      tags: [ 'role::netbase', 'skip::netbase' ]

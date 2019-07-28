@@ -1,0 +1,11 @@
+---
+## RHV Engine credentials
+vault_engine_url: https://engine.example.com/ovirt-engine/api
+vault_engine_user: admin@internal
+vault_engine_password:
+vault_root_ssh_key:
+vault_rhsub_user:
+vault_rhsub_password:
+vault_rhsub_pool:
+vault_rhsub_server:
+...

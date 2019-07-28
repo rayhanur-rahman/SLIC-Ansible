@@ -1,0 +1,9 @@
+---
+- name: forum | restart the forum service
+  supervisorctl_local: >
+    name=forum
+    supervisorctl_path={{ supervisor_ctl }}
+    config={{ supervisor_cfg }}
+    state=restarted
+  when: not devstack
+  tags: deploy

@@ -1,0 +1,18 @@
+---
+- name: "{{ 'Create' if (state is undefined or 'absent' not in state) else 'Terminate' }} RouteTable"
+  ec2_vpc_route_table:
+    purge_routes: "{{ 'false' if (state is undefined or 'absent' not in state) else 'true' }}"
+    purge_subnets: "{{ 'false' if (state is undefined or 'absent' not in state) else 'true' }}"
+    region: "{{ aws_region }}"
+    state: "{{ state | default('present') }}"
+    tags:
+      Name: "{{ item.name }}"
+    vpc_id: "{{ vpc.vpc.id if (state is undefined or 'absent' not in state) else vpc.vpcs[0].vpc_id }}"
+  retries: 3
+  delay: 3
+  when: ( vpc.vpc is defined ) or ( vpc.vpcs[0] is defined )
+  with_items:
+    - name: routing
+    - name: "{{ vpc_subnet_azs.0 }}"
+    - name: "{{ vpc_subnet_azs.1 }}"
+    - name: "{{ vpc_subnet_azs.2 }}"

@@ -1,0 +1,9 @@
+dependencies:
+  - role: os-dependent-vars
+  - role: config
+  - role: libraries
+  - role: rsyslog
+  - role: etcd
+  - role: binary
+  - role: firewall
+  - role: networkd

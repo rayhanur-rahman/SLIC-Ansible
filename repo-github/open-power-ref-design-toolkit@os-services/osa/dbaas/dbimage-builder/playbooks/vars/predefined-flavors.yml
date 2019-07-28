@@ -1,0 +1,153 @@
+---
+
+flavors:
+  - description: Redis tiny flavor
+    name: redis
+    config: tiny
+    vcpus: 2
+    mem: 2048         # MBs
+    vdisk1: 6         # GBs
+  - description: Redis small flavor
+    name: redis
+    config: small
+    vcpus: 4
+    mem: 4096
+    vdisk1: 6
+  - description: Redis medium flavor
+    name: redis
+    config: medium
+    vcpus: 8
+    mem: 8192
+    vdisk1: 6
+  - description: Redis large flavor
+    name: redis
+    config: large
+    vcpus: 16
+    mem: 16384
+    vdisk1: 6
+  - description: Redis xlarge flavor
+    name: redis
+    config: xlarge
+    vcpus: 32
+    mem: 32768
+    vdisk1: 10
+  - description: Mariadb tiny flavor
+    name: mariadb
+    config: tiny
+    vcpus: 2
+    mem: 2048
+    vdisk1: 6         # GBs
+  - description: Mariadb small flavor
+    name: mariadb
+    config: small
+    vcpus: 4
+    mem: 4096
+    vdisk1: 6
+  - description: Mariadb medium flavor
+    name: mariadb
+    config: medium
+    vcpus: 8
+    mem: 8192
+    vdisk1: 6
+  - description: Mariadb large flavor
+    name: mariadb
+    config: large
+    vcpus: 16
+    mem: 16384
+    vdisk1: 8
+  - description: Mariadb xlarge flavor
+    name: mariadb
+    config: xlarge
+    vcpus: 32
+    mem: 32768
+    vdisk1: 16
+  - description: MySQL tiny flavor
+    name: mysql
+    config: tiny
+    vcpus: 2
+    mem: 2048         # MBs
+    vdisk1: 6         # GBs
+  - description: MySQL small flavor
+    name: mysql
+    config: small
+    vcpus: 4
+    mem: 4096
+    vdisk1: 6
+  - description: MySQL medium flavor
+    name: mysql
+    config: medium
+    vcpus: 8
+    mem: 8192
+    vdisk1: 6
+  - description: MySQL large flavor
+    name: mysql
+    config: large
+    vcpus: 16
+    mem: 16384
+    vdisk1: 8
+  - description: MySQL xlarge flavor
+    name: mysql
+    config: xlarge
+    vcpus: 32
+    mem: 32768
+    vdisk1: 16
+  - description: MongoDB tiny flavor
+    name: mongodb
+    config: tiny
+    vcpus: 2
+    mem: 2048         # MBs
+    vdisk1: 6         # GBs
+  - description: MongoDB small flavor
+    name: mongodb
+    config: small
+    vcpus: 4
+    mem: 2048
+    vdisk1: 6
+  - description: MongoDB medium flavor
+    name: mongodb
+    config: medium
+    vcpus: 8
+    mem: 4096
+    vdisk1: 6
+  - description: MongoDB large flavor
+    name: mongodb
+    config: large
+    vcpus: 16
+    mem: 8192
+    vdisk1: 8
+  - description: MongoDB xlarge flavor
+    name: mongodb
+    config: xlarge
+    vcpus: 32
+    mem: 16384
+    vdisk1: 16
+  - description: Postgresql tiny flavor
+    name: postgresql
+    config: tiny
+    vcpus: 2
+    mem: 2048         # MBs
+    vdisk1: 6         # GBs
+  - description: Postgresql small flavor
+    name: postgresql
+    config: small
+    vcpus: 4
+    mem: 4096
+    vdisk1: 6
+  - description: Postgresql medium flavor
+    name: postgresql
+    config: medium
+    vcpus: 8
+    mem: 8192
+    vdisk1: 6
+  - description: Postgresql large flavor
+    name: postgresql
+    config: large
+    vcpus: 16
+    mem: 16384
+    vdisk1: 8
+  - description: Postgresql xlarge flavor
+    name: postgresql
+    config: xlarge
+    vcpus: 32
+    mem: 32768
+    vdisk1: 16

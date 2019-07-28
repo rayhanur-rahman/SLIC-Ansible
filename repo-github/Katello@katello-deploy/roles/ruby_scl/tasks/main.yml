@@ -1,0 +1,22 @@
+- name: 'Install SCL repository'
+  yum:
+    name: centos-release-scl-rh
+    state: present
+
+- name: 'Install Ruby SCL'
+  yum:
+    name:
+      - "{{ ruby_scl_version }}"
+      - "{{ ruby_scl_version }}-ruby-devel"
+      - "{{ ruby_scl_version }}-rubygem-bundler"
+    state: present
+
+- name: Enable and configure SCL at login
+  blockinfile:
+    dest: /etc/profile.d/enable-{{ ruby_scl_version }}.sh
+    create: yes
+    block: |
+      #!/bin/bash
+      source scl_source enable {{ ruby_scl_version }}
+      export GEM_HOME=$(ruby -e 'print Gem.user_dir')
+      export PATH=$PATH:$(ruby -e 'print Gem.user_dir')/bin

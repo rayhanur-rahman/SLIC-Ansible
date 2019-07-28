@@ -1,0 +1,12 @@
+---
+- hosts: georep_master
+  become: true
+  gather_facts: no
+
+  tasks:
+  - name: Create the geo-rep session
+    geo_rep: action=create
+            mastervol="{{ mastervolname }}"
+            slavevol="{{ slavevol }}"
+            force="{{ force }}"
+            georepuser="{{ georepuser }}"

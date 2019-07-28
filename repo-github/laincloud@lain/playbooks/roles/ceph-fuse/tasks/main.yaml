@@ -1,0 +1,65 @@
+- name: install ceph-fuse
+  yum:
+    name: ceph-fuse-{{ ceph_version }}
+    state: present
+
+# 在centos7里， /etc/fstab 不支持 '=', 所以我们用 ':' 替代
+# 但是在用 ':' 替代之后需要修改ceph-fuse mount的代码，使其先将  ':' 替换成 '='
+
+- name: backup /sbin/mount.fuse.ceph
+  command: mv /sbin/mount.fuse.ceph /sbin/mount.fuse.ceph.bak
+  when: ansible_distribution_major_version == "7"
+
+- name: update ceph mount file,
+  shell: sed -e "s/cephargs='--'\`echo \$1 | sed 's\/,\/ --\/g'\`/fs_spec=\`echo \$1 | sed \'s\/:\/=\/g\'\` \ncephargs=\'--\'\`echo \$fs_spec | sed \'s\/,\/ --\/g\'\`/g" /sbin/mount.fuse.ceph.bak >/sbin/mount.fuse.ceph
+  when: ansible_distribution_major_version == "7"
+
+- name: chmod mount.fuse.ceph
+  file: path=/sbin/mount.fuse.ceph state=file mode=755 group=root owner=root
+
+- name: create ceph conf dir
+  command: mkdir -p /etc/ceph
+  ignore_errors: yes
+
+- name: create ceph client_mountpoint dir
+  command: mkdir -p {{client_mountpoint}}
+  ignore_errors: yes
+
+- name: copy keyring
+  template: src=ceph.client.lain.keyring.j2 dest=/etc/ceph/ceph.client.{{ceph_account}}.keyring
+
+- name: copy ceph.conf
+  template: src=ceph.conf.j2 dest=/etc/ceph/ceph.conf
+
+- name: edit fstab
+  lineinfile: dest=/etc/fstab line="id:{{ceph_account}},client_mountpoint:{{ceph_mountpoint}} {{client_mountpoint}} fuse.ceph _netdev 0 0" insertafter=EOF
+
+- name: mount
+  command: mount -a
+
+- name: init fuse.conf if not exist
+  command: touch /etc/ceph/fuse.conf
+
+- name: edit fuse.conf
+  lineinfile: dest=/etc/ceph/fuse.conf line="{{client_mountpoint}}" insertafter=EOF
+
+- name: install gevent
+  package: name=python-gevent state=present
+
+- name: copy cephmon
+  copy: src=plugins dest=/etc/ceph/ mode=0755
+
+- name: generate cephmon service
+  template: src=cephmon.service.j2 dest=/etc/systemd/system/cephmon.service
+  register: result
+
+- name: reload systemd
+  command: systemctl daemon-reload
+  when: result|changed
+
+- name: "enable cephmon"
+  service: name=cephmon enabled=yes
+
+- name: restart cephmon
+  service: name=cephmon state=restarted
+  when: result

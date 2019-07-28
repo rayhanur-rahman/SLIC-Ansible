@@ -1,0 +1,47 @@
+---
+#
+# edX Configuration
+#
+# github:     https://github.com/edx/configuration
+# wiki:       https://github.com/edx/configuration/wiki
+# code style: https://github.com/edx/configuration/wiki/Ansible-Coding-Conventions
+# license:    https://github.com/edx/configuration/blob/master/LICENSE.TXT
+#
+##
+# Vars for role splunk
+# 
+
+#
+# vars are namespace with the module name.
+#
+splunk_role_name: 'splunk'
+
+SPLUNKFORWARDER_SERVER: 'localhost:9997'
+
+SPLUNKFORWARDER_PACKAGE_LOCATION: !!null
+SPLUNKFORWARDER_DEB: !!null
+SPLUNKFORWARDER_PASSWORD: !!null
+
+SPLUNKFORWARDER_LOG_ITEMS:
+  - directory: '{{ COMMON_LOG_DIR }}'
+    recursive: true
+    index: '{{COMMON_ENVIRONMENT}}-{{COMMON_DEPLOYMENT}}'
+    sourcetype: 'edx'
+  - directory: '/var/log'
+    recursive: true
+    index: '{{COMMON_ENVIRONMENT}}-{{COMMON_DEPLOYMENT}}'
+    sourcetype: 'syslog'
+  - directory: '{{ COMMON_LOG_DIR }}/nginx'
+    recursive: true
+    index: '{{COMMON_ENVIRONMENT}}-{{COMMON_DEPLOYMENT}}'
+    sourcetype: 'nginx'
+
+#
+# OS packages
+#
+splunk_debian_pkgs:
+  - gdebi
+
+splunk_redhat_pkgs: []
+
+splunkforwarder_output_dir: '/opt/splunkforwarder/'

@@ -1,0 +1,42 @@
+---
+- name: install packages
+  sudo: yes
+  yum:
+    name: "{{ item }}"
+    state: latest
+  with_items:
+    - dnsmasq
+    - bind-utils
+    - NetworkManager
+  tags:
+    - dnsmasq
+
+- name: ensure dnsmasq.d directory exists
+  sudo: yes
+  file: 
+    path: /etc/NetworkManager/dnsmasq.d
+    state: directory
+  tags:
+    - dnsmasq
+
+- name: configure dnsmasq for consul 
+  sudo: yes
+  template: 
+    src: 10-consul 
+    dest: /etc/NetworkManager/dnsmasq.d/10-consul
+    mode: 755
+  tags:
+    - dnsmasq
+
+- name: configure networkmanager for dnsmasq
+  sudo: yes
+  lineinfile:
+    dest: /etc/NetworkManager/NetworkManager.conf
+    line: "dns=dnsmasq"
+    insertbefore: "^plugins"
+  notify:
+    - restart networkmanager
+  tags:
+    - dnsmasq
+
+- meta: flush_handlers

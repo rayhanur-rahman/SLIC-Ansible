@@ -1,0 +1,27 @@
+---
+#
+# edX Configuration
+#
+# github:     https://github.com/edx/configuration
+# wiki:       https://openedx.atlassian.net/wiki/display/OpenOPS
+# code style: https://openedx.atlassian.net/wiki/display/OpenOPS/Ansible+Code+Conventions
+# license:    https://github.com/edx/configuration/blob/master/LICENSE.TXT
+#
+# Tasks for role analytics_api
+#
+# Overview: Most of this role's tasks come from edx_django_service.
+#
+#
+# Dependencies:
+#
+
+- name: create api users
+  shell: "{{ analytics_api_home }}/venvs/{{ analytics_api_service_name }}/bin/python manage.py set_api_key {{ item.key }} {{ item.value }}"
+  args:
+    chdir: "{{ analytics_api_code_dir }}"
+  become_user: "{{ analytics_api_user }}"
+  environment: "{{ analytics_api_environment }}"
+  with_dict: "{{ ANALYTICS_API_USERS }}"
+  tags:
+    - manage
+    - manage:app-users

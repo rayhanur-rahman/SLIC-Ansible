@@ -1,0 +1,93 @@
+---
+# Copyright 2016 IBM Corp.
+#
+# All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+  - name: Create execute dir.
+    file:
+      dest: "{{ execute_dir }}"
+      state: directory
+      mode: 0755
+
+  - name: Create bash setup script on remote host.
+    template:
+      src: swift_setup_storage.j2
+      dest: "{{ execute_dir }}/swift_setup_storage.sh"
+      mode: 0755
+
+  - name: Backup /etc/fstab.
+    copy:
+      src: /etc/fstab
+      dest: "/etc/fstab.{{ date }}"
+    when: not report_only|bool
+
+  - name: Execute setup script.
+    command: "{{ execute_dir }}/swift_setup_storage.sh"
+    register: storage_setup_result
+
+  - name: Read accountDiskPrep sdnames.
+    slurp:
+      src: /tmp/output.account.diskprep.sdname
+    register: accountDiskPrep
+    when: account_devices|length > 0
+
+  - name: Fetch accountDiskPrep.
+    fetch:
+      src: /tmp/output.account.diskprep
+      dest: "{{ execute_dir }}/output.account.diskprep.{{ inventory_hostname }}"
+      flat: yes
+    when: account_devices|length > 0
+
+  - name: Print accountDiskPrep sdnames.
+    debug:
+      msg: "{{ accountDiskPrep.content | b64decode }}"
+    when: account_devices|length > 0
+
+  - name: Read containerDiskPrep sdnames.
+    slurp:
+      src: /tmp/output.container.diskprep.sdname
+    register: containerDiskPrep
+    when: container_devices|length > 0
+
+  - name: Fetch containerDiskPrep.
+    fetch:
+      src: /tmp/output.container.diskprep
+      dest: "{{ execute_dir }}/output.container.diskprep.{{ inventory_hostname }}"
+      flat: yes
+    when: container_devices|length > 0
+
+  - name: Print containerDiskPrep sdnames.
+    debug:
+      msg: "{{ containerDiskPrep.content | b64decode }}"
+    when: container_devices|length > 0
+
+  - name: Read objectDiskPrep sdnames.
+    slurp:
+      src: /tmp/output.object.diskprep.sdname
+    register: objectDiskPrep
+    when: object_devices|length > 0
+
+  - name: Fetch objectDiskPrep.
+    fetch:
+      src: /tmp/output.object.diskprep
+      dest: "{{ execute_dir }}/output.object.diskprep.{{ inventory_hostname }}"
+      flat: yes
+    when: object_devices|length > 0
+
+  - name: Print objectDiskPrep sdnames.
+    debug:
+      msg: "{{ objectDiskPrep.content | b64decode }}"
+    when: object_devices|length > 0
+

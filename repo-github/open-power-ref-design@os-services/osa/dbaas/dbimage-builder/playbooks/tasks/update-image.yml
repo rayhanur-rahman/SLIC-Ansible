@@ -1,0 +1,256 @@
+---
+
+# This task is invoked during the invocation of the playbook below:
+#
+# ansible-playbook -i host_file dbimage-upload.yml -u ubuntu -c ssh
+#
+# This is invoked on the deployer under the root user
+
+- debug: var=imageName
+
+- debug: var=chrootCmd
+
+- name: Run fdisk to identify partitions in the image
+  command: fdisk -l "{{ baseDir }}/images/{{ imageName }}.img"
+  become: yes
+  register: fdiskrc
+
+- name: Get offset of rootfs partition in image
+  set_fact:
+    imageOffset: "{{ 512 * (item.split()[1]|int) }}"
+  with_items: "{{ fdiskrc['stdout_lines'] }}"
+  when: imageName + '.img2' in item
+
+- name: Create temp directory to mount image
+  command: mktemp -d "/mnt/dbimage.XXXX"
+  become: true
+  register: mktemprc
+
+- name: Set permissions on temp directory
+  file:
+    path: "{{ mktemprc.stdout }}"
+    state: directory
+    mode: 0755
+  become: true
+
+- name: Mount image on {{ mktemprc.stdout }}
+  shell: |
+    sync
+    mount -t ext4 -o loop,offset={{ imageOffset }} {{ baseDir }}/images/{{ imageName }}.img {{ mktemprc.stdout }}
+  become: true
+  register: mountrc
+  failed_when: false
+
+- debug: var=mountrc
+
+- block:
+  - name: Clean environment in image
+    file:
+      path: "{{ item }}"
+      state: absent
+    when: clean_environment
+    become: true
+    with_items:
+      - "{{ mktemprc.stdout + dib_home }}/.ssh"
+      - "{{ mktemprc.stdout + dib_home }}/dibuser"
+      - "{{ mktemprc.stdout + dib_home }}/trove"
+
+  - name: Create directories in image
+    file:
+      path: "{{ item.dir }}"
+      mode: "{{ item.mode }}"
+      owner: "{{ dibUser }}"
+      group: "{{ dibUser }}"
+      state: directory
+    with_items:
+      - { dir: "{{ mktemprc.stdout + dib_home }}/.ssh", mode: "0700" }
+      - { dir: "{{ mktemprc.stdout + dib_home }}/dibuser", mode: "0750" }
+
+  - name: Copy files from deployer to user {{ dibUser }} home directory in the image
+    copy:
+      src: "{{ item.src }}"
+      dest: "{{ mktemprc.stdout + dib_home }}"
+      mode: "{{ item.mode }}"
+      owner: "{{ dibUser }}"
+      group: "{{ dibUser }}"
+    with_items:
+      - { src: "{{ src_trove }}/trove-guestagent.conf", mode: "0644" }
+
+  - name: Create key for user {{ dibUser }} in alternate location
+    command: "ssh-keygen -t rsa -f {{ mktemprc.stdout + dib_home }}/dibuser/id_rsa -N ''"
+    args:
+      creates: "{{ mktemprc.stdout + dib_home }}/dibuser/id_rsa"
+
+  - name: Get key for dibUser
+    slurp:
+      src: "{{ mktemprc.stdout + dib_home }}/dibuser/id_rsa.pub"
+    register: dib_pub_key
+
+  - name: Set authorized key for dibuser in alternate location
+    authorized_key:
+      user: "{{ dibUser }}"
+      state: present
+      key: "{{ dib_pub_key.content | b64decode }}"
+      path: "{{ mktemprc.stdout + dib_home }}/dibuser/authorized_keys"
+      manage_dir: false
+
+  - name: Set authorized key for deployer in alternate location
+    authorized_key:
+      user: "{{ dibUser }}"
+      state: present
+      key: "{{ hostvars[groups['deployer'][0]].deployer_pub_key }}"
+      path: "{{ mktemprc.stdout + dib_home }}/dibuser/authorized_keys"
+      manage_dir: false
+    when: hostvars[groups['deployer'][0]].deployer_pub_key
+
+  - name: Set authorized key for controller in alternate location
+    authorized_key:
+      user: "{{ dibUser }}"
+      state: present
+      key: "{{ hostvars[groups['controller'][0]].controller_pub_key }}"
+      path: "{{ mktemprc.stdout + dib_home }}/dibuser/authorized_keys"
+      manage_dir: false
+    when: hostvars[ groups['controller'][0]].controller_pub_key
+
+  - name: Set authorized key for {{ cloudKey | quote }} in alternate location
+    authorized_key:
+      user: "{{ dibUser }}"
+      state: present
+      key: "{{ hostvars[groups['controller'][0]].cloud_pub_key }}"
+      path: "{{ mktemprc.stdout + dib_home }}/dibuser/authorized_keys"
+      manage_dir: false
+    when:
+      - cloudKey != ''
+      - hostvars[groups['controller'][0]].cloud_pub_key is defined
+
+  - name: Activate keys in the image
+    copy:
+      src: "{{ item.src }}"
+      dest: "{{ mktemprc.stdout + dib_home }}/.ssh"
+      mode: "{{ item.mode }}"
+      owner: "{{ dibUser }}"
+      group: "{{ dibUser }}"
+    with_items:
+      - { src: "{{ mktemprc.stdout + dib_home }}/dibuser/authorized_keys", mode: "0600" }
+      - { src: "{{ mktemprc.stdout + dib_home }}/dibuser/id_rsa.pub", mode: "0600" }
+      - { src: "{{ mktemprc.stdout + dib_home }}/dibuser/id_rsa", mode: "0600" }
+    register: keyrc
+
+  - debug: var=keyrc
+
+  - name: Get trove (vers={{ trove_version }})
+    git:
+      repo: https://github.com/openstack/trove.git
+      dest: "{{ mktemprc.stdout + dib_home }}/trove"
+      version: "{{ trove_version }}"
+    register: gitrc
+    retries: 3
+    delay: 15
+
+  - debug: var=gitrc
+
+  - block:
+    - name: Apply trove guestagent patches
+      patch:
+        src: "{{ item }}"
+        basedir: "{{ mktemprc.stdout + dib_home }}/trove"
+        strip: 1
+      with_items: "{{ src_trove_guestagent_diffs | default('') }}"
+      register: patchrc1
+
+    - name: Apply trove guestagent-debug patches
+      patch:
+        src: "{{ item }}"
+        basedir: "{{ mktemprc.stdout + dib_home }}/trove"
+        strip: 1
+      with_items:
+        - "{{ src_trove_guestagent_debug_diffs | default('') }}"
+      when: dibDebug == 'true'
+      register: patchrc2
+
+    - name: Set file ownership for trove repo
+      file:
+        path: "{{ mktemprc.stdout + dib_home }}/trove"
+        owner: "{{ dibUser }}"
+        group: "{{ dibUser }}"
+        state: directory
+        recurse: yes
+      register: patchrc3
+    when: gitrc['failed'] is not defined
+
+  - block:
+    - name: Chroot user specified command
+      shell: |
+        export HOME=/root
+        PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+        MNT={{ mktemprc.stdout }}
+        sync
+        mount -t proc none $MNT/proc
+        mount -t sysfs none $MNT/sys
+        mount --bind /dev $MNT/dev
+        mount --bind /dev/pts $MNT/dev/pts
+        trap "sync; umount $MNT/dev/pts $MNT/dev $MNT/proc $MNT/sys" EXIT
+        RESOLV=$(readlink -e $MNT/etc/resolv.conf)
+        echo RESOLV=$RESOLV
+        if [ -n "$RESOLV" ]; then
+            SAVE_RESOLV=true
+            cp $RESOLV $(RESOLV).bak
+            cp /etc/resolv.conf $RESOLV
+        else
+            cp --remove-destination /etc/resolv.conf $MNT/etc/resolv.conf
+            RESOLV=$(readlink -e $MNT/etc/resolv.conf)
+        fi
+        ls -l $RESOLV
+        chroot $MNT env PATH=$PATH sh -c "apt-get -y update"
+        chroot $MNT env PATH=$PATH sh -c "{{ chrootCmd }}"
+        rc=$?
+        if [ -n "$SAVE_RESOLV" ]; then
+            mv $(RESOLV).bak $RESOLV
+        else
+            rm $RESOLV
+        fi
+        exit $rc
+      become: yes
+      register: scriptrc
+
+    - debug: var=scriptrc
+    when: chrootCmd != ''
+
+  when: not mountrc['rc']
+  ignore_errors: true
+
+- name: Unmount image on {{ mktemprc.stdout }}
+  shell: umount {{ mktemprc.stdout }}
+  become: yes
+  when: not mountrc['rc']
+
+- name: Remove temp directory used to mount the image
+  file:
+    path: "{{ mktemprc.stdout }}"
+    state: absent
+  become: yes
+
+- name: Halt on mount failure {{ baseDir }}/images/{{ imageName }}.img at {{ mktemprc.stdout }}
+  fail:
+    msg: "{{ mountrc['stderr'] }}"
+  when: mountrc['rc']
+
+- name: Halt on ssh key failure
+  fail:
+    msg: "Expected ssh files were not produced.  See keyrc debug above."
+  when: keyrc['failed'] is defined and keyrc['failed']
+
+- name: Halt on trove guestagent installation failure
+  fail:
+    msg: "Failure is one of git clone, patch, or chown.  See stdout above (or ansible.log)"
+  when: (gitrc['failed'] is defined) or
+        (patchrc1['failed'] is defined) or
+        (patchrc2['failed'] is defined) or
+        (patchrc3['failed'] is defined)
+
+- name: Halt on user provided script failure over mounted image
+  fail:
+    msg: "{{ scriptrc['stderr'] }}"
+  when:
+    - chrootCmd != ''
+    - scriptrc['rc']

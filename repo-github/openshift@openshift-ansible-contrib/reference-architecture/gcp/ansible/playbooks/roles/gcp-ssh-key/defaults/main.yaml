@@ -1,0 +1,2 @@
+---
+gcp_ssh_key: '~/.ssh/google_compute_engine'

@@ -1,0 +1,77 @@
+# Install docker-engine and docker-compose
+# Add users to docker group
+---
+- name: add docker group
+  group:
+    name: "{{ docker_group }}"
+  tags:
+    - install
+    - install:base
+
+- name: add users to docker group
+  user:
+    name: "{{ item }}"
+    groups: "{{ docker_group }}"
+    append: yes
+  with_items: "{{ docker_users }}"
+  tags:
+    - install
+    - install:base
+
+- name: install package dependencies
+  apt:
+    name: "{{ docker_tools_deps_deb_pkgs }}"
+    update_cache: yes
+    cache_valid_time: "{{ cache_valid_time }}"
+  tags:
+    - install
+    - install:system-requirements
+
+- name: add docker apt key
+  apt_key:
+    url: "{{ docker_apt_key_url }}"
+  tags:
+    - install
+    - install:configuration
+
+- name: add docker repo
+  apt_repository:
+    repo: "{{ item }}"
+  with_items: "{{ docker_repos }}"
+  tags:
+    - install
+    - install:configuration
+
+- name: install docker-engine
+  apt:
+    name: "docker-ce"
+    update_cache: yes
+  tags:
+    - install
+    - install:system-requirements
+
+- name: Are we in a Docker container
+  shell: echo $(egrep -q 'docker' /proc/self/cgroup && echo 'yes' || echo 'no')
+  ignore_errors: yes
+  register: docker_container
+  tags:
+    - install
+    - install:base
+
+- name: start docker service
+  service:
+    name: docker
+    enabled: yes
+    state: started
+  when: docker_container.stdout != 'yes'
+  tags:
+    - install
+    - install:configuration
+
+- name: install docker-compose
+  pip:
+    # lock to this version to avoid https://github.com/ansible/ansible/issues/20492
+    name: "docker-compose==1.9.0"
+  tags:
+    - install
+    - install:system-requirements

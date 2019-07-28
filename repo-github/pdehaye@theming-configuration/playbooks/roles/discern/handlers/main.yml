@@ -1,0 +1,9 @@
+---
+- name: discern | restart discern
+  service: name=discern state=restarted
+
+- name: discern | restart celery
+  service: name=celery state=restarted
+
+- name: discern | restart nginx
+  service: name=nginx state=restarted

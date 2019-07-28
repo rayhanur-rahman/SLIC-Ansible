@@ -1,0 +1,42 @@
+---
+
+- name: Configure Elastic APT repository
+  apt_repository:
+    update_cache: True
+    repo: '{{ item.repo }}'
+    filename: '{{ item.filename | d(omit) }}'
+    state: 'present'
+  with_items: '{{ elastic_co__repositories }}'
+  when: item.enabled|d(True)
+
+- name: Install Elastic packages
+  package:
+    name: '{{ q("flattened", (elastic_co__packages
+                              + elastic_co__group_packages
+                              + elastic_co__host_packages
+                              + elastic_co__dependent_packages)) }}'
+    state: 'present'
+  register: elastic_co__register_install
+  until: elastic_co__register_install is succeeded
+
+- name: Make sure that Ansible local facts directory exists
+  file:
+    path: '/etc/ansible/facts.d'
+    state: 'directory'
+    owner: 'root'
+    group: 'root'
+    mode: '0755'
+
+- name: Save Elastic local facts
+  template:
+    src: 'etc/ansible/facts.d/elastic_co.fact.j2'
+    dest: '/etc/ansible/facts.d/elastic_co.fact'
+    owner: 'root'
+    group: 'root'
+    mode: '0755'
+  register: elastic_co__register_facts
+
+- name: Update Ansible facts if they were modified
+  action: setup
+  when: (elastic_co__register_facts is changed or
+         elastic_co__register_install is changed)

@@ -1,0 +1,35 @@
+---
+- name: Create RouteTable rules
+  ec2_vpc_route_table:
+    region: "{{ aws_region }}"
+    subnets: "{{ item.subnets }}"
+    routes:
+      - dest: 0.0.0.0/0
+        gateway_id: "{{ item.gw }}"
+    state: "{{ state | default('present') }}"
+    tags:
+      Name: "{{ item.name }}"
+    vpc_id: "{{ vpc.vpc.id }}"
+  retries: 3
+  delay: 5
+  with_items:
+    - name: routing
+      subnets:
+        - "{{ subnet_public.results.0.subnet.id }}"
+        - "{{ subnet_public.results.1.subnet.id }}"
+        - "{{ subnet_public.results.2.subnet.id }}"
+      gw: "{{ igw.gateway_id | default('') }}"
+    - name: "{{ vpc_subnet_azs.0 }}"
+      subnets:
+        - "{{ subnet_private.results.0.subnet.id }}"
+      gw: "{{ natgw1.nat_gateway_id }}"
+    - name: "{{ vpc_subnet_azs.1 }}"
+      subnets:
+        - "{{ subnet_private.results.1.subnet.id }}"
+      gw: "{{ natgw2.nat_gateway_id }}"
+    - name: "{{ vpc_subnet_azs.2 }}"
+      subnets:
+        - "{{ subnet_private.results.2.subnet.id }}"
+      gw: "{{ natgw3.nat_gateway_id }}"
+  when:
+    - ( state is not defined ) or ( 'absent' not in state )

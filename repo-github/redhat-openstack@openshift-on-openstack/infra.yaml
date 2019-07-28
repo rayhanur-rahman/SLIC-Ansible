@@ -1,0 +1,549 @@
+heat_template_version: 2016-10-14
+
+
+description: >
+  OpenShift Master
+
+
+parameters:
+
+  # What version of OpenShift Container Platform to install
+  # This value is used to select the RPM repo for the OCP release to install
+  ocp_version:
+    type: string
+    description: >
+      The version of OpenShift Container Platform to deploy
+
+  key_name:
+    description: >
+      A pre-submitted SSH key to access the VM hosts
+    type: string
+    constraints:
+    - custom_constraint: nova.keypair
+
+  image:
+    description: >
+      Select a base image to use for the infra servers
+    type: string
+    constraints:
+    - custom_constraint: glance.image
+
+  flavor:
+    description: >
+      Define the hardware characteristics for the VMs: CPU, Memory, base disk
+    type: string
+    constraints:
+    - custom_constraint: nova.flavor
+
+  docker_volume_size:
+    description: >
+      size of a cinder volume in GB to allocate to docker for container/image
+      storage
+    type: number
+    default: 25
+
+  rhn_username:
+    description: >
+      A valid user with entitlements to RHEL and OpenShift software repos
+    type: string
+
+  rhn_password:
+    description: >
+      The password for the RHN user
+    type: string
+    hidden: true
+
+  # Red Hat satellite subscription parameters
+  sat6_hostname:
+    type: string
+    description: >
+      The hostname of the Satellite 6 server which will provide software updates
+    default: ''
+
+  sat6_organization:
+    type: string
+    description: >
+      An organization string provided by Sat6 to group subscriptions
+    default: ''
+
+  sat6_activationkey:
+    type: string
+    description: >
+      An activation key string provided by Sat6 to enable subscriptions
+    default: ''
+
+  rhn_pool:
+    description: >
+      A subscription pool containing the RHEL and OpenShift software repos
+      OPTIONAL
+    type: string
+    hidden: true
+
+  extra_rhn_pools:
+    type: comma_delimited_list
+    description: List of rhn pools which will be installed on each node.
+    default: ''
+
+  hostname:
+    description: >
+      A string to identify infra hostnames.
+    type: string
+    constraints:
+    - allowed_pattern: '[a-z0-9\-]*'
+      description: Hostname must contain only characters [a-z0-9\-].
+
+  domain_name:
+    description: >
+      The DNS domain suffix. All VMs will be placed in this domain
+    type: string
+
+  ansible_public_key:
+    description: >
+      The SSH public key that Ansible will use to access master and node hosts
+      This will be placed on each VM host in /root/.ssh/authorized_keys
+    type: string
+
+  ssh_user:
+    description: >
+      The user for SSH access to the VM hosts
+    type: string
+
+  timeout:
+    description: Time to wait until the infra setup is ready.
+    type: number
+    default: 10800
+
+  bastion_node:
+    description: >
+      The hostname of the bastion node in the deployment
+    type: string
+    default: ''
+
+  external_network:
+    description: >
+      The name of the inbound access network
+    type: string
+    constraints:
+    - custom_constraint: neutron.network
+
+  fixed_network:
+    description: >
+      The name or ID of the admin and public network
+    type: string
+    constraints:
+    - custom_constraint: neutron.network
+
+  fixed_subnet:
+    description: >
+      The name or ID of the admin and public IPv4 space
+    type: string
+    constraints:
+    - custom_constraint: neutron.subnet
+
+  internal_network:
+    description: >
+      The name or ID of the internal network
+    type: string
+    constraints:
+    - custom_constraint: neutron.network
+
+  internal_subnet:
+    description: >
+      The name or ID of the internal IPv4 space
+    type: string
+    constraints:
+    - custom_constraint: neutron.subnet
+
+  allowed_address_pairs:
+    description: >
+      Allowed address pairs to apply on the ports of the nodes
+      that host the Openshift router
+    type: json
+
+
+  ldap_url:
+    description: >
+      The LDAP url for access to the LDAP service (redundant? ML)
+    type: string
+    default: ''
+
+  ldap_preferred_username:
+    description: >
+      What field to use to look up and identify users in the database
+    type: string
+    default: 'uid'
+
+  ldap_bind_dn:
+    description: >
+      LDAP service access user identifier
+    type: string
+    default: ''
+
+  ldap_bind_password:
+    description: >
+      LDAP service access password
+    type: string
+    default: ''
+
+  ldap_ca:
+    description: >
+      The Certificate Authority file to confirm SSL encryption security
+    type: string
+    default: ''
+
+  ldap_insecure:
+    description: >
+      Toggle SSL encryption for LDAP communications
+    type: string
+    default: false
+
+  infra_server_group:
+    description: >
+      ID of a server group containing all of the infra hosts
+    type: string
+
+  infra_security_group:
+    description: >
+      ID of the network access policies for the OpenShift infra hosts
+    type: string
+
+  system_update:
+    type: boolean
+
+  extra_repository_urls:
+    type: comma_delimited_list
+    description: List of repository URLs which will be installed on each node.
+    default: ''
+
+  extra_docker_repository_urls:
+    type: comma_delimited_list
+    description: List of docker repository URLs which will be installed on each node, if a repo is insecure use '#insecure' suffix.
+    default: ''
+
+  dns_servers:
+    type: comma_delimited_list
+    description: address of dns nameservers reachable in your environment
+
+  dns_update_key:
+    type: string
+    hidden: true
+
+  ca_cert:
+    type: string
+    description: Certificate Authority Certificate to be added to trust chain
+
+resources:
+
+  # Create a network connection on the internal communications network
+  port:
+    type: OS::Neutron::Port
+    properties:
+      security_groups:
+      - {get_param: infra_security_group}
+      network: {get_param: fixed_network}
+      allowed_address_pairs: {get_param: allowed_address_pairs}
+      fixed_ips:
+      - subnet: {get_param: fixed_subnet}
+      replacement_policy: AUTO
+
+  # Provide access to the Master on the public network
+  floating_ip:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network: {get_param: external_network}
+      port_id: {get_resource: port}
+
+  # Create a network connection on the internal communications network
+  internal_port:
+    type: OOShift::ContainerPort
+    properties:
+      security_group: {get_param: infra_security_group}
+      network: {get_param: internal_network}
+      subnet: {get_param: internal_subnet}
+
+  # Create the VM instance to host the OpenShift infra service
+  host:
+    type: OS::Nova::Server
+    properties:
+      name:
+        str_replace:
+          template: "HOST.DOMAIN"
+          params:
+            HOST: {get_param: hostname}
+            DOMAIN: {get_param: domain_name}
+      admin_user: {get_param: ssh_user}
+      image: {get_param: image}
+      flavor: {get_param: flavor}
+      key_name: {get_param: key_name}
+      networks:
+      - port: {get_resource: port}
+      - port: {get_attr: [internal_port, port]}
+      user_data_format: SOFTWARE_CONFIG
+      user_data_update_policy: IGNORE
+      user_data: {get_resource: init}
+      scheduler_hints:
+        group: {get_param: infra_server_group}
+
+  # Create space for Docker containers and images
+  docker_volume:
+    type: OS::Cinder::Volume
+    properties:
+      size: {get_param: docker_volume_size}
+
+  # Bind the docker storage to the VM
+  docker_volume_attach:
+    type: OS::Cinder::VolumeAttachment
+    properties:
+      instance_uuid: {get_resource: host}
+      volume_id: {get_resource: docker_volume}
+
+  # Compose configuration data into a single structure
+  init:
+    type: OS::Heat::MultipartMime
+    properties:
+      parts:
+      - config: {get_resource: set_hostname}
+      - config: {get_resource: included_files}
+      - config: {get_resource: update_ca_cert}
+      - config: {get_resource: rhn_register}
+      - config: {get_resource: set_extra_repos}
+      - config: {get_resource: set_extra_docker_repos}
+      - config: {get_resource: host_update}
+      - config: {get_resource: add_dns_record}
+      - config: {get_resource: infra_boot}
+
+  # Compose the short hostname and fully qualified domain name for the new host
+  set_hostname:
+    type: OS::Heat::CloudConfig
+    properties:
+      cloud_config:
+        hostname: {get_param: hostname}
+        fqdn:
+          str_replace:
+            template: "HOST.DOMAIN"
+            params:
+              HOST: {get_param: hostname}
+              DOMAIN: {get_param: domain_name}
+
+  # Compile a set of standard configuration files to provide identity and access
+  included_files:
+    type: OS::Heat::CloudConfig
+    properties:
+      cloud_config:
+        write_files:
+        - path: /usr/local/share/openshift-on-openstack/common_functions.sh
+          permissions: 0755
+          content:
+            str_replace:
+              params:
+                $WC_NOTIFY: { get_attr: ['wait_handle', 'curl_cli'] }
+              template: {get_file: fragments/common_functions.sh}
+        - path: /usr/local/share/openshift-on-openstack/common_openshift_functions.sh
+          permissions: 0755
+          content: {get_file: fragments/common_openshift_functions.sh}
+        - path: /usr/local/bin/retry
+          permissions: 0755
+          content: {get_file: fragments/retry.sh}
+        - path: /usr/local/bin/update_dns
+          permissions: 0755
+          content: {get_file: fragments/update_dns.py}
+        - path: /etc/sysconfig/network-scripts/ifcfg-eth1
+          content:
+            str_replace:
+              params:
+                $IFNAME: eth1
+              template: {get_file: fragments/ifcfg-eth}
+        - path: /etc/pki/ca-trust/source/anchors/ca.crt
+          permissions: 0600
+          content: {get_param: ca_cert}
+        ssh_authorized_keys:
+        - {get_param: ansible_public_key}
+
+  # Add CA Cert to trust chain
+  update_ca_cert:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config: {get_file: fragments/ca_cert.sh}
+
+  # Attach to a source of software updates for RHEL
+  rhn_register:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config:
+        str_replace:
+          params:
+            $OCP_VERSION: {get_param: ocp_version}
+            $RHN_USERNAME: {get_param: rhn_username}
+            $RHN_PASSWORD: {get_param: rhn_password}
+            $SAT6_HOSTNAME: {get_param: sat6_hostname}
+            $SAT6_ORGANIZATION: {get_param: sat6_organization}
+            $SAT6_ACTIVATIONKEY: {get_param: sat6_activationkey}
+            $POOL_ID: {get_param: rhn_pool}
+            $EXTRA_POOL_IDS:
+              list_join:
+                - " --pool="
+                - {get_param: extra_rhn_pools}
+          template: {get_file: fragments/rhn-register.sh}
+
+  # Enable any extra repositories
+  set_extra_repos:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config:
+        str_replace:
+          params:
+            $REPOLIST:
+              list_join:
+                - " "
+                - {get_param: extra_repository_urls}
+          template: {get_file: fragments/set-extra-repos.sh}
+
+  set_extra_docker_repos:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config:
+        str_replace:
+          params:
+            $REPOLIST:
+              list_join:
+                - " "
+                - {get_param: extra_docker_repository_urls}
+          template: {get_file: fragments/set-extra-docker-repos.sh}
+
+  # Insure that the host software is current
+  host_update:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config:
+        str_replace:
+          params:
+            $SYSTEM_UPDATE: {get_param: system_update}
+          template: {get_file: fragments/host-update.sh}
+
+  add_dns_record:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config:
+        str_replace:
+          params:
+            '%ZONE%': {get_param: domain_name}
+            '%DNS_SERVER%': {get_param: [dns_servers, 0]}
+            '%DNS_UPDATE_KEY%': {get_param: dns_update_key}
+            '%IP_ADDRESS%': {get_attr: [port, fixed_ips, 0, ip_address]}
+          template: {get_file: fragments/add_dns_record.sh}
+
+  # Prepare the host to run Docker and Ansible for OpenShift install and config
+  infra_boot:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: script
+      config:
+        str_replace:
+          params:
+            $DOCKER_VOLUME_ID: {get_resource: docker_volume}
+          template: {get_file: fragments/infra-boot.sh}
+
+  # Add a node's IP/Name mapping to DNS
+  node_add:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: script
+      inputs:
+      - name: node_hostname
+      - name: node_type
+      outputs:
+      - name: result
+      config: {get_file: fragments/bastion-node-add.sh}
+
+  # Add the hostname and address of the bastion host to the infra host
+  deployment_bastion_node_add:
+    depends_on: wait_condition
+    type: OS::Heat::SoftwareDeployment
+    properties:
+      config:
+        get_resource: node_add
+      server:
+        get_param: bastion_node
+      input_values:
+        node_type: infra
+        node_hostname:
+          str_replace:
+            template: "HOST.DOMAIN"
+            params:
+              HOST: {get_param: hostname}
+              DOMAIN: {get_param: domain_name}
+
+  node_cleanup:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: script
+      inputs:
+      - name: node_name
+      - name: node_type
+      - name: ssh_user
+        default: {get_param: ssh_user}
+      outputs:
+      - name: result
+      config: {get_file: fragments/bastion-node-cleanup.sh}
+
+  # activation hook for removing the node from DNS and from the Kubernetes
+  # cluster
+  deployment_bastion_node_cleanup:
+    depends_on: [host, wait_condition]
+    type: OS::Heat::SoftwareDeployment
+    properties:
+      actions: ['DELETE']
+      input_values:
+        node_type: infra
+        node_name:
+          str_replace:
+            template: "HOST.DOMAIN"
+            params:
+              HOST: {get_param: hostname}
+              DOMAIN: {get_param: domain_name}
+      config:
+        get_resource: node_cleanup
+      server:
+        get_param: bastion_node
+
+  # Wait for infra_boot (cloud-init) to complete or time out
+  wait_condition:
+    type: OS::Heat::WaitCondition
+    properties:
+      handle: {get_resource: wait_handle}
+      timeout: {get_param: timeout}
+
+  # This provides a curl CLI string to the cloud-init script which is queried
+  # with a status at the end of of the cloud-init process
+  wait_handle:
+    type: OS::Heat::WaitConditionHandle
+
+outputs:
+  console_url:
+    description: Compose the access URL for the OpenShift web UI
+    value:
+      str_replace:
+        params:
+          HOSTNAME: {get_param: hostname}
+          DOMAINNAME: {get_param: domain_name}
+        template: "https://HOSTNAME.DOMAINNAME:8443/console/"
+  api_url:
+    description: Compose the access URL for the OpenShift REST API
+    value:
+      str_replace:
+        params:
+          HOSTNAME: {get_param: hostname}
+          DOMAINNAME: {get_param: domain_name}
+        template: "https://HOSTNAME.DOMAINNAME:8443/"
+  wc_data:
+    description: Syncronization data
+    value: { get_attr: ['wait_condition', 'data'] }
+  hostname:
+    description: The actual short name for the host
+    value: {get_param: hostname}
+  host:
+    description: A reference to the infra host identifier
+    value: {get_resource: host}
+  ip_address:
+    description: IP address of the node
+    value: {get_attr: [floating_ip, floating_ip_address]}

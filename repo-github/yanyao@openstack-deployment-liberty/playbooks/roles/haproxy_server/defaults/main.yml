@@ -1,0 +1,82 @@
+---
+# Copyright 2014, Rackspace US, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Defines that the role will be deployed on a host machine
+is_metal: true
+
+haproxy_apt_repo_url: "http://ppa.launchpad.net/vbernat/haproxy-1.5/ubuntu"
+haproxy_apt_repo:
+  repo: "deb {{ haproxy_apt_repo_url }} {{ ansible_distribution_release }} main"
+  state: "present"
+
+# Haproxy GPG Keys
+haproxy_gpg_keys:
+  - key_name: 'haproxy'
+    keyserver: 'hkp://keyserver.ubuntu.com:80'
+    fallback_keyserver: 'hkp://p80.pool.sks-keyservers.net:80'
+    hash_id: '0xcffb779aadc995e4f350a060505d97a41c61b9cd'
+
+haproxy_pre_apt_packages:
+  - python-software-properties
+  - software-properties-common
+  - debconf-utils
+
+haproxy_apt_packages:
+  - haproxy
+  - hatop
+  - rsyslog  # Used for local logging
+  - vim-haproxy
+
+## Haproxy Configuration
+haproxy_rise: 3
+haproxy_fall: 3
+haproxy_interval: 12000
+
+## Haproxy Stats
+haproxy_stats_enabled: False
+haproxy_stats_bind_address: 127.0.0.1
+haproxy_stats_port: 1936
+haproxy_username: admin
+haproxy_stats_password: secrete
+
+# Default haproxy backup nodes to empty list so this doesn't have to be
+# defined for each service.
+haproxy_backup_nodes: []
+
+# haproxy_service_configs:
+#   - service:
+#       hap_service_name: haproxy_all
+#       hap_backend_nodes: "{{ groups['haproxy_all'][0] }}"
+#       # hap_backup_nodes: "{{ groups['haproxy_all'][1:] }}"
+#       hap_port: 80
+#       hap_balance_type: http
+#       hap_backend_options:
+#         - "forwardfor"
+#         - "httpchk"
+#         - "httplog"
+
+galera_monitoring_user: monitoring
+haproxy_bind_on_non_local: False
+
+## haproxy SSL
+haproxy_ssl: no
+haproxy_ssl_dh_param: 2048
+haproxy_ssl_self_signed_regen: no
+haproxy_ssl_cert: /etc/ssl/certs/haproxy.cert
+haproxy_ssl_key: /etc/ssl/private/haproxy.key
+haproxy_ssl_pem: /etc/ssl/private/haproxy.pem
+haproxy_ssl_ca_cert: /etc/ssl/certs/haproxy-ca.pem
+haproxy_ssl_self_signed_subject: "/C=US/ST=Texas/L=San Antonio/O=IT/CN={{ internal_lb_vip_address }}/subjectAltName=IP.1={{ external_lb_vip_address }}"
+haproxy_ssl_cipher_suite: "{{ ssl_cipher_suite }}"

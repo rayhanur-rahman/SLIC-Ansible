@@ -1,0 +1,11 @@
+---
+- hosts: master
+  become: true
+  gather_facts: no
+
+  tasks:
+  - name: Clones a snapshot
+    snapshot: action=clone
+             snapname={{ snapname }}
+             clonename={{ clonename }}
+             force="{{ force }}"

@@ -1,0 +1,8 @@
+---
+- hosts: gluster_servers
+  become: true
+  gather_facts: no
+
+  tasks:
+  - name: Performance tune for general storage.
+    shell: tuned-adm profile {{ profile }}

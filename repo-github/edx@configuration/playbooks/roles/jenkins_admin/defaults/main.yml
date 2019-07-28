@@ -1,0 +1,101 @@
+---
+#
+# edX Configuration
+#
+# github:     https://github.com/edx/configuration
+# wiki:       https://openedx.atlassian.net/wiki/display/OpenOPS
+# code style: https://openedx.atlassian.net/wiki/display/OpenOPS/Ansible+Code+Conventions
+# license:    https://github.com/edx/configuration/blob/master/LICENSE.TXT
+#
+##
+# Defaults for role jenkins_admin
+#
+
+#
+# vars are namespace with the module name.
+#
+
+JENKINS_ADMIN_NAME: 'default_jenkins_name'
+
+# A dictionary of AWS credentials to use to make
+# a boto file for jenkins.
+JENKINS_ADMIN_AWS_CREDENTIALS: !!null
+
+# jenkins_admin also requires other variables that are not defined by default.
+
+# JENKINS_ADMIN_S3_PROFILE: !!null
+# JENKINS_ADMIN_BACKUP_BUCKET: !!null
+# JENKINS_ADMIN_BACKUP_KEY: !!null
+
+jenkins_admin_role_name: jenkins_admin
+
+
+jenkins_admin_version: "1.658"
+#
+# OS packages
+#
+
+jenkins_admin_debian_pkgs:
+  # These are copied from the edxapp
+  # role so that we can create virtualenvs
+  # on the jenkins server for edxapp
+  # for compiling the virtualenv
+  # (only needed if wheel files aren't available)
+  - build-essential
+  - s3cmd
+  - pkg-config
+  - graphviz-dev
+  - graphviz
+  - libmysqlclient-dev
+  # for scipy, do not install
+  # libopenblas-base, it will cause
+  # problems for numpy
+  - gfortran
+  - liblapack-dev
+  - g++
+  - libxml2-dev
+  - libxslt1-dev
+  # apparmor
+  - apparmor-utils
+  # misc
+  - curl
+  - ipython
+  - nodejs
+  - ntp
+  # for shapely
+  - libgeos-dev
+  # i18n
+  - gettext
+  # Pillow (PIL Fork) Dependencies
+  # Needed by the CMS to manipulate images.
+  - libjpeg8-dev
+  - libpng12-dev
+  # for check-migrations
+  - mysql-client
+  # for aws cli scripting
+  - jq
+  # pyOpenSSL prerequisite
+  # Need by python script that check SSL expiration
+  - libffi-dev
+
+jenkins_admin_redhat_pkgs: []
+
+jenkins_admin_plugins: [] # Plugins installed manually, not tracked here.
+
+# See templates directory for potential basic jobs you could add to your jenkins.
+jenkins_admin_jobs: []
+
+# Supervisor related settings
+jenkins_supervisor_user: "{{ jenkins_user }}"
+jenkins_supervisor_app_dir: "{{ jenkins_home }}/supervisor"
+jenkins_supervisor_cfg_dir: "{{ jenkins_supervisor_app_dir }}/conf.d"
+jenkins_supervisor_available_dir: "{{ jenkins_supervisor_app_dir }}/available.d"
+jenkins_supervisor_data_dir: "{{ jenkins_home }}/supervisor/data"
+jenkins_supervisor_cfg: "{{ jenkins_supervisor_app_dir }}/supervisord.conf"
+jenkins_supervisor_log_dir: "{{ COMMON_LOG_DIR }}/supervisor/jenkins"
+jenkins_supervisor_venv_dir: "{{ jenkins_home }}/venvs/supervisor"
+jenkins_supervisor_venv_bin: "{{ jenkins_supervisor_venv_dir }}/bin"
+jenkins_supervisor_ctl: "{{ jenkins_supervisor_venv_bin }}/supervisorctl"
+jenkins_supervisor_service_user: "{{ jenkins_user }}"
+
+jenkins_admin_scripts_dir: "{{ jenkins_home }}/scripts"

@@ -1,0 +1,24 @@
+---
+# command arguments from dbflavor commands
+
+dbName: "{{ lookup('env', 'DBFLAVOR_DBNAME') | default('') }}"
+flavor: "{{ lookup('env', 'DBFLAVOR_NAME) | default('') }}"
+cpus: "{{ lookup('env', 'DBFLAVOR_CPUS') | default('') }}"
+mem: "{{ lookup('env', 'DBFLAVOR_MEM') | default('') }}"
+vdisk1: "{{ lookup('env', 'DBFLAVOR_VDISK1') | default('') }}"
+vdisk2: "{{ lookup('env', 'DBFLAVOR_VDISK2') | default('') }}"
+swift: "{{ lookup('env', 'DBFLAVOR_SWIFT') | default('') }}"
+isJujuCharm: "{{ lookup('env', 'DBIMAGE_CHARM') | bool }}"
+
+# Environment variables derived from the cluster genesis inventory file
+
+deployment_environment:
+  https_proxy: "{{ lookup('env', 'https_proxy') | default ('') }}"
+  http_proxy: "{{ lookup('env', 'http_proxy') | default ('') }}"
+  no_proxy: "{{ lookup('env', 'no_proxy') | default ('') }}"
+
+# Internal variables
+
+baseDir: "{{ lookup('env', 'DBIMAGE_DIR') }}"
+
+dbFlavors: []

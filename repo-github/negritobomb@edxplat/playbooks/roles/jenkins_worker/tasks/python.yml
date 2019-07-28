@@ -1,0 +1,72 @@
+---
+
+# Install scripts requiring a GitHub OAuth token
+- name: Install requests Python library
+  pip: name=requests state=present
+
+- fail: OAuth token not defined
+  when: github_oauth_token is not defined
+
+- name: Install Python GitHub PR auth script
+  template: src="github_pr_auth.py.j2" dest="/usr/local/bin/github_pr_auth.py"
+            owner=root group=root
+            mode=755
+
+- name: Install Python GitHub post status script
+  template: src="github_post_status.py.j2" dest="/usr/local/bin/github_post_status.py"
+            owner=root group=root
+            mode=755
+
+# Create a virtualenv for edx-platform by installing the requirements
+# and packaging the virtualenv.
+# A shallow clone is created off of master. The depth setting
+# refers to the --depth-setting of git clone. A value of 1
+# will truncate all history prior to the last revision.
+- name: Create shallow clone of edx-platform
+  git: >
+    repo=https://github.com/edx/edx-platform.git
+    dest={{ jenkins_home }}/shallow-clone
+    version=master
+    depth=1
+  sudo_user: "{{ jenkins_user }}"
+
+- name: Pip installs that are needed for pip-accel to work for us
+  pip: >
+    name="{{ item }}"
+    virtualenv={{ jenkins_home }}/edx-venv
+    virtualenv_command=virtualenv-2.7
+  sudo_user: "{{ jenkins_user }}"
+  with_items: pip_accel_reqs
+
+# Install the platform requirements using pip-accel.
+# This will allow the binary distributions to be downloaded from S3
+# rather than compiled each time.
+- name: Install edx-platform requirements using pip-accel
+  pip: >
+    requirements={{ jenkins_home }}/shallow-clone/requirements/edx/{{ item }}
+    extra_args="--exists-action=w"
+    virtualenv={{ jenkins_home }}/edx-venv
+    virtualenv_command=virtualenv-2.7
+    executable=pip-accel
+  with_items:
+    - pre.txt
+    - github.txt
+    - base.txt
+    - post.txt
+    - paver.txt
+  sudo_user: "{{ jenkins_user }}"
+
+# Archive the current state of the virtualenv
+# as a starting point for new builds.
+# The edx-venv directory is deleted and then recreated
+# cleanly from the archive by the jenkins build scripts.
+- name: Create a clean virtualenv archive
+  command: >
+    tar -cpzf edx-venv_clean.tar.gz edx-venv
+    chdir={{ jenkins_home }}
+  sudo_user: "{{ jenkins_user }}"
+
+# Remove the shallow-clone directory now that we archive
+# done with it
+- name: Remove shallow-clone
+  file: path={{ jenkins_home }}/shallow-clone state=absent

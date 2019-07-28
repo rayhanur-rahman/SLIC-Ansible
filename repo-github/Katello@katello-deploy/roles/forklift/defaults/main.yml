@@ -1,0 +1,3 @@
+---
+forklift_directory: "{{ playbook_dir | dirname }}"
+forklift_state: up

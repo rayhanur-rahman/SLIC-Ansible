@@ -1,0 +1,56 @@
+# Installs the xqueue watcher code and supervisor scripts.
+# The watcher can watch one or many queues and dispatch submissions
+# to the appropriate grader which lives in a separate SCM repository.
+
+- name: Install application requirements
+  pip:
+    requirements: "{{ xqwatcher_requirements_file }}"
+    virtualenv: "{{ xqwatcher_app_dir }}/venvs/{{ xqwatcher_service_name }}"
+    state: present
+  become: true
+  become_user: "{{ xqwatcher_user }}"
+  tags:
+    - install
+    - install:app-requirements
+
+- name: Write out course config files
+  template:
+    src: "edx/app/xqwatcher/conf.d/course.json.j2"
+    dest: "{{ xqwatcher_conf_dir }}/conf.d/{{ item.COURSE }}.json"
+    owner: "{{ xqwatcher_user }}"
+    group: "{{ xqwatcher_user }}"
+    mode: "0644"
+  with_items: "{{ XQWATCHER_COURSES }}"
+  tags:
+    - install
+    - install:configuration
+
+- name: Write supervisord config
+  template:
+    src: "edx/app/supervisor/conf.d/xqwatcher.conf.j2"
+    dest: "{{ supervisor_available_dir }}/xqwatcher.conf"
+    owner: "{{ supervisor_user }}"
+    group: "{{ common_web_user }}"
+    mode: "0644"
+  tags:
+    - install
+    - install:configuration
+
+- name: Update supervisor configuration
+  command: "{{ supervisor_ctl }} -c {{ supervisor_cfg }} update"
+  when: not disable_edx_services
+  tags:
+    - manage
+    - manage:start
+
+- name: Restart xqwatcher
+  supervisorctl:
+    name: "{{ xqwatcher_service_name }}"
+    supervisorctl_path: "{{ supervisor_ctl }}"
+    config: "{{ supervisor_cfg }}"
+    state: restarted
+  when: not disable_edx_services
+  become_user: "{{ common_web_user }}"
+  tags:
+    - manage
+    - manage:update

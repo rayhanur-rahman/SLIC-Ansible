@@ -1,0 +1,42 @@
+---
+# Copyright 2017, Rackspace US, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- name: OpenStack flavor setup
+  hosts: localhost
+  environment: "{{ deployment_environment_variables | default({}) }}"
+  user: root
+  tasks:
+    - name: Create OpenStack client configuration
+      include_role:
+        name: "openstack_openrc"
+
+    - name: Create flavors of nova VMs
+      os_nova_flavor:
+        endpoint_type: internal
+        cloud: default
+        state: present
+        name: "{{ item.name }}"
+        ram: "{{ item.ram }}"
+        vcpus: "{{ item.vcpus }}"
+        disk: "{{ item.disk }}"
+        swap: "{{ item.swap }}"
+        ephemeral: "{{ item.ephemeral }}"
+      with_items: "{{ openstack_vm_flavors }}"
+
+  vars_files:
+    - vars/openstack-service-config.yml
+
+  tags:
+    - rpc

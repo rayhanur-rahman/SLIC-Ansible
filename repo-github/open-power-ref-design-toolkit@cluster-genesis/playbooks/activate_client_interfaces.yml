@@ -1,0 +1,125 @@
+---
+# Copyright 2019 IBM Corp.
+#
+# All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- name: activate_client_interfaces.yml
+  hosts: client_nodes
+  gather_facts: no
+  tasks:
+    - name: Gather facts
+      setup:
+
+    - name: Disable ZEROCONF Routes
+      lineinfile:
+        path: /etc/sysconfig/network
+        line: 'NOZEROCONF=yes'
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'RedHat'
+
+    - name: Bring down all interfaces except ansible communication interface
+      command: "ip link set dev {{ item }} down"
+      when:
+        - item != 'lo'
+        - "ansible_host != hostvars[inventory_hostname]['ansible_' + \
+           item.replace('-', '_')].get('ipv4', {}).get('address')"
+        - "hostvars[inventory_hostname]['ansible_' + \
+           item.replace('-', '_')]['active']"
+      loop: "{{ ansible_interfaces }}"
+
+    - name: Pause for networks to go down
+      pause:
+        seconds: 5
+
+    - name: Insure all interfaces are up
+      command: "ip link set dev {{ item }} up"
+      when:
+        - item != 'lo'
+        - "ansible_host != hostvars[inventory_hostname]['ansible_' + \
+           item.replace('-', '_')].get('ipv4', {}).get('address')"
+      loop: "{{ ansible_interfaces }}"
+
+    - name: Pause for networks to come up
+      pause:
+        seconds: 5
+
+    - name: Create temporary dhclient.conf
+      lineinfile:
+        path: /run/dhclient.conf
+        line: 'timeout 10;'
+        create: True
+
+    - name: Update switch mac address tables
+      shell: "dhclient -r && dhclient -n -1 {{ item }} || true"
+      become: true
+      when:
+        - item != 'lo'
+        - "ansible_host != hostvars[inventory_hostname]['ansible_' + \
+           item.replace('-', '_')].get('ipv4', {}).get('address')"
+        - ansible_distribution == 'Ubuntu'
+      loop: "{{ ansible_interfaces }}"
+      environment:
+        PATH_DHCLIENT_CONF: /run/dhclient.conf
+
+    - name: Update switch mac address tables
+      shell: "dhclient -r && dhclient -1 {{ item }} || true"
+      become: true
+      when:
+        - item != 'lo'
+        - "ansible_host != hostvars[inventory_hostname]['ansible_' + \
+           item.replace('-', '_')].get('ipv4', {}).get('address')"
+        - ansible_distribution == 'CentOS' or ansible_distribution == 'RedHat'
+      loop: "{{ ansible_interfaces }}"
+      environment:
+        PATH_DHCLIENT_CONF: /run/dhclient.conf
+
+    - name: Pause for ipv4 link local
+      pause:
+        seconds: 20
+
+    # A one time copy is made of the network interfaces files after initial
+    # OS install. This is now attempted at the end of install in wait_for_
+    # client_ping.yml, but is re-attempted here for previous installs done
+    # with prior versions of POWER-Up.
+    - block:
+        - name: Find interfaces files
+          find: paths="/etc/sysconfig/network-scripts" patterns="ifcfg-*"
+          register: files_to_copy
+
+        - name: create backup directory
+          file: path=/etc/sysconfig/network-scripts/gen-t0-bkup state=directory
+
+        - name: One time t0 backup of initial interface files
+          copy:
+            src: "{{ item.path }}"
+            dest: "/etc/sysconfig/network-scripts/gen-t0-bkup/"
+            remote_src: yes
+            force: no
+            owner: root
+          loop: "{{ files_to_copy.files }}"
+      when: (ansible_distribution == 'RedHat') or
+            (ansible_distribution == 'CentOS')
+
+    - block:
+        - name: create backup directory
+          file: path=/etc/network/gen-t0-bkup state=directory
+
+        - name: One time t0 backup of initial interface file
+          copy:
+            src: "/etc/network/interfaces"
+            dest: "/etc/network/gen-t0-bkup/"
+            remote_src: yes
+            force: no
+            owner: root
+      when: ansible_distribution == 'Ubuntu'

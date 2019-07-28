@@ -1,0 +1,24 @@
+---
+- name: "Ensure SSH key directory exists"
+  file:
+    path: "~/.ssh"
+    state: directory
+
+- name: "Stat clusterid SSH key"
+  stat:
+    path: "~/.ssh/{{ clusterid }}.{{ dns_domain }}"
+  register: sshkey
+
+- name: "{{ 'Generate' if (state is undefined or 'absent' not in state) else 'Terminate' }} clusterid SSH key"
+  shell: "{{ cmd }}"
+  vars:
+    cmd: "{{ \
+    'ssh-keygen -b 2048 -t rsa -f ~/.ssh/' + clusterid + '.' + dns_domain + ' -q -C user@' + dns_domain + ' -N ' + sshkey_password + ' -q' \
+      if (state is undefined or 'absent' not in state) else \
+    'rm -rf ~/.ssh/' + clusterid + '.' + dns_domain + '*'
+    }}"
+  when: "\
+  ( ( state is undefined or 'absent' not in state ) and sshkey.stat.exists == false ) \
+  or \
+  ( ( state is defined and 'absent' in state ) and sshkey.stat.exists == true ) \
+  "

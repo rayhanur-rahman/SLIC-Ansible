@@ -1,0 +1,39 @@
+---
+aws_cred_profile: "default"
+
+# password for ssh key - ~/.ssh/{{ clusterid }}.{{ dns_domain }}
+sshkey_password: 'abc123'
+
+clusterid: "refarch"
+dns_domain: "example.com"
+aws_region: "us-east-1"
+
+vpc_cidr: "172.16.0.0/16"
+
+subnets_public_cidr:
+  - 172.16.0.0/24
+  - 172.16.1.0/24
+  - 172.16.2.0/24
+
+subnets_private_cidr:
+  - 172.16.16.0/20
+  - 172.16.32.0/20
+  - 172.16.48.0/20
+
+ec2_type_bastion: "t2.medium"
+
+#ec2_count_master: 3
+ec2_type_master: "m5.2xlarge"
+
+#ec2_count_infra: 3
+ec2_type_infra: "m5.2xlarge"
+
+#ec2_count_node: 3
+ec2_type_node: "m5.2xlarge"
+
+#ec2_count_cns: 3
+ec2_type_cns: "m5.2xlarge"
+
+rhel_release: "rhel-7.5"
+
+#ec2ami: ami-abc3231a

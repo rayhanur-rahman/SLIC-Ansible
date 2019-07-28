@@ -1,0 +1,14 @@
+---
+- name: Install zookeeper packages
+  yum:
+    name:
+      - java-11-openjdk-headless
+      - zookeeper
+    state: installed
+
+- name: Enable and Start zookeeper
+  systemd:
+    name: zookeeper
+    state: "{{ 'started' if 'zookeeper' in enabled_services else 'stopped' }}"
+    enabled: "{{ 'True' if 'zookeeper' in enabled_services else 'False' }}"
+...

@@ -1,0 +1,56 @@
+- name: check if having lain container running on this node
+  shell: docker ps | grep -v .portal.portal | grep "registry.{{ domain }}" | wc -l
+  register: result
+
+- fail: msg="still having lain container running on this node, check if by `docker ps`"
+  when: result.stdout != '0'
+
+- name: stop networkd
+  service: name=networkd state=stopped
+
+- name: stop the swarm agent
+  service: name=swarm-agent state=stopped
+
+- name: stop the swarm manager
+  service: name=swarm-manager state=stopped
+
+- name: stop lainlet
+  service: name=lainlet state=stopped
+
+- name: stop rebellion
+  service: name=rebellion state=stopped
+
+- name: get /lain/config/backup_enabled
+  command: etcdctl get /lain/config/backup_enabled
+  register: result
+  ignore_errors: yes
+
+- name: stop backupd
+  service: name=backupd state=stopped
+  when: result|success and result.stdout == 'True'
+
+- name: umount /var/lib/registry
+  command: umount /var/lib/registry
+  ignore_errors: yes
+
+- name: umount /mfs
+  command: umount /mfs
+  ignore_errors: yes
+
+- name: stop rsyncd
+  service: name="{{rsync_service_name}}" state=stopped
+
+- name: stop calico
+  service: name={{item}} state=stopped
+  with_items:
+    - "calico-bird"
+    - "calico-bird6"
+    - "calico-confd"
+    - "calico-felix"
+    - "calico-libnetwork"
+
+- name: stop etcd
+  service: name=etcd state=stopped
+
+- name: stop consul
+  service: name=consul state=stopped

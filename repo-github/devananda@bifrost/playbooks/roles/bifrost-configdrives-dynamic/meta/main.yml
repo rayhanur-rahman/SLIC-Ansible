@@ -1,0 +1,22 @@
+---
+galaxy_info:
+  author: Ironic Developers
+  description: Creates a basic configdrive for Bifrost
+  company: OpenStack
+  license: Apache
+  min_ansible_version: 1.9
+  platforms:
+  - name: EL
+    versions:
+    - 7
+  - name: Ubuntu
+    versions:
+    - trusty
+    - utopic
+  - name: Debian
+    versions:
+    - wheezy
+  categories:
+  - cloud
+  - cloud:openstack
+dependencies: []

@@ -1,0 +1,74 @@
+- job:
+    name: ci-pipeline-atomic-host-tests
+    concurrent: true
+    defaults: ci-pipeline-defaults
+    parameters:
+        - string:
+            name: fed_branch
+            description: |
+              fedmsg branch
+        - string:
+            name: image2boot
+            description: |
+              url pointing to the image to boot
+    builders:
+        - jms-messaging:
+            override-topic: org.centos.prod.ci.pipeline.compose.test.integration.running
+            provider-name: fedora-fedmsg
+            msg-type: Custom
+            msg-props: |
+                topic=org.centos.prod.ci.pipeline.compose.test.integration.running
+                username=fedora-atomic
+                build_url=${BUILD_URL}
+                compose_url=http://artifacts.ci.centos.org/artifacts/fedora-atomic/${fed_branch}/ostree
+                build_id=${BUILD_ID}
+                branch=${fed_branch}
+                ref=fedora/${fed_branch}/x86_64/atomic-host
+                rev=${rev}
+                namespace=rpms
+                repo=${fed_repo}
+                status=success
+                test_guidance=
+        - ci-pipeline-duffy-builder:
+            task: atomic-host-tests
+            variables: |
+                export JENKINS_JOB_NAME="${JOB_NAME}"
+                export JENKINS_BUILD_TAG="${BUILD_TAG}"
+                export ANSIBLE_HOST_KEY_CHECKING="False"
+                export BUILD="${fed_branch}"
+                export image2boot="${image2boot:-}"
+            timeout: 3600
+            playbook: ci-pipeline/playbooks/system-setup.yml
+    publishers:
+        - ci-pipeline-duffy-publisher
+        - xunit:
+            thresholdmode: 'number'
+            thresholds:
+              - failed:
+                    unstablenew: 0
+                    failurenew: 0
+              - skipped:
+                    unstablenew: 0
+                    failurenew: 0
+            types:
+                - junit:
+                    pattern: "logs/ansible_xunit.xml"
+                    stoponerror: true
+                    deleteoutput: false
+        - jms-messaging:
+            override-topic: org.centos.prod.ci.pipeline.compose.test.integration.complete
+            provider-name: fedora-fedmsg
+            msg-type: Custom
+            msg-props: |
+                topic=org.centos.prod.ci.pipeline.compose.test.integration.complete
+                username=fedora-atomic
+                build_url=${BUILD_URL}
+                compose_url=http://artifacts.ci.centos.org/artifacts/fedora-atomic/${fed_branch}/ostree
+                build_id=${BUILD_ID}
+                branch=${fed_branch}
+                ref=fedora/${fed_branch}/x86_64/atomic-host
+                rev=${rev}
+                namespace=rpms
+                repo=${fed_repo}
+                status=TODO
+                test_guidance=

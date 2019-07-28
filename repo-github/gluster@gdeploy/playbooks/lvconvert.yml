@@ -1,0 +1,12 @@
+---
+- hosts: gluster_servers
+  become: true
+  gather_facts: no
+
+  tasks:
+      - name: Convert LV to cachepool  or cache LV
+        lv: action=convert lvtype="{{ lvtype }}" cachemode="{{ cachemode }}"
+            poolmetadata="{{ poolmetadata }}" lvname="{{ lvname }}"
+            vgname="{{ vgname }}" cachepool="{{ cachepool }}"
+            thinpool="{{ thinpool }}" poolmetadataspare="{{ poolmetadataspare }}"
+            chunksize="{{ chunksize }}"

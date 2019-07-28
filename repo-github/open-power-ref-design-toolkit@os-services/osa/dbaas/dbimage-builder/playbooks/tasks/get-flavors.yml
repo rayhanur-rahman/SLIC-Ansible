@@ -1,0 +1,27 @@
+---
+
+# This task is invoked during the invocation of the playbook below:
+#
+# ansible-playbook -i host_file dbflavor-upload.yml -u ubuntu -c ssh
+#
+# This is invoked on the deployer node
+
+- debug: var=deployment_environment
+
+- debug: var=dbName
+
+- name: Generate all flavors
+  shell: >-
+    python {{ baseDir }}/scripts/helpers/flavor.py dump
+    -P {{ baseDir }}/playbooks/vars/predefined-flavors.yml
+    -C {{ baseDir }}/playbooks/vars/customized-flavors.yml
+  register: flavorsrc
+
+- name: Refine list to user specified database
+  set_fact:
+    dbFlavors: "{{ dbFlavors }} + [ {{ item }} ]"
+  with_items: "{{ flavorsrc['stdout'] | from_yaml | list }}"
+  when:
+    - item['name'] == dbName
+
+- debug: var=dbFlavors

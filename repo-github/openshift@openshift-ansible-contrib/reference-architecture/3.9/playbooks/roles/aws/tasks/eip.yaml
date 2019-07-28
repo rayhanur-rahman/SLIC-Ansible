@@ -1,0 +1,11 @@
+---
+- name: Create EIP instance for EC2 / Bastion
+  ec2_eip:
+    device_id: "{{ ec2bastion.results[0].tagged_instances[0].id }}"
+    in_vpc: yes
+    region: "{{ aws_region }}"
+    state: present
+  retries: 3
+  register: eipbastion
+  when:
+    - ( state is undefined ) or ( 'absent' not in state )

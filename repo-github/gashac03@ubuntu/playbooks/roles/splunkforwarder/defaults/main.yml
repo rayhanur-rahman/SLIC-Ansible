@@ -1,0 +1,62 @@
+---
+#
+# edX Configuration
+#
+# github:     https://github.com/edx/configuration
+# wiki:       https://github.com/edx/configuration/wiki
+# code style: https://github.com/edx/configuration/wiki/Ansible-Coding-Conventions
+# license:    https://github.com/edx/configuration/blob/master/LICENSE.TXT
+#
+##
+# Vars for role splunk
+#
+
+#
+# vars are namespace with the module name.
+#
+splunk_role_name: 'splunk'
+
+SPLUNKFORWARDER_PACKAGE_URL: !!null
+SPLUNKFORWARDER_DEB: !!null
+SPLUNKFORWARDER_PASSWORD: !!null
+
+SPLUNKFORWARDER_SERVERS:
+  - target_group: "default_output_server"
+    server: "localhost:9997"
+    default: true
+
+SPLUNKFORWARDER_LOG_ITEMS:
+  - source: '{{ COMMON_LOG_DIR }}/lms'
+    recursive: true
+    index: '{{ COMMON_ENVIRONMENT }}-{{ COMMON_DEPLOYMENT }}'
+    sourcetype: 'edx'
+  - source: '{{ COMMON_LOG_DIR }}/cms'
+    recursive: true
+    index: '{{ COMMON_ENVIRONMENT }}-{{ COMMON_DEPLOYMENT }}'
+    sourcetype: 'edx'
+  - source: '{{ COMMON_LOG_DIR }}/mongo'
+    recursive: true
+    index: '{{ COMMON_ENVIRONMENT }}-{{ COMMON_DEPLOYMENT }}'
+    sourcetype: 'mongo'
+  - source: '{{ COMMON_LOG_DIR }}'
+    recursive: true
+    index: '{{ COMMON_ENVIRONMENT }}-{{ COMMON_DEPLOYMENT }}'
+    sourcetype: 'syslog'
+  - source: '/var/log'
+    recursive: true
+    index: '{{ COMMON_ENVIRONMENT }}-{{ COMMON_DEPLOYMENT }}'
+    sourcetype: 'syslog'
+  - source: '{{ COMMON_LOG_DIR }}/nginx'
+    recursive: true
+    index: '{{ COMMON_ENVIRONMENT }}-{{ COMMON_DEPLOYMENT }}'
+    sourcetype: 'nginx'
+
+#
+# OS packages
+#
+splunk_debian_pkgs:
+  - gdebi
+
+splunk_redhat_pkgs: []
+
+splunkforwarder_output_dir: '/opt/splunkforwarder/'

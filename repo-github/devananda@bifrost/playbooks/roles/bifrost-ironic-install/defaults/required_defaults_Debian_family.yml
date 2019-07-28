@@ -1,0 +1,45 @@
+---
+init_template: upstart_template.j2
+init_dest_dir: /etc/init/
+init_ext: .conf
+syslinux_tftp_dir: /usr/lib/syslinux/
+ipxe_dir: /usr/lib/ipxe/
+ipxe_full_binary: ipxe.pxe
+sgabios_dir: /usr/share/qemu/
+nginx_user: www-data
+virt_group: libvirtd
+mysql_service_name: mysql
+required_packages:
+  - mysql-server
+  - rabbitmq-server
+  - python-dev
+  - python-mysqldb
+  - python-configparser
+  - libffi-dev
+  - libxslt1-dev
+  - libssl-dev
+  - libxml2-dev
+  - ipxe
+  - tftpd-hpa
+  - tftp-hpa
+  - syslinux-common
+  - syslinux
+  - xinetd
+  - parted
+  - ipmitool
+  - psmisc
+  - nginx
+  - wget
+  - genisoimage
+  - kpartx
+  - qemu-utils
+  - python-openwsman
+  - amtterm
+  - sgabios
+  - libvirt-bin
+  - debootstrap
+  - dnsmasq
+# NOTE(TheJulia): The above entry for dnsmasq must be the last entry in the
+# package list as the installation causes name resolution changes that can
+# temporarily block packages following it while the system is being
+# reconfigured. See: https://review.openstack.org/#/c/223813

@@ -1,0 +1,69 @@
+# requires:
+#   - common/tasks/main.yml
+---
+- name: nginx | Install nginx
+  apt: pkg=nginx state={{ pkgs.nginx.state }}
+  notify: nginx | restart nginx
+  tags:
+  - nginx
+  - install
+
+# Standard configuration that is common across all roles
+# Default values for these variables are set in group_vars/all
+# Note: remove spaces in {{..}}, otherwise you will get a template parsing error.
+- include: nginx_site.yml state={{nginx_cfg.sites_enabled.edx_release}} site_name=edx-release
+- include: nginx_site.yml state={{nginx_cfg.sites_enabled.basic_auth}} site_name=basic-auth
+
+- name: nginx | Write out default htpasswd file
+  copy: content={{ nginx_cfg.htpasswd }} dest=/etc/nginx/nginx.htpasswd owner=www-data group=www-data mode=0600
+  tags:
+  - nginx
+  - update
+
+- name: nginx | Create nginx log file location (just in case)
+  file: path={{log_base_dir}}/nginx state=directory owner=syslog group=adm mode=2770
+  tags:
+  - nginx
+  - logging
+  - update
+
+# removing default link
+- name: nginx | Removing default nginx config and restart (enabled)
+  file: path=/etc/nginx/sites-enabled/default state=absent
+  notify: nginx | restart nginx
+  tags:
+  - nginx
+  - update
+
+# Note that nginx logs to /var/log until it reads its configuration, so /etc/logrotate.d/nginx is still good
+
+- name: nginx | Set up nginx access log rotation
+  template: dest=/etc/logrotate.d/nginx-access src=edx_logrotate_nginx_access.j2 owner=root group=root mode=644
+  tags:
+  - logging
+  - update
+
+- name: nginx | Set up nginx access log rotation
+  template: dest=/etc/logrotate.d/nginx-error src=edx_logrotate_nginx_error.j2 owner=root group=root mode=644
+  tags:
+  - logging
+  - update
+
+- name: nginx | Removing default nginx config (available)
+  file: path=/etc/nginx/sites-available/default state=absent
+  tags:
+  - nginx
+  - update
+  
+- name: nginx | Register the fact that nginx has run
+  command: echo True
+  register: nginx_role_run
+  tags:
+  - nginx
+  - update
+
+# If tasks that notify restart nginx don't change the state of the remote system
+# their corresponding notifications don't get run.  If nginx has been stopped for
+# any reason, this will ensure that it is started up again.
+- name: nginx | make sure nginx has started
+  service: name=nginx state=started

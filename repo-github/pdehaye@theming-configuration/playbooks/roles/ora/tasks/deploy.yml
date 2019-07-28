@@ -1,0 +1,106 @@
+- name: ora | See if edx-ora.conf is installed
+  shell: "[ -f /etc/init/edx-ora.conf ] && echo 'Found' || echo ''"
+  register: edx_ora_installed
+  tags:
+  - ora
+  - deploy
+
+- name: ora | See if edx-ora-celery.conf is installed
+  shell: "[ -f /etc/init/edx-ora-celery.conf ] && echo 'Found' || echo ''"
+  register: edx_ora_celery_installed
+  tags:
+  - ora
+  - deploy
+
+# Stop ora service.
+- name: ora | stop edx-ora service
+  service: name=edx-ora state=stopped
+  when: edx_ora_installed.stdout == 'Found'
+  notify: ora | restart edx-ora
+  tags:
+  - ora
+  - deploy
+
+- name: ora | stop edx-ora-celery service
+  service: name=edx-ora-celery state=stopped
+  when: edx_ora_celery_installed.stdout == 'Found'
+  notify: ora | restart edx-ora-celery
+  tags:
+  - ora
+  - deploy
+
+# Do A Checkout
+- name: ora | git checkout ora repo into $app_base_dir
+  git: dest={{ora_code_dir}} repo={{ora_source_repo}} version={{ora_version}}
+  notify:
+    - ora | restart edx-ora
+    - ora | restart edx-ora-celery
+  tags:
+  - ora
+  - deploy
+
+# Do Post Checkout Tasks.
+- name: ora | change permissions on ora code dir
+  file: path={{ora_code_dir}} state=directory owner=www-data group=www-data mode=755 recurse=yes
+  notify:
+    - ora | restart edx-ora
+    - ora | restart edx-ora-celery
+  tags:
+  - ora
+  - deploy
+
+
+# TODO: Check git.py _run_if_changed() to see if the logic there to skip running certain
+# portions of the deploy needs to be incorporated here.
+
+
+# Install the python pre requirements into {{ ora_venv_dir }}
+- name: ora | install python pre-requirements
+  pip: requirements="{{ora_pre_requirements_file}}" virtualenv="{{ora_venv_dir}}" state=present
+  notify:
+    - ora | restart edx-ora
+    - ora | restart edx-ora-celery
+  tags:
+  - ora
+  - deploy
+
+# Install the python post requirements into {{ ora_venv_dir }}
+- name: ora | install python post-requirements
+  pip: requirements="{{ora_post_requirements_file}}" virtualenv="{{ora_venv_dir}}" state=present
+  notify:
+    - ora | restart edx-ora
+    - ora | restart edx-ora-celery
+  tags:
+  - ora
+  - deploy
+
+  #Needed if using redis to prevent memory issues
+- name: ora | change memory commit settings -- needed for redis
+  command: sysctl vm.overcommit_memory=1
+  notify:
+    - ora | restart edx-ora
+    - ora | restart edx-ora-celery
+  tags:
+  - ora
+  - deploy
+
+- name: ora | syncdb and migrate
+  shell: sudo -u www-data {{ora_venv_dir}}/bin/django-admin.py syncdb --migrate --noinput --settings=edx_ora.aws --pythonpath={{ora_code_dir}}
+  when: migrate_db is defined and migrate_db|lower == "yes"
+  notify:
+    - ora | restart edx-ora
+    - ora | restart edx-ora-celery
+  tags:
+  - ora
+  - syncdb
+  - deploy
+
+- name: ora | create users
+  shell: sudo -u www-data {{ora_venv_dir}}/bin/django-admin.py update_users --settings=edx_ora.aws --pythonpath={{ora_code_dir}}
+  notify:
+    - ora | restart edx-ora
+    - ora | restart edx-ora-celery
+  tags:
+  - ora
+  - syncdb
+  - deploy

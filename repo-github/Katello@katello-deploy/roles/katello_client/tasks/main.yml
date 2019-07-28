@@ -1,0 +1,51 @@
+---
+- name: 'Cleanup previous registrations'
+  include_tasks: cleanup.yml
+  when: katello_client_cleanup
+
+- name: 'Install bootstrap rpm'
+  yum:
+    name: "http://{{ katello_client_server }}/pub/katello-ca-consumer-latest.noarch.rpm"
+    state: "present"
+
+- name: 'Register client with subscription-manager as user {{ katello_client_username }}'
+  redhat_subscription:
+    state: "present"
+    org_id: "{{ katello_client_organization }}"
+    environment: "{{ katello_client_environment }}"
+    username: "{{ katello_client_username }}"
+    password: "{{ katello_client_password }}"
+    server_insecure: "{{ katello_client_insecure }}"
+  when:
+    - katello_client_activationkey == ""
+
+- name: 'Register client with subscription-manager using AK {{ katello_client_activationkey }}'
+  redhat_subscription:
+    state: "present"
+    org_id: "{{ katello_client_organization }}"
+    activationkey: "{{ katello_client_activationkey }}"
+    server_insecure: "{{ katello_client_insecure }}"
+  when:
+    - katello_client_activationkey != ""
+
+- name: 'Enable extra repositories'
+  command: subscription-manager repos --enable {{ item }}
+  with_items: "{{ katello_client_extra_repos }}"
+
+- name: 'Install katello-host-tools'
+  yum:
+    name: "katello-host-tools"
+    state: "present"
+  ignore_errors: yes
+
+- name: 'Install katello-agent'
+  yum:
+    name: "katello-agent"
+    state: "present"
+  when: katello_client_install_agent
+
+- name: 'Install katello-host-tools-tracer'
+  yum:
+    name: "katello-host-tools-tracer"
+    state: "present"
+  when: katello_client_install_tracer

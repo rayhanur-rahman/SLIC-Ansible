@@ -1,0 +1,10 @@
+---
+- hosts: master
+  become: true
+  gather_facts: no
+
+  tasks:
+  - name: Gluster volume quota operation
+    quota:  action="{{ action }}"
+            volume="{{ volname }}"
+            time="{{ time }}"

@@ -1,0 +1,11 @@
+---
+- hosts: master_node
+  become: true
+  gather_facts: no
+
+  tasks:
+  - name: Disable gluster.nfs
+    volume_set: action=set
+                volume="{{ volname }}"
+                key=nfs.disable value=on
+

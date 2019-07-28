@@ -1,0 +1,27 @@
+---
+- hosts: localhost
+  user: root
+  become: false
+  vars_files:
+    - vars/main.yaml
+  tasks:
+    - name: "Create resource pool on vCenter"
+      vmware_resource_pool:
+        hostname: "{{ openshift_cloudprovider_vsphere_host }}"
+        username: "{{ openshift_cloudprovider_vsphere_username }}"
+        password: "{{ openshift_cloudprovider_vsphere_password }}"
+        datacenter: "{{ openshift_cloudprovider_vsphere_datacenter }}"
+        cluster: "{{ openshift_cloudprovider_vsphere_cluster}}"
+        resource_pool: "{{ openshift_cloudprovider_vsphere_resource_pool }}"
+        state: "present"
+        validate_certs: False
+    - name: "Create folder structure on vCenter"
+      vmware_folder:
+        hostname: "{{ openshift_cloudprovider_vsphere_host }}"
+        username: "{{ openshift_cloudprovider_vsphere_username }}"
+        password: "{{ openshift_cloudprovider_vsphere_password }}"
+        datacenter: "{{ openshift_cloudprovider_vsphere_datacenter }}"
+        cluster: "{{ openshift_cloudprovider_vsphere_cluster}}"
+        folder: "{{ openshift_cloudprovider_vsphere_folder }}"
+        state: "present"
+        validate_certs: False

@@ -1,0 +1,77 @@
+---
+- name: "{{ 'Create' if (state is undefined or 'absent' not in state) else 'Terminate' }} NAT Gateway"
+  ec2_vpc_nat_gateway:
+    if_exist_do_not_create: yes
+    nat_gateway_id: "{{ '' if (state is undefined or 'absent' not in state) else natgws.result[0].nat_gateway_id }}"
+    region: "{{ aws_region }}"
+    state: "{{ state | default('present') }}"
+    subnet_id: "{{ subnet_public.results.0.subnet.id if (state is undefined or 'absent' not in state) else '' }}"
+    wait: yes
+  register: natgw1
+  retries: 3
+  delay: 3
+  when: "\
+  ( ( subnet_public is defined ) and ( subnet_public.results.0 is defined ) ) \
+  or \
+  ( natgws.result[0] is defined )"
+
+- name: "Pause for 30 to allow for AWS to {{ 'instantiate' if (state is undefined or 'absent' not in state) else 'terminate' }}"
+  pause:
+    seconds: 30
+  when: natgw1 is changed
+
+- name: "{{ 'Create' if (state is undefined or 'absent' not in state) else 'Terminate' }} NAT Gateway"
+  ec2_vpc_nat_gateway:
+    if_exist_do_not_create: yes
+    nat_gateway_id: "{{ '' if (state is undefined or 'absent' not in state) else natgws.result[1].nat_gateway_id }}"
+    region: "{{ aws_region }}"
+    state: "{{ state | default('present') }}"
+    subnet_id: "{{ subnet_public.results.1.subnet.id if (state is undefined or 'absent' not in state) else '' }}"
+    wait: yes
+  register: natgw2
+  retries: 3
+  delay: 3
+  when: "\
+  ( ( subnet_public is defined ) and ( subnet_public.results.1 is defined ) ) \
+  or \
+  ( natgws.result[1] is defined )"
+
+- name: "Pause for 30 to allow for AWS to {{ 'instantiate' if (state is undefined or 'absent' not in state) else 'terminate' }}"
+  pause:
+    seconds: 30
+  when: natgw2 is changed
+
+- name: "{{ 'Create' if (state is undefined or 'absent' not in state) else 'Terminate' }} NAT Gateway"
+  ec2_vpc_nat_gateway:
+    if_exist_do_not_create: yes
+    nat_gateway_id: "{{ '' if (state is undefined or 'absent' not in state) else natgws.result[2].nat_gateway_id }}"
+    region: "{{ aws_region }}"
+    state: "{{ state | default('present') }}"
+    subnet_id: "{{ subnet_public.results.2.subnet.id if (state is undefined or 'absent' not in state) else '' }}"
+    wait: yes
+  register: natgw3
+  retries: 3
+  delay: 3
+  when: "\
+  ( ( subnet_public is defined ) and ( subnet_public.results.2 is defined ) ) \
+  or \
+  ( natgws.result[2] is defined )"
+
+- name: "Pause for 30 to allow for AWS to {{ 'instantiate' if (state is undefined or 'absent' not in state) else 'terminate' }}"
+  pause:
+    seconds: 30
+  when: natgw3 is changed
+
+- include_tasks: tag.yaml
+  vars:
+    - resource: "{{ item.nat.nat_gateway_id }}"
+    - tagss: "Name={{ item.az }}, clusterid={{ clusterid }}, kubernetes.io/cluster/{{ clusterid }}={{ clusterid }}"
+  with_items:
+    - az: "{{ vpc_subnet_azs.0 }}"
+      nat: "{{ natgw1 }}"
+    - az: "{{ vpc_subnet_azs.1 }}"
+      nat: "{{ natgw2 }}"
+    - az: "{{ vpc_subnet_azs.2 }}"
+      nat: "{{ natgw3 }}"
+  when:
+    - ( state is undefined ) or ( 'absent' not in state )

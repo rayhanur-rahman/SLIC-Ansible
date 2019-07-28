@@ -1,0 +1,122 @@
+# Copyright (c) 2015 Hewlett-Packard Development Company, L.P.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+---
+# Note(TheJulia): Fact collection from ironic is necessary to obtain
+# the host's assigned UUID value.
+- name: "Update facts from ironic to fill in any missing values"
+  include: update_facts_from_ironic.yaml
+
+- name: "Identify ssh_public_key from ssh_public_key_path"
+  include: ssh_public_key_path.yaml
+  when: ssh_public_key is undefined
+
+- name: "Make temporary folder to build configdrive"
+  command: mktemp -d
+  register: variable_configdrive_location
+
+- name: "Make metadata folders - /openstack/<version>"
+  file:
+    state: directory
+    name: "{{ variable_configdrive_location.stdout }}/{{ uuid }}/openstack/{{ item }}/"
+  with_items: "{{ metadata_versions }}"
+
+- name: "Place template in each openstack/<version> folder"
+  template:
+    src: openstack_meta_data.json.j2
+    dest: "{{ variable_configdrive_location.stdout }}/{{ uuid }}/openstack/{{ item }}/meta_data.json"
+  with_items: "{{ metadata_versions }}"
+
+- name: "Generate network_data"
+  network_metadata:
+    ipv4_address: "{{ ipv4_address | default('') }}"
+    ipv4_gateway: "{{ ipv4_gateway | default('') }}"
+    ipv4_interface_mac: "{{ ipv4_interface_mac | default('') }}"
+    ipv4_nameserver: "{% if ipv4_nameserver is string %}['{{ ipv4_nameserver | default('') }}']{% else %}{{ ipv4_nameserver }}{% endif %}"
+    ipv4_subnet_mask: "{{ ipv4_subnet_mask | default('') }}"
+    vlan_id: "{{ vlan_id | default('') }}"
+    network_mtu: "{{ network_mtu | default('1500') }}"
+    nics: "{{ nics | default(omit) }}"
+    node_network_data: "{{ node_network_data | default(node_network_info) }}"
+  when: addressing_mode is undefined or "dhcp" not in addressing_mode
+
+- name: "Place network data template in each openstack/<version> folder"
+  template:
+    src: network_data.json.j2
+    dest: "{{ variable_configdrive_location.stdout }}/{{ uuid }}/openstack/{{ item }}/network_data.json"
+  with_items: "{{ metadata_versions }}"
+  when:
+    - item in metadata_versions_supporting_network_data
+    - addressing_mode is undefined or "dhcp" not in addressing_mode
+
+# TODO(TheJulia): Deprecation removal of the old network_info file name
+# should likely take place after an elongated deprecation cycle.
+# Begin deprecated in the Ocata release suggests Queens as the point
+# in which we should remove it.
+- name: "Place deprecated network info file location in each openstack/<version> folder"
+  template:
+    src: network_data.json.j2
+    dest: "{{ variable_configdrive_location.stdout }}/{{ uuid }}/openstack/{{ item }}/network_info.json"
+  with_items: "{{ metadata_versions }}"
+  when:
+    - item in metadata_versions_supporting_network_data
+    - addressing_mode is undefined or "dhcp" not in addressing_mode
+
+- name: "Make metadata folder - /openstack/content"
+  file:
+    state: directory
+    name: "{{ variable_configdrive_location.stdout }}/{{ uuid }}/openstack/content/"
+
+- name: "Write network Debian style interface template"
+  template: src=interfaces.j2 dest={{ variable_configdrive_location.stdout }}/{{ uuid }}/openstack/content/0000
+  when: write_interfaces_file | bool == true
+
+- name: "Check if mkisofs is available"
+  shell: mkisofs --help &> /dev/null
+  ignore_errors: yes
+  register: test_mkisofs
+
+- name: "If mkisofs is not available, fallback to genisoimage"
+  set_fact:
+    iso_gen_utility: "genisoimage"
+  when: ('genisoimage' in test_mkisofs.stderr) or test_mkisofs.rc != 0
+
+- name: "Check if genisoimage is available"
+  shell: genisoimage --help &> /dev/null
+  ignore_errors: yes
+  register: test_genisoimage
+
+- name: "fail if genisoimage is not available."
+  fail: msg="Neither mkisofs or genisoimage is available. Cannot make config drive files."
+  when: test_genisoimage.rc != 0 and test_mkisofs.rc != 0
+
+- name: "Make config drive files"
+  become: yes
+  command: "{{iso_gen_utility}} -R -V config-2 -o {{http_boot_folder}}/configdrive-{{ uuid }}.iso {{ variable_configdrive_location.stdout }}/{{ uuid }}"
+
+- name: "Make config drive files base64 encoded and gzip compressed"
+  become:  yes
+  shell: gzip -c {{http_boot_folder}}/configdrive-{{ uuid }}.iso | base64 > {{http_boot_folder}}/configdrive-{{ uuid }}.iso.gz
+
+- name: "Cleanup configdrive .iso files"
+  become: yes
+  file:
+    state: absent
+    name: "{{http_boot_folder}}/configdrive-{{ uuid }}.iso"
+
+- name: "Cleanup configdrive temp folder"
+  become: yes
+  file:
+    state: absent
+    force: yes
+    name: "{{ variable_configdrive_location.stdout }}"

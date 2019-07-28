@@ -1,0 +1,22 @@
+---
+- hosts: localhost
+  gather_facts: yes
+  roles:
+  - instance-groups
+
+- hosts: localhost
+  tasks:
+  - debug:
+      var: 'groups.keys()'
+  - debug:
+      var: "groups['masters']"
+  - debug:
+      var: "groups['single_master']"
+  - debug:
+      var: "groups['schedulable_nodes']"
+  - debug:
+      var: "groups['etcd']"
+  - debug:
+      var: "hostvars[item]"
+    with_items:
+    - "{{groups['masters']}}"

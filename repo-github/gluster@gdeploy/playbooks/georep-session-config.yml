@@ -1,0 +1,29 @@
+---
+- hosts: georep_master
+  become: true
+  gather_facts: no
+
+  tasks:
+  - name: Configures the geo-rep session
+    geo_rep: action=config
+            mastervol="{{ mastervolname }}"
+            slavevol="{{ slavevol }}"
+            gluster_log_file="{{ gluster_log_file | default('') }}"
+            gluster_log_level="{{ gluster_log_level | default('') }}"
+            log_file="{{ log_file | default('') }}"
+            log_level="{{ log_level | default('') }}"
+            changelog_log_level="{{ changelog_log_level | default('') }}"
+            ssh_command="{{ ssh_command | default('') }}"
+            rsync_command="{{ rsync_command | default('') }}"
+            use_tarssh="{{ use_tarssh | default('') }}"
+            volume_id="{{ volume_id | default('') }}"
+            timeout="{{ timeout | default('') }}"
+            sync_jobs="{{ sync_jobs | default('') }}"
+            ignore_deletes="{{ ignore_deletes | default('') }}"
+            checkpoint="{{ checkpoint | default('') }}"
+            sync_acls="{{ sync_acls | default('') }}"
+            sync_xattrs="{{ sync_xattrs | default('') }}"
+            log_rsync_performance="{{ log_rsync_performance | default('') }}"
+            rsync_options="{{ rsync_options | default('') }}"
+            use_meta_volume="{{ use_meta_volume | default('') }}"
+            meta_volume_mnt="{{ meta_volume_mnt | default('') }}"

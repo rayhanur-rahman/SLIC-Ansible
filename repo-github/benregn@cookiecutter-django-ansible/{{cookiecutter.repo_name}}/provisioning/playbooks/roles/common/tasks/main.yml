@@ -1,0 +1,87 @@
+{% raw %}---
+- name: update APT package cache and aptitude safe-upgrade
+  apt: >
+    update_cache=yes
+    upgrade=yes
+    cache_valid_time={{six_hours}}
+  sudo: True
+  tags:
+    - setup
+
+- name: install common packages
+  apt: >
+    pkg={{item}}
+    update_cache=yes
+    cache_valid_time={{six_hours}}
+    state=installed
+  with_items: common_pkg
+  sudo: True
+  tags:
+    - setup
+
+- name: remove chef and puppet
+  apt: >
+    pkg={{item}}
+    state=absent
+  with_items: other_provisioners
+  sudo: True
+  tags:
+    - setup
+
+- name: remove sudo group rights
+  lineinfile: >
+    dest=/etc/sudoers
+    regexp="^%sudo"
+    state=absent
+  sudo: True
+  tags:
+    - setup
+
+- name: update ssh parameters
+  lineinfile: >
+    dest=/etc/ssh/sshd_config
+    regexp=^{{ item.key }}
+    line="{{ item.key }} {{ item.value }}"
+    insertafter=EOF
+    backup=yes
+    state=present
+  with_items:
+    - { key: 'PermitRootLogin', value: 'no' }
+    - { key: 'PasswordAuthentication', value: 'no' }
+    # below prevented ssh to vagrant machine
+    # - { key: 'LoginGraceTime', value: '20' }
+    # - { key: 'X11Forwarding', value: 'no' }
+    # - { key: 'ClientAliveInterval', value: '30' }
+    # - { key: 'ClientAliveCountMax', value: '1000' }
+  notify:
+    - restart ssh
+  sudo: True
+  tags:
+    - setup
+
+- name: adjust APT update intervals
+  copy: >
+    src=apt_periodic
+    dest=/etc/apt/apt.conf.d/10periodic
+  sudo: True
+  tags:
+    - setup
+
+- name: "make sure unattended-upgrades only installs from {{common_ubuntu_release}}-security"
+  copy: >
+    src=50unattended-upgrades
+    dest=/etc/apt/apt.conf.d/50unattended-upgrades
+  sudo: True
+  tags:
+    - setup
+
+- name: "create /var/log/{{project_name}} directory"
+  file: >
+    path=/var/log/{{project_name}}
+    owner={{django_user}}
+    group=www-data
+    state=directory
+    mode=775
+  sudo: True
+  tags:
+    - setup{% endraw %}

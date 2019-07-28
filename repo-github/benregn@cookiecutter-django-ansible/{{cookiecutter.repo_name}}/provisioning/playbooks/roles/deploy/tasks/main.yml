@@ -1,0 +1,118 @@
+{% raw %}---
+- name: install web packages
+  apt: >
+    pkg={{item}}
+    update_cache=yes
+    cache_valid_time={{six_hours}}
+    state=installed
+  with_items: setup_pkg
+  sudo: True
+  tags:
+    - deploy
+
+- name: copy /.ssh/config
+  copy: >
+    src=ssh_config
+    dest=/home/{{ django_user }}/.ssh/config
+    owner={{django_user}}
+    group={{django_user}}
+  sudo: True
+  tags:
+    - deploy
+
+- name: "ensure /home/{{ django_user }}/.virtualenvs/ dir is created"
+  file: >
+    path=/home/{{ django_user }}/.virtualenvs
+    recurse=yes
+    owner={{ django_user }}
+    group=www-data
+    state=directory
+  sudo: True
+  tags:
+    - deploy
+
+- name: ensure correct permissions on code_root_dir dir
+  file: >
+    path={{ code_root_dir }}
+    recurse=yes
+    owner={{ django_user }}
+    group=www-data
+    state=directory
+  sudo: True
+  tags:
+    - deploy
+
+- name: pull git
+  git: >
+    repo={{ git_repo }}
+    dest={{ code_root_dir }}
+    accept_hostkey=yes
+    key_file=/home/{{ django_user }}/.ssh/id_rsa
+    update=yes
+  sudo: False
+  when: is_production
+  tags:
+    - deploy
+
+- name: install pip requirements
+  pip: >
+    virtualenv={{ virtualenv_dir }}
+    requirements={{ reqs_dir }}/{{ reqs_file }}
+  tags:
+    - deploy
+
+- name: run django manage commands
+  django_manage: >
+    app_path={{ django_root_dir }}
+    command={{ item }}
+    settings={{ settings_module }}
+    virtualenv={{ virtualenv_dir }}
+  with_items:
+    - syncdb
+    - migrate
+    - collectstatic
+  tags:
+    - deploy
+  environment: env_vars
+
+- name: "restart supervisor managed processes"
+  supervisorctl: >
+    name={{ item }}
+    state=restarted
+  with_items:
+    - "{{ project_name }}"
+    - celerybeat
+    - celeryd
+  sudo: True
+  tags:
+    - deploy
+
+- name: copy custom runserver_plus script
+  template: >
+    src=rs.j2
+    dest=/usr/local/bin/rs
+    owner={{django_user}}
+    group={{django_user}}
+    mode=755
+  when: not is_production
+  sudo: True
+  tags:
+    - deploy
+
+- name: add runserver_plus.conf to supervisor
+  template: >
+    src=runserver_plus.conf.j2
+    dest=/etc/supervisor/runserver_plus.conf
+  when: not is_production
+  sudo: True
+  tags:
+    - deploy
+
+- name: restart runserver_plus processes
+  supervisorctl: >
+    name=runserver_plus
+    state=restarted
+  when: not is_production
+  sudo: True
+  tags:
+    - deploy{% endraw %}

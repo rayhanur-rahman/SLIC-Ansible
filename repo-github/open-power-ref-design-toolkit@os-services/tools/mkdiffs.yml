@@ -1,0 +1,126 @@
+---
+# Configuration file for the mkdiffs tooling
+
+changes_loc: ../changes
+temp_diff_loc: ../.diffs
+gitsrc_loc: ../.gitsrc
+
+# Individual files that changes will reference
+#
+# example:
+#   The changed file should go into 'changes/files/<path>/<changed_file>', then
+# create an entry in the 'files' section as below:
+#
+# files:
+#   - file:
+#     source: .gitsrc/openstack-ansible/etc/openstack_deploy/env.d/swift.yml
+#     target: /etc/openstack_deploy/env.d/swift.yml
+#
+files:
+  - file:
+    source: .gitsrc/openstack-ansible/etc/openstack_deploy/env.d/swift.yml
+    target: /etc/openstack_deploy/env.d/swift.yml
+  - file:
+    source: .gitsrc/openstack-ansible/etc/openstack_deploy/env.d/cinder.yml
+    target: /etc/openstack_deploy/env.d/cinder.yml
+  - file:
+    source: .gitsrc/openstack-ansible/etc/openstack_deploy/env.d/trove.yml
+    target: /etc/openstack_deploy/env.d/trove.yml
+
+# Projects to clone
+projects:
+  - project:
+    git: https://git.openstack.org/openstack/openstack-ansible-lxc_container_create
+    branch: 15.1.10
+    target_location: /etc/ansible/roles/lxc_container_create
+    src_location: lxc_container_create
+  - project:
+    git: https://git.openstack.org/openstack/openstack-ansible
+    branch: 15.1.10
+    target_location: /opt/openstack-ansible
+    src_location: openstack-ansible
+  - project:
+    git: https://git.openstack.org/openstack/openstack-ansible-os_glance
+    branch: 15.1.10
+    target_location: /etc/ansible/roles/os_glance
+    src_location: os_glance
+  - project:
+    git: https://git.openstack.org/openstack/openstack-ansible-os_nova
+    branch: 15.1.10
+    target_location: /etc/ansible/roles/os_nova
+    src_location: os_nova
+  - project:
+    git: https://git.openstack.org/openstack/openstack-ansible-os_swift
+    branch: 15.1.10
+    target_location: /etc/ansible/roles/os_swift
+    src_location: os_swift
+  - project:
+    git: https://git.openstack.org/openstack/openstack-ansible-openstack_hosts
+    branch: 15.1.10
+    target_location: /etc/ansible/roles/openstack_hosts
+    src_location: openstack_hosts
+  - project:
+    git: https://git.openstack.org/openstack/openstack-ansible-ceph_client
+    branch: 15.1.10
+    target_location: /etc/ansible/roles/ceph_client
+    src_location: ceph_client
+  - project:
+    git: https://git.openstack.org/openstack/openstack-ansible-os_heat
+    branch: 15.1.10
+    target_location: /etc/ansible/roles/os_heat
+    src_location: os_heat
+  - project:
+    git: https://git.openstack.org/openstack/openstack-ansible-os_horizon
+    branch: 15.1.10
+    target_location: /etc/ansible/roles/os_horizon
+    src_location: os_horizon
+  - project:
+    git: https://git.openstack.org/openstack/openstack-ansible-os_trove
+    branch: 15.1.10
+    target_location: /etc/ansible/roles/os_trove
+    src_location: os_trove
+  - project:
+    git: https://git.openstack.org/openstack/openstack-ansible-os_cinder
+    branch: 15.1.10
+    target_location: /etc/ansible/roles/os_cinder
+    src_location: os_cinder
+  - project:
+    git: https://git.openstack.org/openstack/openstack-ansible-os_neutron
+    branch: 15.1.10
+    target_location: /etc/ansible/roles/os_neutron
+    src_location: os_neutron
+  - project:
+    git: https://git.openstack.org/openstack/openstack-ansible-os_ceilometer
+    branch: 15.1.10
+    target_location: /etc/ansible/roles/os_ceilometer
+    src_location: os_ceilometer
+  - project:
+    git: https://git.openstack.org/openstack/openstack-ansible-os_horizon
+    branch: 15.1.10
+    target_location: /etc/ansible/roles/os_horizon
+    src_location: os_horizon
+  - project:
+    git: https://git.openstack.org/openstack/openstack-ansible-repo_server
+    branch: 15.1.10
+    target_location: /etc/ansible/roles/repo_server
+    src_location: repo_server
+  - project:
+    git: https://git.openstack.org/openstack/openstack-ansible-os_keystone
+    branch: 15.1.10
+    target_location: /etc/ansible/roles/os_keystone
+    src_location: os_keystone
+  - project:
+    git: https://git.openstack.org/openstack/openstack-ansible-galera_server
+    branch: 15.1.10
+    target_location: /etc/ansible/roles/galera_server
+    src_location: galera_server
+  - project:
+    git: https://git.openstack.org/openstack/openstack-ansible-galera_client
+    branch: 15.1.10
+    target_location: /etc/ansible/roles/galera_client
+    src_location: galera_client
+  - project:
+    git: https://git.openstack.org/openstack/openstack-ansible-pip_install
+    branch: 15.1.10
+    target_location: /etc/ansible/roles/pip_install
+    src_location: pip_install

@@ -1,0 +1,11 @@
+---
+- hosts: master
+  become: true
+  gather_facts: no
+
+  tasks:
+  - name: Sets options for volume
+    volume_set: action=set
+                volume="{{ volname }}"
+                key={{ item.key }} value={{ item.value }}
+    with_items: "{{ set }}"

@@ -1,0 +1,2 @@
+---
+etc_hosts_domain: "{{ ansible_domain }}"

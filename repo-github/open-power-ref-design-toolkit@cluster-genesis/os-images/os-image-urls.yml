@@ -1,0 +1,38 @@
+---
+# Copyright 2019 IBM Corp.
+#
+# All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+os_image_urls:
+  - name: ubuntu-14.04.5-server-amd64
+    images:
+      - url: http://releases.ubuntu.com/14.04.5/ubuntu-14.04.5-server-amd64.iso
+        sha1sum: 5e567024c385cc8f90c83d6763c6e4f1cd5deb6f
+  - name: ubuntu-16.04.6-server-amd64
+    images:
+      - url: http://releases.ubuntu.com/16.04/ubuntu-16.04.6-server-amd64.iso
+        sha1sum: 056b7c15efc15bbbf40bf1a9ff1a3531fcbf70a2
+  - name: ubuntu-16.04.6-server-ppc64el
+    images:
+      - url: http://cdimage.ubuntu.com/releases/16.04.6/release/ubuntu-16.04.6-server-ppc64el.iso
+        sha1sum: 3c990f38646b7fbd75e560df52b60f0c37c6b7ab
+  - name: ubuntu-18.04.2-server-amd64
+    images:
+      - url: http://cdimage.ubuntu.com/releases/18.04/release/ubuntu-18.04.2-server-amd64.iso
+        sha1sum: 57c3a25f2c5fd61596ce39afbff44dd49b0089a2
+  - name: ubuntu-18.04.2-server-ppc64el
+    images:
+      - url: http://cdimage.ubuntu.com/releases/18.04/release/ubuntu-18.04.2-server-ppc64el.iso
+        sha1sum: 96f4d7aebb86adcc4b8625eea43bf1c0b86364e1

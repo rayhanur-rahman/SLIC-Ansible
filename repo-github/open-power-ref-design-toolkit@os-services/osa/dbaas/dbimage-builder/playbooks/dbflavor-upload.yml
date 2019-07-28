@@ -1,0 +1,24 @@
+---
+# example:
+#   ansible-playbook -i host_file dbflavor-upload.yml -u ubuntu -c ssh
+#
+
+- name: Initialize flavors
+  hosts: deployer
+  environment: "{{ deployment_environment | default({}) }}"
+  vars_files:
+    - vars/dbflavor-args.yml
+  tasks:
+    - include: tasks/get-flavors.yml
+
+- name: Upload flavors to controller
+  hosts: controller
+  environment: "{{ deployment_environment | default({}) }}"
+  become: yes
+  vars_files:
+    - vars/dbflavor-args.yml
+  tasks:
+    - include: tasks/upload-flavors.yml
+      when: not isJujuCharm
+    - include: tasks/charm-upload-flavors.yml
+      when: isJujuCharm

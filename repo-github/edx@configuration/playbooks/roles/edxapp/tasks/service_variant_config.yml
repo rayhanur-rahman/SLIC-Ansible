@@ -1,0 +1,214 @@
+---
+- name: create application and auth config
+  template:
+    src: "{{ item[0] }}.{{ item[1] }}.json.j2"
+    dest: "{{ edxapp_app_dir }}/{{ item[0] }}.{{ item[1] }}.json"
+    owner: "{{ edxapp_user }}"
+    group: "{{ common_web_group }}"
+    mode: 0640
+  become: true
+  with_nested:
+    - "{{ service_variants_enabled }}"
+    - [ 'env', 'auth' ]
+  tags:
+    - install
+    - install:configuration
+    - install:app-configuration
+    - edxapp_cfg # Old deprecated tag, will remove when possible
+
+- name: combined lms auth env for yml
+  set_fact:
+    lms_combined_config: '{{lms_env_config|combine(lms_auth_config)}}'
+  no_log: "{{ COMMON_CONFIG_NO_LOGGING }}"
+  when: '"lms" in service_variants_enabled'
+  tags:
+    - install
+    - install:configuration
+    - install:app-configuration
+    - edxapp_cfg # Old deprecated tag, will remove when possible
+    - edxapp_cfg_yaml_only # Used to render the yaml without the json until we remove the json configs
+
+- name: render lms yml config # meant to replace existing json config eventually
+  template:
+    src: "lms.yml.j2"
+    dest: "{{ COMMON_CFG_DIR }}/lms.yml"
+    owner: "{{ edxapp_user }}"
+    group: "{{ common_web_group }}"
+    mode: 0640
+  become: true
+  no_log: "{{ COMMON_CONFIG_NO_LOGGING }}"
+  with_items: "{{ service_variants_enabled }}"
+  when: '"lms" in service_variants_enabled'
+  tags:
+    - install
+    - install:configuration
+    - install:app-configuration
+    - edxapp_cfg # Old deprecated tag, will remove when possible
+    - edxapp_cfg_yaml_only # Used to render the yaml without the json until we remove the json configs
+
+- name: combined cms auth env for yml
+  set_fact:
+    cms_combined_config: '{{cms_env_config|combine(cms_auth_config)}}'
+  no_log: "{{ COMMON_CONFIG_NO_LOGGING }}"
+  when: '"cms" in service_variants_enabled'
+  tags:
+    - install
+    - install:configuration
+    - install:app-configuration
+    - edxapp_cfg # Old deprecated tag, will remove when possible
+    - edxapp_cfg_yaml_only # Used to render the yaml without the json until we remove the json configs
+
+- name: render studio yml config # meant to replace existing json config eventually
+  template:
+    src: "studio.yml.j2"
+    dest: "{{ COMMON_CFG_DIR }}/studio.yml"
+    owner: "{{ edxapp_user }}"
+    group: "{{ common_web_group }}"
+    mode: 0640
+  become: true
+  no_log: "{{ COMMON_CONFIG_NO_LOGGING }}"
+  with_items: "{{ service_variants_enabled }}"
+  when: '"cms" in service_variants_enabled'
+  tags:
+    - install
+    - install:configuration
+    - install:app-configuration
+    - edxapp_cfg # Old deprecated tag, will remove when possible
+    - edxapp_cfg_yaml_only # Used to render the yaml without the json until we remove the json configs
+
+# write the supervisor scripts for the service variants
+- name: "writing {{ item }} supervisor script"
+  template:
+    src: "edx/app/supervisor/conf.d.available/{{ item }}.conf.j2"
+    dest: "{{ supervisor_available_dir }}/{{ item }}.conf"
+    owner: "{{ supervisor_user }}"
+    group: "{{ supervisor_user }}"
+    mode: 0644
+  become_user: "{{ supervisor_user }}"
+  with_items: "{{ service_variants_enabled }}"
+  tags:
+    - install
+    - install:configuration
+
+# write the supervisor script for celery workers
+- name: writing celery supervisor scripts
+  template:
+    src: "edx/app/supervisor/conf.d.available/{{ item }}.j2"
+    dest: "{{ supervisor_available_dir }}/{{ item }}"
+    owner: "{{ supervisor_user }}"
+    group: "{{ supervisor_user }}"
+    mode: 0644
+  become_user: "{{ supervisor_user }}"
+  with_items:
+    - workers.conf
+  tags:
+    - install
+    - install:configuration
+
+# clean out an old edxapp.conf file which we don't use now.
+# this can be deleted after we build things from scratch.
+- name: clean out old edxapp.conf
+  file:
+    path: "{{ supervisor_available_dir }}/edxapp.conf"
+    state: "absent"
+  tags:
+    - install
+    - install:configuration
+
+- name: add gunicorn configuration files
+  template:
+    src: "{{ item }}_gunicorn.py.j2"
+    dest: "{{ edxapp_app_dir }}/{{ item }}_gunicorn.py"
+    mode: 0644
+  become_user: "{{ edxapp_user }}"
+  with_items: "{{ service_variants_enabled }}"
+  tags:
+    - install
+    - install:configuration
+
+# Enable the supervisor jobs
+- name: "enable {{ item }} supervisor script"
+  file:
+    src: "{{ supervisor_available_dir }}/{{ item }}.conf"
+    dest: "{{ supervisor_cfg_dir }}/{{ item }}.conf"
+    state: link
+    force: yes
+  become_user: "{{ supervisor_user }}"
+  with_items: "{{ service_variants_enabled }}"
+  when: celery_worker is not defined and not disable_edx_services
+  tags:
+    - install
+    - install:configuration
+
+- name: enable celery worker supervisor script
+  file:
+    src: "{{ supervisor_available_dir }}/workers.conf"
+    dest: "{{ supervisor_cfg_dir }}/workers.conf"
+    state: link
+    force: yes
+  become_user: "{{ supervisor_user }}"
+  when: celery_worker is defined and not disable_edx_services
+  tags:
+    - install
+    - install:configuration
+
+- name: create helper scripts for managing edxapp
+  template:
+    src: "edx/bin/{{ item[0] }}-{{ item[1] }}.j2"
+    dest: "{{ COMMON_BIN_DIR }}/{{ item[0] }}-{{ item[1] }}"
+    owner: "{{ edxapp_user }}"
+    mode: 0755
+  with_nested:
+    - "{{ edxapp_helper_scripts }}"
+    - "{{ service_variants_enabled }}"
+  tags:
+    - install
+    - install:configuration
+
+- name: create script to compile and update assets
+  template:
+    src: "edx/bin/edxapp-update-assets.j2"
+    dest: "{{ COMMON_BIN_DIR }}/edxapp-update-assets"
+    owner: "{{ edxapp_user }}"
+    mode: 0755
+  tags:
+    - install
+    - install:configuration
+
+# migrate when the migrate user is overridden in extra vars
+- name: migrate
+  command: "{{ COMMON_BIN_DIR }}/edxapp-migrate-{{ item }}"
+  when: migrate_db is defined and migrate_db|lower == "yes" and COMMON_MYSQL_MIGRATE_PASS and item != "lms-preview"
+  run_once: yes
+  environment:
+    DB_MIGRATION_USER: "{{ COMMON_MYSQL_MIGRATE_USER }}"
+    DB_MIGRATION_PASS: "{{ COMMON_MYSQL_MIGRATE_PASS }}"
+  with_items: "{{ service_variants_enabled }}"
+  tags:
+    - migrate
+
+# There are problems with django collectstatic copying files.  It doesn't retain
+# last modified timestamps, but relies on those same timestamps to know if a new file
+# should be recopied.  While collectstatic --clear exists, it only clears some of the
+# files in edxapp_staticfile_dir, it leaves postprocessed or otherwise hashed files.
+# This ensures we have a totally clean directory.
+- name: Remove and recreate the staticfiles directory so nothing stale can exist
+  file:
+      path: "{{ edxapp_staticfile_dir }}"
+      state: "{{ item }}"
+      owner: "{{ edxapp_user }}"
+      group: "{{ common_web_group }}"
+      mode:  "0755"
+  when: celery_worker is not defined and not devstack
+  with_items: ['absent', 'directory']
+  tags:
+    - gather_static_assets
+    - assets
+
+# Gather assets using paver if possible
+- name: "gather static assets with paver"
+  command: "{{ COMMON_BIN_DIR }}/edxapp-update-assets"
+  when: celery_worker is not defined and not devstack
+  tags:
+    - gather_static_assets
+    - assets

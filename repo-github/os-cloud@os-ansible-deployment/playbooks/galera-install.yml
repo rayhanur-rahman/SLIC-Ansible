@@ -1,0 +1,68 @@
+---
+# Copyright 2014, Rackspace US, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+- name: Galera container config
+  hosts: galera_all
+  gather_facts: "{{ gather_facts | default(True) }}"
+  serial: 1
+  max_fail_percentage: 0
+  user: root
+  tasks:
+    - include: common-tasks/os-log-dir-setup.yml
+      vars:
+        log_dirs:
+          - src: "/openstack/log/{{ inventory_hostname }}-mysql_logs"
+            dest: "/var/log/mysql_logs"
+    - include: common-tasks/os-lxc-container-setup.yml
+      vars:
+        list_of_bind_mounts: "{{ galera_container_bind_mounts }}"
+        extra_container_config_no_restart:
+          - "lxc.start.order=99"
+    - include: common-tasks/package-cache-proxy.yml
+  vars:
+    is_metal: "{{ properties.is_metal|default(false) }}"
+  tags:
+    - galera
+
+- name: Install galera server
+  hosts: galera_all
+  gather_facts: "{{ gather_facts | default(True) }}"
+  serial: 1
+  max_fail_percentage: 20
+  user: root
+  roles:
+    - role: "pip_install"
+      tags:
+        - pip
+    - role: "galera_server"
+    - role: "rsyslog_client"
+      rsyslog_client_log_rotate_file: galera_log_rotate
+      rsyslog_client_log_dir: "/var/log/mysql_logs"
+      rsyslog_client_log_files:
+        - /var/log/mysql.log
+        - /var/log/mysql.err
+      rsyslog_client_config_name: "99-galera-rsyslog-client.conf"
+      tags:
+        - rsyslog
+    - role: "system_crontab_coordination"
+      tags:
+        - crontab
+  vars:
+    # overridden here to ensure the correct value for the galera_client role
+    galera_address: 127.0.0.1
+    galera_server_id: "{{ inventory_hostname | string_2_int }}"
+    galera_wsrep_node_name: "{{ container_name }}"
+  tags:
+    - galera

@@ -1,0 +1,9 @@
+- name: Stop all services
+  hosts: all
+  become: True
+  gather_facts: False
+  vars:
+    serial_count: 1
+  serial: "{{ serial_count }}"
+  roles:
+    - stop_all_edx_services

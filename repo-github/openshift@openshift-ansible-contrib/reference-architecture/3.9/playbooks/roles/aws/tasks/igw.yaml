@@ -1,0 +1,10 @@
+---
+- name: "{{ 'Create' if (state is undefined or 'absent' not in state) else 'Terminate' }} IGW"
+  ec2_vpc_igw:
+    region: "{{ aws_region }}"
+    state: "{{ state | default('present') }}"
+    vpc_id: "{{ vpc.vpc.id if (state is undefined or 'absent' not in state) else vpc.vpcs[0].vpc_id }}"
+  retries: 3
+  delay: 3
+  register: igw
+  when: ( vpc.vpc is defined ) or ( vpc.vpcs[0] is defined )

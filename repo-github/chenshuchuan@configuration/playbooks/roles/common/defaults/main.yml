@@ -1,0 +1,92 @@
+
+# Override these variables
+# to change the base directory
+# where edX is installed
+
+COMMON_BASE_DIR: /edx
+COMMON_DATA_DIR: "{{ COMMON_BASE_DIR}}/var"
+COMMON_APP_DIR: "{{ COMMON_BASE_DIR}}/app"
+COMMON_LOG_DIR: "{{ COMMON_DATA_DIR }}/log"
+# Override this to create
+# common users in all roles
+COMMON_USER_INFO: []
+# these directories contain
+# symlinks for convenience
+COMMON_BIN_DIR: "{{ COMMON_BASE_DIR }}/bin"
+COMMON_CFG_DIR: "{{ COMMON_BASE_DIR }}/etc"
+
+COMMON_ENVIRONMENT: 'default_env'
+COMMON_DEPLOYMENT: 'default_deployment'
+COMMON_PYPI_MIRROR_URL: 'http://pypi.douban.com/simple  --trusted-host pypi.douban.com'
+# do not include http/https
+COMMON_GIT_MIRROR: 'github.com'
+# override this var to set a different hostname
+COMMON_HOSTNAME: !!null
+
+# Set to true to customize DNS search domains
+COMMON_CUSTOM_DHCLIENT_CONFIG: false
+# uncomment and specifity your domains.
+# COMMON_DHCLIENT_DNS_SEARCH: ["ec2.internal","example.com"]
+
+
+COMMON_MOTD_TEMPLATE: "motd.tail.j2"
+
+# These are two special accounts across all databases
+# the read only user is is granted select privs on all dbs
+# the admin user is granted create user privs on all dbs
+
+COMMON_MYSQL_READ_ONLY_USER: 'read_only'
+COMMON_MYSQL_READ_ONLY_PASS: 'password'
+COMMON_MYSQL_ADMIN_USER: 'root'
+COMMON_MYSQL_ADMIN_PASS: '8uhbYGVTFCRDXESZ'
+
+COMMON_MONGO_READ_ONLY_USER: 'edxapp'
+COMMON_MONGO_READ_ONLY_PASS: 'password'
+
+common_debian_pkgs:
+  - ntp
+  - ack-grep
+  - lynx-cur
+  - logrotate
+  - mosh
+  - rsyslog
+  - screen
+  - tree
+  - git
+  - unzip
+  - python2.7
+  - python-pip
+  - python2.7-dev
+  # Not installed by default on vagrant ubuntu
+  # boxes
+  - curl
+
+common_pip_pkgs:
+  - pip==1.5.4
+  - virtualenv==1.11.4
+  - virtualenvwrapper
+
+common_web_user: www-data
+common_web_group: www-data
+common_log_user: syslog
+
+common_git_ppa: "ppa:git-core/ppa"
+
+# Skip supervisor tasks
+# When set to true this flag will allow you to install everything but keep
+# supervisor from starting any of the services.
+# Service files will be placed in supervisor's conf.available.d but not linked
+# to supervisors 'conf.d' directory.
+disable_edx_services: False
+
+# Some apps run differently in dev mode(forums)
+# so different start scripts are generated in dev mode.
+devstack: False
+
+common_debian_variants:
+  - Ubuntu
+  - Debian
+
+common_redhat_variants:
+  - CentOS
+  - Red Hat Enterprise Linux

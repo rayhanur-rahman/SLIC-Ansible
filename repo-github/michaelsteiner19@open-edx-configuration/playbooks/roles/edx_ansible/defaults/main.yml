@@ -1,0 +1,51 @@
+---
+#
+# edX Configuration
+#
+# github:     https://github.com/edx/configuration
+# wiki:       https://openedx.atlassian.net/wiki/display/OpenOPS
+# code style: https://openedx.atlassian.net/wiki/display/OpenOPS/Ansible+Code+Conventions
+# license:    https://github.com/edx/configuration/blob/master/LICENSE.TXT
+#
+##
+# Defaults for role edx_ansible, an edx_ansible role to install edx_ansible
+#
+#
+# OS packages
+#
+# set this to true dump all extra vars
+# this is currently broken when extra vars
+# contains references to vars that are not
+# included in the play.
+EDX_ANSIBLE_DUMP_VARS: false
+
+
+edx_ansible_debian_pkgs:
+  - python-pip
+  - python-apt
+  - libmysqlclient-dev
+  - git-core
+  - build-essential
+  - python-dev
+  - libxml2-dev
+  - libxslt1-dev
+  - curl
+  - python-yaml
+  - python-mysqldb
+
+edx_ansible_app_dir: "{{ COMMON_APP_DIR }}/edx_ansible"
+edx_ansible_code_dir: "{{ edx_ansible_app_dir }}/edx_ansible"
+edx_ansible_data_dir: "{{ COMMON_DATA_DIR }}/edx_ansible"
+edx_ansible_venvs_dir: "{{ edx_ansible_app_dir }}/venvs"
+edx_ansible_venv_dir: "{{ edx_ansible_venvs_dir }}/edx_ansible"
+edx_ansible_venv_bin: "{{ edx_ansible_venv_dir }}/bin"
+edx_ansible_user: "edx-ansible"
+edx_ansible_source_repo: https://github.com/edx/configuration.git
+edx_ansible_requirements_file: "{{ edx_ansible_code_dir }}/requirements.txt"
+edx_ansible_requirements_files:
+  - "{{ edx_ansible_code_dir }}/pre-requirements.txt"
+  - "{{ edx_ansible_code_dir }}/requirements.txt"
+
+# edX configuration repo
+configuration_version: master
+edx_ansible_var_file: "{{ edx_ansible_app_dir }}/server-vars.yml"
