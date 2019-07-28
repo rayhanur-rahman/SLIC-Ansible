@@ -16,3 +16,5 @@ Next, src/YmlPathGenerator.py will generate all the paths of all the .yml files.
 After that, use the AnsibleSmellDetector.py to get the smell counts in each yml files. Just set the location of ymlPaths text file that was obtained from the very previous step (ymlPaths/github.txt). The output will saved on smellList folder (smellsList/github.csv). 
 
 Finally, run the GetSmellStatistics.py, set the location of yml files (ymlPaths/github.txt) and output obtained from previous step (smellsList/github.csv) and you will see the result. 
+
+Feel free to report any issue :)
