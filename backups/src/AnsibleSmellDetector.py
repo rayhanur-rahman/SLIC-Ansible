@@ -1,9 +1,6 @@
-import re
+import yaml, re
 from datetime import datetime
 from urllib.parse import urlparse
-
-import yaml
-
 
 class Node:
     def __init__(self, key):
@@ -11,7 +8,6 @@ class Node:
         self.value = ''
         self.children = []
         self.parent = None
-
 
 def traverse(dictionary, node):
     for key in dictionary:
@@ -37,7 +33,6 @@ def traverse(dictionary, node):
             # print(dictionary[key])
             child.value = dictionary[key]
 
-
 def traverseList(ls, node):
     for item in ls:
         child = Node('')
@@ -57,19 +52,14 @@ def traverseList(ls, node):
             # print(item)
             child.value = item
 
-
 def tree(node, checkSubTree, response):
     # print(f'{node.key}:{node.value}')
 
-    listOfUserNameAndPassword = ['root', 'passno', 'pass-no', 'pass_no', 'auth_token', 'authetication_token', 'auth-token', 'authentication-token', 'user', 'uname', 'username', 'user-name', 'user_name', 'owner-name', 'owner_name', 'owner', 'admin', 'login', 'pass', 'pwd', 'password', 'passwd', 'secret', 'uuid', 'crypt', 'certificate',
-                                 'userid', 'loginid', 'token', 'ssh_key', 'md5', 'rsa', 'ssl_content', 'ca_content', 'ssl-content', 'ca-content', 'ssh_key_content', 'ssh-key-content', 'ssh_key_public', 'ssh-key-public', 'ssh_key_private', 'ssh-key-private', 'ssh_key_public_content', 'ssh_key_private_content', 'ssh-key-public-content', 'ssh-key-private-content']
-    listOfPassWord = ['pass', 'pwd', 'password',
-                      'passwd', 'passno', 'pass-no', 'pass_no']
-    listOfUserName = ['root', 'user', 'uname', 'username', 'user-name', 'user_name',
-                      'owner-name', 'owner_name', 'owner', 'admin', 'login', 'userid', 'loginid']
-    listOfSSHDirectory = ['source', 'destination',
-                          'path', 'directory', 'src', 'dest', 'file']
-    miscelleneous = ['key', 'id', 'cert']
+    listOfUserNameAndPassword = ['root','passno','pass-no', 'pass_no', 'auth_token', 'authetication_token','auth-token', 'authentication-token', 'user', 'uname', 'username', 'user-name', 'user_name', 'owner-name', 'owner_name', 'owner', 'admin', 'login', 'pass', 'pwd', 'password', 'passwd', 'secret', 'uuid', 'crypt', 'certificate', 'userid', 'loginid', 'token', 'ssh_key', 'md5', 'rsa', 'ssl_content', 'ca_content', 'ssl-content', 'ca-content', 'ssh_key_content', 'ssh-key-content', 'ssh_key_public', 'ssh-key-public', 'ssh_key_private', 'ssh-key-private', 'ssh_key_public_content', 'ssh_key_private_content', 'ssh-key-public-content', 'ssh-key-private-content']
+    listOfPassWord = ['pass', 'pwd', 'password', 'passwd', 'passno', 'pass-no', 'pass_no' ]
+    listOfUserName = ['root', 'user', 'uname', 'username', 'user-name', 'user_name', 'owner-name', 'owner_name', 'owner', 'admin', 'login', 'userid', 'loginid']
+    listOfSSHDirectory = ['source', 'destination', 'path', 'directory', 'src', 'dest', 'file']
+    miscelleneous = ['key','id', 'cert']
 
     if checkSubTree:
         listOfUserNameAndPassword.append('name')
@@ -136,8 +126,7 @@ def tree(node, checkSubTree, response):
             'smell-instance': f'{str(node.key)}:{str(node.value)}'
         })
 
-    download = ['iso', 'tar', 'tar.gz', 'tar.bzip2', 'zip',
-                'rar', 'gzip', 'gzip2', 'deb', 'rpm', 'sh', 'run', 'bin']
+    download = ['iso', 'tar', 'tar.gz', 'tar.bzip2', 'zip', 'rar', 'gzip', 'gzip2', 'deb', 'rpm', 'sh', 'run', 'bin']
     parsedUrl = urlparse(str(node.value))
     if re.match(
             r'^(http:\/\/www\.|https:\/\/www\.|http:\/\/|https:\/\/)?[a-z0-9]+([_\-\.]{1}[a-z0-9]+)*\.[a-z]{2,5}(:[0-9]{1,5})?(\/.*)?$',
@@ -148,7 +137,7 @@ def tree(node, checkSubTree, response):
                 'smell-instance': f'{str(node.key)}:{str(node.value)}'
             })
         for item in download:
-            if re.match(r'(http|https|www)[_\-a-zA-Z0-9:\/.]*{text}$'.format(text=item), str(node.value)):
+            if re.match(r'(http|https|www)[_\-a-zA-Z0-9:\/.]*{text}$'.format(text = item), str(node.value)):
                 if node.parent != None:
                     parent = node.parent
                     siblings = parent.children
@@ -170,7 +159,7 @@ def tree(node, checkSubTree, response):
                 'smell-instance': f'{str(node.key)}:{str(node.value)}'
             })
         for item in download:
-            if re.match(r'(http|https|www)[_\-a-zA-Z0-9:\/.]*{text}$'.format(text=item), str(node.value)):
+            if re.match(r'(http|https|www)[_\-a-zA-Z0-9:\/.]*{text}$'.format(text = item), str(node.value)):
                 if node.parent != None:
                     parent = node.parent
                     siblings = parent.children
@@ -186,18 +175,17 @@ def tree(node, checkSubTree, response):
                             'smell-instance': f'{str(node.key)}:{str(node.value)}'
                         })
 
+
     if len(node.children) > 0:
         for child in node.children:
             tree(child, checkSubTree, response)
-
 
 def parseYaml(filename):
     response = []
     stream = open(filename, 'r')
     file = open(filename, 'r')
 
-    tabuWordsInComments = ['bug', 'debug', 'todo', 'to-do', 'to_do', 'fix',
-                           'issue', 'problem', 'solve', 'hack', 'ticket', 'later', 'incorrect', 'fixme']
+    tabuWordsInComments = ['bug', 'debug', 'todo', 'to-do', 'to_do', 'fix', 'issue', 'problem', 'solve', 'hack', 'ticket', 'later', 'incorrect', 'fixme']
 
     for line in file:
         if line.strip().startswith('#'):
@@ -226,12 +214,9 @@ def parseYaml(filename):
     tree(root, False, response)
     return response
 
-YMLPATHSFILE = '/home/brokenquark/Workspace/SLIC-Ansible/ymlPaths/github.txt'
-SMELL_COUNT_OUTPUT_FILE = '/home/brokenquark/Workspace/SLIC-Ansible/smellsList/github.csv'
-
 def detectSmells():
-    file = open(YMLPATHSFILE, 'r')
-    output = open(SMELL_COUNT_OUTPUT_FILE, 'a')
+    file = open('../yml directory list/ymlPathsostk.txt', 'r')
+    output = open('ansible-smell-count-ostk.csv', 'a')
     output.write(f"MONTH,REPO_DIR,FILE_NAME,HARD_CODE_SECR,EMPT_PASS,HTTP_USAG,BIND_USAG,SUSP_COMM,INTE_CHCK,HARD_CODE_UNAME,HARD_CODE_PASS,TOTAL\n")
     output.close()
 
@@ -257,12 +242,48 @@ def detectSmells():
                     smellCounts[element['smell-type']] += 1
                     total += 1
 
-            output = open(SMELL_COUNT_OUTPUT_FILE, 'a')
-            path = [x for x in line.strip().split(
-                '/') if x.strip() != ''][0:-1]
+            output = open('ansible-smell-count-ostk.csv', 'a')
+            path = [x for x in line.strip().split('/') if x.strip() != ''][0:-1]
             path = '/' + '/'.join(path)
-            output.write(
-                f"{datetime.now().year}-{datetime.now().month},{path},{line.strip()},{smellCounts['hardcoded-secret']}, {smellCounts['empty-password']}, {smellCounts['use of http']}, {smellCounts['improper ip address binding']}, {smellCounts['suspicious comment']}, {smellCounts['no-integrity-check']}, {smellCounts['hardcoded-username']}, {smellCounts['hardcoded-password']}, {total}\n")
+            output.write(f"{datetime.now().year}-{datetime.now().month},{path},{line.strip()},{smellCounts['hardcoded-secret']}, {smellCounts['empty-password']}, {smellCounts['use of http']}, {smellCounts['improper ip address binding']}, {smellCounts['suspicious comment']}, {smellCounts['no-integrity-check']}, {smellCounts['hardcoded-username']}, {smellCounts['hardcoded-password']}, {total}\n")
+
+            dump = open('dump.csv', 'a')
+            atLeastOneSmellFound = False
+            for index in range(0,smellCounts['hardcoded-secret']):
+                dump.write(f'{line.strip()},HARD_CODE_SECR\n')
+                atLeastOneSmellFound = True
+
+            for index in range(0,smellCounts['empty-password']):
+                dump.write(f'{line.strip()},EMPT_PASS\n')
+                atLeastOneSmellFound = True
+
+            for index in range(0,smellCounts['use of http']):
+                dump.write(f'{line.strip()},HTTP_USAG\n')
+                atLeastOneSmellFound = True
+
+            for index in range(0,smellCounts['improper ip address binding']):
+                dump.write(f'{line.strip()},BIND_USAG\n')
+                atLeastOneSmellFound = True
+
+            for index in range(0,smellCounts['suspicious comment']):
+                dump.write(f'{line.strip()},SUSP_COMM\n')
+                atLeastOneSmellFound = True
+
+            for index in range(0,smellCounts['no-integrity-check']):
+                dump.write(f'{line.strip()},INTE_CHCK\n')
+                atLeastOneSmellFound = True
+
+            for index in range(0,smellCounts['hardcoded-username']):
+                dump.write(f'{line.strip()},HARD_CODE_UNAME\n')
+                atLeastOneSmellFound = True
+
+            for index in range(0,smellCounts['hardcoded-password']):
+                dump.write(f'{line.strip()},HARD_CODE_PASS\n')
+                atLeastOneSmellFound = True
+
+            if not atLeastOneSmellFound:
+                dump.write(f'{line.strip()},NONE\n')
+            dump.close()
 
             smellCounts['hardcoded-secret'] = 0
             smellCounts['empty-password'] = 0
@@ -280,5 +301,25 @@ def detectSmells():
 
     return
 
-
 detectSmells()
+
+
+# fn = 'Users/akond/SECU_REPOS/ostk-ansi/ansible-role-tripleo-modify-image/tasks/modify_image.yml'.replace('/', '-')
+# url = f'/home/brokenquark/Workspace/SLIC-Ansible/ansible/{fn}'
+# response = parseYaml(url)
+#
+# print(response)
+
+# file = open('Testing/ANSIBLE_FINAL_ORACLE_DATASET.csv', 'r')
+# index = 0
+# for line in file:
+#     if index > 0:
+#         fname = line.split(',')[0]
+#         fname = fname.replace('/', '-')[1:]
+#         try:
+#             print(fname)
+#
+#         except:
+#             pass
+#     index += 1
+
