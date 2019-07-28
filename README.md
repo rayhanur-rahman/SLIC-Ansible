@@ -9,9 +9,10 @@ Here is the steps to reproduce the work:
 
 Dependency: Python3.7
 
-The src/repodownloader.py will download github repositories given the repo name and user name which is given in the repoList/repo-ansible.csv directory. After the downloading, the script will check the crietria mentioned in the paper and if the criteria are fulfilled, the repo will be kept, otherwise the repo will be deleted. 
+The src/RepoDownloader.py will download github repositories given the repo name and user name. However, you don't need to start over, the downloaded repos are already included. We worked with two set of repos: 1) openstack repos and 2) other repos which are available at github. First repos are saved at repo-openstack folder and second repos are saved at repo-github folder. The next steps are demonstrated for repo-github datasets.
 
-The src/AnsibleSmellDetector.py will take the file location (which is stored in ymlPaths directory as a cvs file) of the ansible playbooks and outputs the smell occurrence and smell types in csv format which will be stored as csv file in rq1 folder.
+Next, src/YmlPathGenerator.py will generate all the paths of all the .yml files. You just need to set the directory location in the script. The output file will be saved at ymlPaths folder (ymlPaths/github.txt).
 
-Based on the output produced in the previous step, The src/rq2.py will take the csv file as input and calculate the number of smell occurrences, density, proportions and prints out the result in a table format.
+After that, use the AnsibleSmellDetector.py to get the smell counts in each yml files. Just set the location of ymlPaths text file that was obtained from the very previous step (ymlPaths/github.txt). The output will saved on smellList folder (smellsList/github.csv). 
 
+Finally, run the GetSmellStatistics.py, set the location of yml files (ymlPaths/github.txt) and output obtained from previous step (smellsList/github.csv) and you will see the result. 
