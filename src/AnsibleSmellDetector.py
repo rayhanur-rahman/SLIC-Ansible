@@ -4,7 +4,6 @@ from urllib.parse import urlparse
 
 import yaml
 
-
 class Node:
     def __init__(self, key):
         self.key = key
@@ -226,8 +225,10 @@ def parseYaml(filename):
     tree(root, False, response)
     return response
 
+
 YMLPATHSFILE = '/home/brokenquark/Workspace/SLIC-Ansible/ymlPaths/github.txt'
 SMELL_COUNT_OUTPUT_FILE = '/home/brokenquark/Workspace/SLIC-Ansible/smellsList/github.csv'
+
 
 def detectSmells():
     file = open(YMLPATHSFILE, 'r')
@@ -282,3 +283,5 @@ def detectSmells():
 
 
 detectSmells()
+
+
